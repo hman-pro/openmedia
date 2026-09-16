@@ -10,7 +10,7 @@ is sent to the worker. Spawn using an argument array and a minimal environment.
 
 | Operation | Input | Successful result |
 |---|---|---|
-| inspect | Validated source URL, request ID, absolute monotonic deadline, response/output limits | MediaMetadata and normalized FormatOption list; no downloaded media |
+| inspect | Validated source URL, request ID, parent-created directory, absolute monotonic deadline, response/output limits | MediaMetadata, normalized FormatOption list, and an optional thumbnail file of at most 1 MiB in that directory; no primary media |
 | download | Source identity, exact selected option, parent-created directory, remaining deadline and byte limit | One regular file in that directory; actual bytes, format, media identity |
 
 Events: `progress` (stage and bytes, at most once per second), `rate_request` (platform and
@@ -49,9 +49,12 @@ when anonymous inspection fails.
 
 Use an explicit single yt-dlp format ID, never its automatic best/merge selection. Disable
 postprocessors, thumbnail embedding, subtitle embedding, output conversion, external
-downloaders, plugin loading, and persistent download archives. Only permit native transports
-that can produce the selected source file without remuxing/merging. Mark unsupported
-transports as unavailable; do not present a choice that requires FFmpeg to complete.
+downloaders, plugin loading, and persistent download archives. Eligible formats use yt-dlp
+protocol `https` and are fetched as one resource (single or ranged requests). Treat `http`,
+`m3u8`, `m3u8_native`, `http_dash_segments`, `f4m`, `ism`, `rtmp`, websocket, and any other
+protocol as unavailable, even when fragments could be joined without FFmpeg: each fragment
+downloader is a separate network path requiring its own guard binding. Adding a protocol
+requires updating this allowlist, T039 transport tests, and live evidence.
 
 Combined video/audio files supplied by the source are eligible. Standalone video is silent;
 standalone native audio is audio-only. Images retain the source-delivered file format, not

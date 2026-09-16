@@ -159,6 +159,7 @@ or automatic format fallback. Include existing combined audiovisual files when a
 otherwise label video-only outputs as silent. Audio-only formats must already be exposed by
 the source. Omit choices requiring external remuxing or merging. This implements the user's
 source-format choice without adding a separate merging feature or an FFmpeg dependency.
+The eligible download-protocol allowlist is fixed in `contracts/source-adapters.md`.
 
 **Integration controls**: Use metadata-only extraction before selection. Post/media-type
 classification must precede format presentation; do not flatten carousels or playlists into

@@ -72,7 +72,7 @@ ends in `failed` with an unknown result and asks the user to check the chat befo
 | Current state | Event | Next state and action |
 |---|---|---|
 | None | Valid link and capacity available | checking; reserve user and work slot |
-| checking | One supported item with usable options | awaiting_selection; publish preview, start 900s expiry, release work slot |
+| checking | One supported item with usable options | awaiting_selection; publish preview with any worker thumbnail, remove inspection directory, start 900s expiry, release work slot |
 | checking | Invalid source, no usable option, error, deadline | failed; explain, release and clean |
 | awaiting_selection | Owner selects current option, work capacity available | downloading; claim option once, start 600s deadline |
 | awaiting_selection | No capacity for selection | unchanged; explain busy, preserve original expiry |

@@ -154,9 +154,10 @@ requests from two different users; verify the response and destination for each.
 
 ### Functional Requirements
 
-- **FR-001**: The bot MUST accept exactly one media link per message in a private chat;
-  surrounding text is allowed. It MUST reject missing or multiple links with guidance
-  and direct group users to a private chat (Story 2.1; group edge case).
+- **FR-001**: The bot MUST accept a private-chat message containing exactly one link to a
+  supported platform; surrounding text and links to other sites are ignored. It MUST reject
+  messages with no such link or more than one, with guidance, and direct group users to a
+  private chat (Story 2.1; group edge case).
 - **FR-002**: The workflow MUST support public single-item YouTube videos, LinkedIn video
   and image posts, and Instagram video and image posts. It MUST offer audio-only choices
   when the source provides a supported downloadable audio-only option requiring no
@@ -234,11 +235,13 @@ requests from two different users; verify the response and destination for each.
   when none is available. No acceptance example requires format conversion.
 - **SC-002**: In at least 95% of a 20-request acceptance run within processing capacity,
   users see acknowledgment within 2 seconds and metadata with choices within 30 seconds,
-  when the source and messaging service are responsive.
+  excluding only samples affected by externally logged source or messaging-service errors
+  under the exclusion rule fixed in the validation guide; excluded samples are replaced.
 - **SC-003**: In at least 95% of 20 eligible download attempts within capacity, users receive
-  their selected file within 2 minutes when files are at most 20 MB, fit delivery limits,
-  and source and messaging services remain responsive. Larger eligible files follow the
-  10-minute processing deadline.
+  their selected file within 2 minutes when files are at most 20 MB and fit delivery limits,
+  excluding only samples affected by externally logged source or messaging-service errors
+  under the exclusion rule fixed in the validation guide; excluded samples are replaced.
+  Larger eligible files follow the 10-minute processing deadline.
 - **SC-004**: Every defined invalid-input, unavailable-content, limit, and timeout scenario
   ends with the specified reason and next step when communication is available; none
   remains indefinitely active or reports a failed delivery as successful.
@@ -266,6 +269,9 @@ requests from two different users; verify the response and destination for each.
 - Formats and quality choices are limited to the source item's available options that
   the service can deliver without conversion. No standardized MP4 or MP3 output is
   promised when that format is absent from the source. Images retain their original format.
+- Because formats are not merged, the highest qualities on some platforms may be offered
+  only as silent video or separate audio-only choices; video with sound may be available
+  only at lower qualities, or not at all, for a given item.
 - Delivery is a direct Telegram attachment. External download hosting, file splitting,
   and automatic changes to quality to fit limits are outside scope.
 - The 15-minute selection expiry, 60-second inspection deadline, 10-minute processing

@@ -3,9 +3,10 @@
 ## Inputs and audience
 
 Any Telegram user may submit one recognized public media URL in a private chat without
-registration. Parse Telegram URL/text-link entities, with surrounding text permitted. Reject
-zero or multiple URL entities, unsupported hosts/routes, and collection/live URLs with a
-short explanation. Ignore edits to previous messages as new requests. Optional `/start` and
+registration. Parse Telegram URL/text-link entities, with surrounding text permitted. Count
+only entities whose host belongs to YouTube, LinkedIn, or Instagram; ignore other URLs. Reject
+zero or multiple supported-platform URLs, then unsupported routes and collection/live URLs,
+with a short explanation. Ignore edits to previous messages as new requests. Optional `/start` and
 `/help` explain supported sources and usage; neither is a prerequisite. Groups receive only
 a private-chat instruction; no extraction or source preview is performed there.
 

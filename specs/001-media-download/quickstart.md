@@ -126,6 +126,12 @@ and record time from link submission to acknowledgment and preview. At least 19 
 at least 19 must arrive within 2 minutes. Record source/messaging availability so external
 outages are distinguished from performance failures, not silently discarded.
 
+**Exclusion rule (fixed before the run)**: a sample may be excluded only when its request log
+records a source HTTP 429 or 5xx, a Telegram `retry_after` or 5xx, or a connection failure to
+either service. Delays from OpenMedia's own limiter or capacity are never excluded. Replace
+each excluded sample with a new request. More than 5 exclusions in a run makes it inconclusive:
+repeat it later; it does not pass. Record every exclusion with its logged cause.
+
 Use accelerated clocks for the 900s preview expiry and cleanup tests, and at least one real
 subprocess test to verify timeout kills the worker rather than just stopping its awaiter.
 Use independent accounts for SC-005. Complete SC-006 with one link and one first-page format

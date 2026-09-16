@@ -35,7 +35,8 @@ Telegram output uses a local per-chat limiter of one ordinary message/edit per s
 an overall cap of 20 ordinary sends/edits per second. Callback acknowledgments are handled
 promptly through their separate method. Source progress is coalesced into stage messages,
 not relayed once per downloaded fragment. Saturation and upstream 429 are measured; timing
-criteria apply within documented service capacity, not during external throttling.
+criteria apply within documented service capacity, excluding samples only under the
+quickstart exclusion rule.
 
 ## Files, lifecycle, and health
 

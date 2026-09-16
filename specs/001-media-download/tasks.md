@@ -35,6 +35,7 @@ queue service, web server, FFmpeg, conversion pipeline, or public deployment is 
 
 **Purpose**: Establish a reproducible Python package and controlled validation environment.
 
+- [ ] T059 [P] Run a timeboxed source feasibility spike before Phase 2, outside `src/` and without committing downloaded media: for one credential-free example per FR-002 category, run metadata-only inspection (`yt-dlp -J <url>` for video; Instaloader `Post.from_shortcode` for Instagram images; fetch the LinkedIn public embed HTML and confirm one explicit image attachment). Record per category in `specs/001-media-download/validation.md`: anonymous access result, network location, candidate format `protocol` values, whether a combined video-with-sound format exists, and blockers. Space Instagram requests at least 60s apart. A category without anonymous access stops Phase 2 pending an explicit scope decision.
 - [ ] T001 Initialize the Python `>=3.13,<3.14` package and module entry point in `pyproject.toml`, `src/openmedia/__init__.py`, `src/openmedia/__main__.py`, and `src/openmedia/sources/__init__.py`, using the layout in `plan.md` without implementing user workflows yet.
 - [ ] T002 Declare python-telegram-bot `==22.8`, yt-dlp[default] `==2026.8.19`, Instaloader `==4.15.3`, and the planned pytest/pytest-asyncio dev group in `pyproject.toml`; resolve exact compatible dependencies into `uv.lock`, verify `uv sync --locked --group dev`, and record any compatibility failure in `specs/001-media-download/validation.md` instead of silently changing the stack.
 - [ ] T003 [P] Configure `.gitignore` and `.dockerignore` to exclude `.env`, credentials, local live manifests, downloaded media, caches, `.git` from images, and unnecessary fixture/build artifacts while retaining versioned sanitized test fixtures in Git.
@@ -42,6 +43,8 @@ queue service, web server, FFmpeg, conversion pipeline, or public deployment is 
 
 **Checkpoint**: Package installs from the lock; controlled tests cannot accidentally call
 Telegram or social sources. Dependencies: T001 → T002 → {T003, T004}.
+T059 has no prerequisites and may run alongside T001–T004; Phase 2 starts only after T059
+records an anonymous pass per category or an approved scope decision.
 
 ---
 
@@ -50,7 +53,8 @@ Telegram or social sources. Dependencies: T001 → T002 → {T003, T004}.
 **Purpose**: Provide the bounded, typed interfaces all three stories use. Complete this phase
 before story implementation. The quoted constraints below come from `data-model.md`.
 
-- [ ] T005 Implement runtime settings and redacted validation in `src/openmedia/config.py` and `.env.example` using `contracts/runtime.md`: required runtime token, owned work directory, 50,000,000-byte file ceiling, two workers, 100 pending previews, 128 MiB workspaces, INFO logging, and fixed 60s/900s/600s/900s deadlines; reject invalid/contradictory values and exclude tokens from object representations.
+- [ ] T057 Write configuration unit tests in `tests/unit/test_config.py`: missing token, token absent from repr/str/error text, nonpositive limits, `OPENMEDIA_WORKSPACE_BYTES` not exceeding `OPENMEDIA_MAX_FILE_BYTES`, invalid log level, and rejection of environment overrides for the fixed 60s/900s/600s/900s deadlines (FR-014; constitution credential rules).
+- [ ] T005 Implement runtime settings and redacted validation in `src/openmedia/config.py` and `.env.example` using `contracts/runtime.md`: required runtime token, owned work directory, 50,000,000-byte file ceiling, two workers, 100 pending previews, 128 MiB workspaces, INFO logging, and fixed 60s/900s/600s/900s deadlines; reject invalid/contradictory values and exclude tokens from object representations; pass T057.
 - [ ] T006 Define DownloadRequest in `src/openmedia/models.py` with the exact field constraints: request_id "Random 128-bit identity, encoded as 32 hex characters; never reused"; user_id/chat_id "Telegram integer identities; private chat required; do not infer ownership from username"; source_url/platform/media_id "Validated canonical public source; recognized route and stable source item identity"; state "checking, awaiting_selection, downloading, sending, completed, failed, expired, replaced"; metadata "Optional MediaMetadata, populated by successful inspection"; options "Ordered FormatOption records bound to this request; immutable after preview"; selected_option_id "Null until one valid callback atomically claims the request"; created_at/preview_expires_at/processing_deadline "Monotonic deadlines internally; UTC timestamps only for diagnostics"; preview_message_id "Message owning the format keyboard; callbacks must match"; work_directory/worker_pid "Internal handles only; no caller-supplied paths; absent while idle"; delivery_result "Optional DeliveryResult".
 - [ ] T007 Define MediaMetadata in `src/openmedia/models.py`: `platform`, `canonical_url`, and `media_id` identify the item; "Optional `title_or_caption`, `creator`, `duration_seconds`, and `thumbnail_url` carry available descriptive information"; "Duration is nonnegative and absent for images"; `media_count` and `media_kind` distinguish one video/image from collection/live content; preserve "Never infer a creator or title from missing data" and reject wrappers that hide playlists/carousels by selecting their first child.
 - [ ] T008 Define FormatOption in `src/openmedia/models.py` with option_id "Stable integer within one request; mapped on the server, never accepted as a raw extractor expression"; adapter/source_format_id "Selected extractor and exact upstream identifier or immutable image identity"; media_type "video, audio, image"; extension/mime_type "Supported native file format; detected/validated rather than trusting a filename"; width/height/bitrate "Optional quality descriptors; positive when supplied"; includes_audio "True/false for video; absent when not applicable"; size_bytes/size_kind "Nonnegative byte count or null; exact, estimated, or unknown"; transport_ref "Private upstream URL/headers or extractor reference; never emitted in callback data or logs"; availability "selectable or excluded, with a user-facing reason"; preserve "A selectable option must be producible without conversion or merging" and "Never choose a different option on retry".
@@ -80,25 +84,26 @@ first-time users, native audio when exposed, and silent-video labeling.
 
 ### Tests for User Story 1
 
-- [ ] T016 [P] [US1] Add yt-dlp contract tests and sanitized metadata fixtures in `tests/contract/test_ytdlp.py` and `tests/fixtures/ytdlp/` for YouTube/LinkedIn/Instagram video, explicit native format IDs, audio-only and silent video, metadata-only inspection, and rejecting conversion/merge-only choices (FR-002, FR-006, FR-007).
+- [ ] T016 [P] [US1] Add yt-dlp contract tests and sanitized metadata fixtures in `tests/contract/test_ytdlp.py` and `tests/fixtures/ytdlp/` for YouTube/LinkedIn/Instagram video, explicit native format IDs, audio-only and silent video, metadata-only inspection, and rejecting conversion/merge-only choices and non-allowlisted protocols (FR-002, FR-006, FR-007).
 - [ ] T017 [P] [US1] Add Instagram image contract tests and provenance-documented fixtures in `tests/contract/test_instagram.py` and `tests/fixtures/instagram/` for GraphImage native URLs, missing metadata, GraphSidecar rejection, and image media versus thumbnail identity (FR-002, FR-004, FR-006).
 - [ ] T018 [P] [US1] Add LinkedIn image parser contract tests and provenance-documented guest-page fixtures in `tests/contract/test_linkedin.py` and `tests/fixtures/linkedin/` for matching activity ID, one explicit feed-image attachment, missing creator/caption, multiple images, absent/mismatched identity, and avatar/article/OG-preview rejection (FR-002, FR-004).
-- [ ] T019 [P] [US1] Add Telegram preview/selection contract tests in `tests/contract/test_bot_preview.py` for public private-chat access, one link with surrounding text, optional metadata, native labels and size certainty, eight-option pagination, explicit selection even for one choice, compact callbacks, and no required /start command (FR-001, FR-003–FR-007, FR-016).
+- [ ] T019 [P] [US1] Add Telegram preview/selection contract tests in `tests/contract/test_bot_preview.py` for public private-chat access, one supported-platform link with surrounding text and unrelated URLs, optional metadata, worker-provided or absent thumbnail, native labels and size certainty, eight-option pagination, explicit selection even for one choice, compact callbacks, and no required /start command (FR-001, FR-003–FR-007, FR-016).
 - [ ] T020 [P] [US1] Add a mocked end-to-end happy-path suite in `tests/integration/test_download_flow.py` proving no media download before selection, exact selected file bytes/format and originating chat on delivery, status ordering, and completion only after a returned Telegram Message (FR-007–FR-009; SC-001, SC-006).
+- [ ] T058 [P] [US1] Write link and label unit tests in `tests/unit/test_links.py` and `tests/unit/test_option_labels.py`: supported-platform link counting (per FR-001), canonical route recognition for the five categories, collection/live route rejection, option ordering (video with sound, audio, silent video, image; quality descending), and exact/estimated/unknown size labels (FR-001, FR-002, FR-005).
 
 ### Implementation for User Story 1
 
-- [ ] T021 [P] [US1] Implement video/native-audio inspection and exact-format downloads in `src/openmedia/sources/ytdlp.py`, using guarded networking and parent rate events, bundled EJS plus restricted Deno, explicit site extractors and format IDs, no generic fallback/config/cookies/plugins/postprocessors/external downloaders, and native-transport filtering; pass T016.
+- [ ] T021 [P] [US1] Implement video/native-audio inspection and exact-format downloads in `src/openmedia/sources/ytdlp.py`, using guarded networking and parent rate events, bundled EJS plus restricted Deno, explicit site extractors and format IDs, no generic fallback/config/cookies/plugins/postprocessors/external downloaders, and protocol allowlist filtering per `contracts/source-adapters.md`; pass T016.
 - [ ] T022 [P] [US1] Implement Instagram image inspection and selected-image downloading in `src/openmedia/sources/instagram.py` with Instaloader post classification, guarded transport, parent-owned rate-control callbacks, original source format, optional metadata, and no primary-image fetch during inspection; pass T017.
 - [ ] T023 [P] [US1] Implement the narrow LinkedIn public-embed image adapter in `src/openmedia/sources/linkedin.py` using the reviewed attachment parser approach, strict requested activity identity, exactly one explicit attachment, optional descriptive metadata, guarded networking, and original-format download after selection; record any reused source commit/attribution in the module and pass T018.
-- [ ] T024 [US1] Integrate recognized source routes and normalized media classification in `src/openmedia/sources/__init__.py` and worker dispatch in `src/openmedia/workers.py`; connect all three adapters, reject collections/live items without flattening, keep native options stable, and prove every adapter/redirect uses guarded transport in `tests/contract/test_adapter_transports.py`.
+- [ ] T024 [US1] Integrate recognized source routes and normalized media classification in `src/openmedia/sources/__init__.py` and worker dispatch in `src/openmedia/workers.py`; connect all three adapters, reject collections/live items without flattening, keep native options stable, and prove every adapter/redirect uses guarded transport in `tests/contract/test_adapter_transports.py`; fetch the separate thumbnail URL inside the inspect worker through guarded transport and return an optional validated image file, where thumbnail failure omits the thumbnail without failing inspection.
 - [ ] T025 [US1] Create opt-in live source validation in `tests/live/test_sources.py` and `tests/fixtures/live-sources.example.json` with case_id/platform/media_type/url/expected identity, covering all five combinations; inspect before explicit small-file selection, clean files, skip with a reason when the manifest is absent, and never send Telegram messages from this suite.
 - [ ] T026 [US1] Run the early five-category source feasibility check through `tests/live/test_sources.py` using a private manifest and record source identity, versions, native output, access conditions, results, and blockers in `specs/001-media-download/validation.md`; require a passing example per category before marking this task complete, and keep credential-required/unavailable categories open rather than counting error handling as media support.
-- [ ] T027 [US1] Implement input parsing, optional /start and /help, private-chat guidance, metadata previews, separate bounded thumbnail retrieval, source-native option labels, and eight-option keyboards in `src/openmedia/bot.py` according to `contracts/telegram-bot.md`; preserve unknown/estimated size, optional metadata, and explicit selection; pass T019.
+- [ ] T027 [US1] Implement input parsing, optional /start and /help, private-chat guidance, metadata previews, upload of the worker-provided thumbnail file (no network fetch from `bot.py`), source-native option labels, and eight-option keyboards in `src/openmedia/bot.py` according to `contracts/telegram-bot.md`; preserve unknown/estimated size, optional metadata, and explicit selection; pass T019 and T058.
 - [ ] T028 [US1] Wire inspection → awaiting selection → exact selected download → sending in `src/openmedia/coordinator.py`, using the foundation's atomic ownership/capacity primitives; end requests on invisible/failed previews, retain the one 600s processing deadline, validate selected output identity/type/format/quality, and never auto-select or substitute a format.
 - [ ] T029 [US1] Implement native-byte `sendDocument` upload in `src/openmedia/delivery.py`, checking actual size and path before sending, recording returned message ID only on confirmed success, and never retrying an ambiguous upload; connect it to coordinator completion and immediate success cleanup.
-- [ ] T030 [US1] Implement application startup and polling in `src/openmedia/__main__.py`: redacted configuration/runtime checks, token usability, pending-update discard, eight bounded handlers, HTTP pool of 16 plus polling connection, tracked background tasks, structured stage logs, and per-chat/global ordinary-send limits of 1/s and 20/s with prompt callback acknowledgments.
-- [ ] T031 [US1] Run T016–T020 and `tests/contract/test_adapter_transports.py` against the integrated workflow, correct happy-path defects in the responsible `src/openmedia/` modules, and record passing fixture coverage and the US1 independent test in `specs/001-media-download/validation.md`; distinguish controlled coverage from T026 live evidence.
+- [ ] T030 [US1] Implement application startup and polling in `src/openmedia/__main__.py`: redacted configuration/runtime checks, token usability, pending-update discard, eight bounded handlers, HTTP pool of 16 plus polling connection, tracked background tasks, structured stage logs (including upstream status class per request), and per-chat/global ordinary-send limits of 1/s and 20/s with prompt callback acknowledgments.
+- [ ] T031 [US1] Run T016–T020, T058, and `tests/contract/test_adapter_transports.py` against the integrated workflow, correct happy-path defects in the responsible `src/openmedia/` modules, and record passing fixture coverage and the US1 independent test in `specs/001-media-download/validation.md`; distinguish controlled coverage from T026 live evidence.
 
 **Checkpoint**: US1 is runnable as a local bot and independently demonstrable. The entire
 FR-002 matrix remains part of the MVP; a YouTube-only demo is an intermediate checkpoint,
@@ -119,7 +124,7 @@ no duplicate upload, cleanup, and successful admission of a subsequent valid req
 
 ### Tests for User Story 2
 
-- [ ] T032 [P] [US2] Add invalid-input/source-failure contract tests in `tests/contract/test_bot_errors.py` for every error category in `contracts/telegram-bot.md`, unsupported redirects, groups, collections/live posts, unavailable native audio, no formats, and first-time-user recovery without exposing raw exceptions (FR-001, FR-010–FR-011).
+- [ ] T032 [P] [US2] Add invalid-input/source-failure contract tests in `tests/contract/test_bot_errors.py` for every error category in `contracts/telegram-bot.md`, unsupported redirects, two supported-platform links (including playlist plus video), groups, collections/live posts, unavailable native audio, no formats, and first-time-user recovery without exposing raw exceptions (FR-001, FR-010–FR-011).
 - [ ] T033 [P] [US2] Add failure/cleanup integration tests in `tests/integration/test_failure_cleanup.py` for 60s inspection and 600s processing deadlines with five-second reap reserve, storage exhaustion, malformed worker output, real process-group timeout, 900s cleanup ceiling, startup leftovers, and failed notifications (FR-014–FR-015; SC-004, SC-007).
 - [ ] T034 [P] [US2] Add upload-outcome tests in `tests/contract/test_delivery_errors.py` for confirmed rejection, blocked bot, rate-limit retry within remaining deadline, uncertain network outcome, original-format/size mismatch, and absence of automatic duplicate sends (FR-009–FR-011).
 
@@ -178,7 +183,7 @@ conditions. Limit work to the existing requirements; do not add speculative inte
 - [ ] T052 Run `uv sync --locked --group dev` and the complete `tests/unit`, `tests/contract`, and `tests/integration` suites, fix only acceptance defects in the responsible source files, and record command results and all FR-001–FR-016/SC-001–SC-007 coverage in `specs/001-media-download/validation.md`.
 - [ ] T053 Build and locally run `Dockerfile` through the container commands in `specs/001-media-download/quickstart.md` with 2 CPUs, 2 GiB RAM, 512 MiB tmpfs, read-only root, and one dedicated test bot instance; verify configuration/readiness/health/clean shutdown and record image/runtime results in `specs/001-media-download/validation.md` without deploying publicly.
 - [ ] T054 Repeat the five-category live source suite from `tests/live/test_sources.py` on the intended deployment network and complete the manual Telegram happy-path/two-account checks from `specs/001-media-download/quickstart.md`; record exact output/native-format/source conditions in `specs/001-media-download/validation.md`, with absent credentials/accounts/network or unsupported categories remaining explicit incomplete checks.
-- [ ] T055 Execute and record the acceptance timing runs in `specs/001-media-download/validation.md`: 20 eligible inspections with at least 19 acknowledgments within 2s and previews within 30s, and 20 eligible selected files at most 20 MB with at least 19 deliveries within 2 minutes, at concurrency ≤2 overall/≤1 Instagram; retain external failure conditions and actual observations rather than counting mock timing as live proof.
+- [ ] T055 Execute and record the acceptance timing runs in `specs/001-media-download/validation.md`: 20 eligible inspections with at least 19 acknowledgments within 2s and previews within 30s, and 20 eligible selected files at most 20 MB with at least 19 deliveries within 2 minutes, at concurrency ≤2 overall/≤1 Instagram, applying the quickstart exclusion rule and replacing excluded samples; retain external failure conditions and actual observations rather than counting mock timing as live proof.
 - [ ] T056 Update `README.md` and `specs/001-media-download/quickstart.md` to match the implemented commands, versions, access/format scope, configuration, limits, and verified support; review `specs/001-media-download/validation.md` against every requirement and report unresolved external checks without marking the affected tasks complete.
 
 **Checkpoint**: Release readiness requires passing controlled checks, source/media matrix,
@@ -208,14 +213,15 @@ files. Do not schedule whole stories concurrently without file ownership coordin
 
 ### Task Dependencies
 
-- Setup: T001 → T002 → {T003, T004}; finish all four before Phase 2.
-- Foundation: T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015.
-- US1 tests T016–T020 can run in parallel after T015 and before corresponding implementation.
+- Setup: T001 → T002 → {T003, T004}; T059 has no prerequisites. Finish all five before Phase 2;
+  T059 must record an anonymous pass per category or an approved scope decision.
+- Foundation: T057 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015.
+- US1 tests T016–T020 and T058 can run in parallel after T015 and before corresponding implementation.
 - Adapter implementations T021/T022/T023 depend on T016/T017/T018 respectively and the
   foundation; they edit distinct source modules and can proceed in parallel.
-- T024 depends on T021–T023; T025 → T026 follow T024. T027 depends on T019 and T024;
+- T024 depends on T021–T023 and T058; T025 → T026 follow T024. T027 depends on T019, T058, and T024;
   T028 depends on T024/T027; T029 depends on T028; T030 depends on T027–T029;
-  T031 depends on T016–T020 and T024/T027–T030. T026 may remain open while bot work proceeds
+  T031 depends on T016–T020, T058, and T024/T027–T030. T026 may remain open while bot work proceeds
   if live inputs are missing, but it blocks the claim that the full US1 source matrix works.
 - US2: after T031, {T032, T033, T034} → T035 → T036 → T037 → T038 → T039 → T040.
 - US3: after T031, {T041, T042} → T043 → T044 → T045 → T046 → T047. Default execution
@@ -232,29 +238,29 @@ files. Do not schedule whole stories concurrently without file ownership coordin
 
 | Scope | Implementation tasks | Validation tasks |
 |---|---|---|
-| FR-001, FR-003–FR-005, FR-016 | T005–T008, T027, T030, T036 | T019, T031, T032, T054 |
-| FR-002, FR-006 | T010, T021–T024, T035 | T016–T018, T025–T026, T054 |
+| FR-001, FR-003–FR-005, FR-016 | T005–T008, T027, T030, T036 | T019, T031, T032, T054, T058 |
+| FR-002, FR-006 | T010, T021–T024, T035 | T016–T018, T025–T026, T054, T058–T059 |
 | FR-007–FR-009 | T024, T027–T030, T038 | T020, T031, T034, T054 |
 | FR-010–FR-011 | T012, T014, T035–T038 | T011, T032–T034, T039–T040 |
 | FR-012–FR-013 | T015, T043–T046 | T041–T042, T047, T054 |
-| FR-014–FR-015 | T014–T015, T037, T046, T049 | T013, T033, T041, T050, T053 |
+| FR-014–FR-015 | T014–T015, T037, T046, T049 | T013, T033, T041, T050, T053, T057 |
 | SC-001, SC-006 | Complete US1 | T020, T026, T031, T054 |
 | SC-002–SC-003 | T030 plus bounded workers/delivery | T055 |
 | SC-004, SC-007 | Complete US2 and US3 | T033, T039–T041, T047, T050 |
 | SC-005 | Complete US3 | T041–T042, T047, T054 |
-| Constitution: container, reuse, runtime and notices | T002, T012, T014, T023, T048–T049, T051 | T039, T050, T052–T056 |
+| Constitution: container, reuse, runtime and notices | T002, T012, T014, T023, T048–T049, T051 | T039, T050, T052–T057 |
 
 ### Parallel Opportunities
 
 Parallel work is optional; `[P]` does not authorize overlapping writes. Shared foundations
 and shared runtime/bot/coordinator modules remain sequential. Parallel groups:
-T003/T004; T016–T020; T021–T023; T032–T034; T041/T042; T051 alongside T049–T050.
+T003/T004/T059; T016–T020 and T058; T021–T023; T032–T034; T041/T042; T051 alongside T049–T050.
 
 ## Parallel Example: User Story 1
 
 After the foundation, author `test_ytdlp.py` (T016), `test_instagram.py` (T017),
-`test_linkedin.py` (T018), `test_bot_preview.py` (T019), and `test_download_flow.py` (T020)
-in parallel. Once their relevant tests exist, implement source modules T021–T023 separately;
+`test_linkedin.py` (T018), `test_bot_preview.py` (T019), `test_download_flow.py` (T020), and the `tests/unit/`
+link/label tests (T058) in parallel. Once their relevant tests exist, implement source modules T021–T023 separately;
 register and integrate adapters only in T024 after all three are ready.
 
 ## Parallel Example: User Story 2
@@ -295,8 +301,9 @@ required to execute this plan.
 
 ## Notes
 
-- 56 tasks: 4 setup, 11 foundational, 16 US1, 9 US2, 7 US3, and 9 final-phase tasks.
-- All 16 `[P]` tasks have explicit prerequisites and distinct-file parallel opportunities.
+- 59 tasks: 5 setup, 12 foundational, 17 US1, 9 US2, 7 US3, and 9 final-phase tasks.
+  T057–T059 were added after analysis and are placed by execution order, not renumbered.
+- All 18 `[P]` tasks have explicit prerequisites and distinct-file parallel opportunities.
 - The data-model constraints are quoted in T006–T009; lifecycle/retention constraints are
   assigned to T015, T037, and T043–T046 rather than left to implementation discretion.
 - No automatic release, public deployment, credential acquisition, or scope reduction is
