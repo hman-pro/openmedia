@@ -1,0 +1,47 @@
+[project]
+name = "openmedia"
+version = "0.1.0"
+description = "Telegram bot that delivers one public media link in a native upstream format, unchanged."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+
+# Pinned exactly: research.md §7 requires a reviewable dependency closure, and uv.lock
+# records the transitive set these produce.
+dependencies = [
+    "python-telegram-bot==22.8",
+    "yt-dlp[default]==2026.8.19",
+    "instaloader==4.15.3",
+]
+
+[project.scripts]
+openmedia = "openmedia.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+    "pytest-asyncio>=1,<2",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+module-name = "openmedia"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# `--strict-markers` turns a mistyped marker into an error instead of a silently
+# unfiltered test run, which is what keeps the `live` gate below trustworthy.
+addopts = "--strict-markers --strict-config -m 'not live'"
+
+markers = [
+    "live: opt-in check that reaches a real upstream source. Excluded by default; run deliberately with `uv run pytest -m live`.",
+]
+
+# The bot is async end to end, so every async test is an asyncio test; "auto" avoids
+# marking each one individually.
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

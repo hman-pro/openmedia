@@ -1,0 +1,52 @@
+# Secrets — constitution: bot tokens and source credentials never reach version control.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets/
+
+# Downloaded media and worker workspaces.
+# Workers own a temporary work directory; its contents are never committed.
+work/
+downloads/
+media/
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.mp3
+*.opus
+# Sanitized tiny fixtures are versioned on purpose (T004).
+!tests/fixtures/**
+
+# Live-check artifacts — machine-local, may contain real URLs.
+tests/live/manifest.local.*
+specs/**/validation.local.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+# uv.lock stays tracked: T002 pins the exact resolved dependency set.
+
+# Test and lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Agent and editor local state
+.claude/
+
+# macOS
+.DS_Store

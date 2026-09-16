@@ -1,0 +1,50 @@
+{
+  "_comment": [
+    "Template for the opt-in live suite. Copy this OUTSIDE version control, replace every",
+    "url with a credential-free public example, and export OPENMEDIA_LIVE_MANIFEST=<path>.",
+    "Never add signed URLs, private posts, cookies, or tokens. Every FR-002 category needs",
+    "a passing case before the release matrix can be called complete."
+  ],
+  "cases": [
+    {
+      "case_id": "youtube-video",
+      "platform": "youtube",
+      "media_type": "video",
+      "url": "https://www.youtube.com/watch?v=REPLACE_ME",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "video"
+    },
+    {
+      "case_id": "linkedin-video",
+      "platform": "linkedin",
+      "media_type": "video",
+      "url": "https://www.linkedin.com/posts/REPLACE_ME",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "video"
+    },
+    {
+      "case_id": "linkedin-image",
+      "platform": "linkedin",
+      "media_type": "image",
+      "url": "https://www.linkedin.com/posts/REPLACE_ME",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "image"
+    },
+    {
+      "case_id": "instagram-video",
+      "platform": "instagram",
+      "media_type": "video",
+      "url": "https://www.instagram.com/reel/REPLACE_ME/",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "video"
+    },
+    {
+      "case_id": "instagram-image",
+      "platform": "instagram",
+      "media_type": "image",
+      "url": "https://www.instagram.com/p/REPLACE_ME/",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "image"
+    }
+  ]
+}

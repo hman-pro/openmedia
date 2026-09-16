@@ -1,0 +1,68 @@
+# Build context exclusions for the runtime image (contracts/runtime.md, "Build and notices").
+# Everything the running bot does not need is kept out of the image so that secrets,
+# fixtures, and host-built artifacts cannot leak into a published layer.
+
+# Secrets and host-local configuration. Only .env.example is ever committed, and even that
+# has no place in the image: the token is supplied by the runtime environment.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets/
+
+# Version control and agent/editor state.
+.git
+.gitignore
+.dockerignore
+.github/
+.claude/
+.specify/
+.vscode/
+.idea/
+
+# Host-built virtualenv: built for the developer's platform, never valid inside the image.
+# The image installs its own /app/.venv from uv.lock.
+.venv/
+venv/
+
+# Specification and validation documents: reviewed in the repository, not shipped.
+# README.md is deliberately NOT excluded: pyproject.toml declares it as the project
+# readme, so the image's `uv sync` would fail to build the package without it.
+specs/
+
+# Tests, fixtures, and live-check artifacts. Dev tooling is excluded from the runtime
+# layer, so the tiny licensed media fixtures have no runtime consumer either.
+tests/
+*.local.md
+*.local.json
+
+# Downloaded media and worker workspaces. Workers create their own directories under the
+# container's tmpfs; nothing media-shaped should enter the build context.
+work/
+downloads/
+media/
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.mp3
+*.opus
+
+# Python and tooling caches.
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# macOS
+.DS_Store
