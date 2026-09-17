@@ -32,9 +32,16 @@ Phases are strictly sequential: Setup → Foundational → US1 → US2 → US3 �
 
 ## Constraints that code review will not catch
 
-- **Deliver one native upstream format, byte-for-byte.** When yt-dlp offers video and
-  audio as separate streams, mark the combined option unavailable and say why. FFmpeg,
-  merging, remuxing, and transcoding stay out of this project.
+- **Deliver source-encoded streams, never re-encoded.** A choice is one native upstream
+  file byte-for-byte, or exactly one video plus one audio stream merged by FFmpeg stream
+  copy (`-c copy`) into a compatible container and labeled combined. Transcoding, scaling,
+  and format conversion stay out. FFmpeg only ever reads local files.
+- **YouTube uses `player_client=default,android`.** `default` supplies fetchable adaptive
+  streams; `android` pins muxed format 18. `ios` is SABR-only and unusable. Change the list
+  only with fresh live evidence (research §6).
+- **Delivery cap is 50,000,000 bytes because Telegram's hosted Bot API caps uploads at
+  50 MB.** Raising it needs a local Bot API server, which is a second service and a plan
+  revision.
 - **Anonymous access only.** No stored cookies, logins, or source credentials. A category
   that needs authentication is a scope decision, not an implementation detail.
 - **State lives in memory.** Bounded maps and tombstones. Introducing a database, queue,

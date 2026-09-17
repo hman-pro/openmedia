@@ -53,10 +53,14 @@ media item; it must not hide a rejected playlist/carousel by selecting its first
 | transport_ref | Private upstream URL/headers or extractor reference; never emitted in callback data or logs |
 | availability | selectable or excluded, with a user-facing reason |
 
-A selectable option must be producible without conversion or merging. Combined audiovisual
-source files are eligible; standalone video is labeled silent. Exact sizes above the cap are
-excluded. Estimates do not masquerade as exact sizes: an uncertain option may be attempted
-with a byte limit and a warning that size is unconfirmed. Each final file must match its
+A selectable option must be producible without conversion or re-encoding. Combined audiovisual
+source files are eligible; standalone video is labeled silent. A merged option records both
+component format IDs in `source_format_id` as `<video>+<audio>`, sets `includes_audio` to
+true, labels the component-size sum as estimated (muxing changes container overhead), and
+is labeled combined. Combined choices require a known/projected sum within the cap; unknown
+or oversized sums are excluded. Exact sizes above the cap are excluded for individual
+outputs. Individual outputs with uncertain size may be attempted with a byte limit and a
+warning that size is unconfirmed. Each final file must match its
 selected media identity, type, format, and quality. Never choose a different option on retry.
 
 ## DeliveryResult

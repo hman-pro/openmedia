@@ -47,8 +47,9 @@ when anonymous inspection fails.
 
 ## Exact source-format downloads
 
-Use an explicit single yt-dlp format ID, never its automatic best/merge selection. Disable
-postprocessors, thumbnail embedding, subtitle embedding, output conversion, external
+Use explicit yt-dlp format IDs: one ID, or one `video+audio` ID pair for a merged choice.
+Never use automatic best/merge selection or fallback. Disable postprocessors other than the
+FFmpeg merger, thumbnail embedding, subtitle embedding, output conversion, external
 downloaders, plugin loading, and persistent download archives. Eligible formats use yt-dlp
 protocol `https` and are fetched as one resource (single or ranged requests). Treat `http`,
 `m3u8`, `m3u8_native`, `http_dash_segments`, `f4m`, `ism`, `rtmp`, websocket, and any other
@@ -56,14 +57,27 @@ protocol as unavailable, even when fragments could be joined without FFmpeg: eac
 downloader is a separate network path requiring its own guard binding. Adding a protocol
 requires updating this allowlist, T039 transport tests, and live evidence.
 
+YouTube inspection and download use `player_client=default,android` (research §6). The client
+list is part of this contract and changes only with updated live evidence.
+
 Combined video/audio files supplied by the source are eligible. Standalone video is silent;
-standalone native audio is audio-only. Images retain the source-delivered file format, not
+standalone native audio is audio-only. A merged choice combines exactly one video and one
+audio component by stream copy (`-c copy`, no re-encoding) into MP4 (`avc1` or `av01` with
+`mp4a`) or WebM (`vp9` with `opus`). Both components must pass the protocol allowlist, and
+their size sum governs cap eligibility. FFmpeg receives only local component files inside the
+owned work directory, runs with `-nostdin` and `-protocol_whitelist file`, and is never used
+as a downloader, so it adds no network path outside the guarded transports. For merged output,
+validate the container signature and that it holds exactly the two selected streams with
+their source codecs. Images retain the source-delivered file format, not
 a claim about a creator's original pre-platform upload. Resolve format from trustworthy
 metadata/headers and validate it against the downloaded signature. Reject inconsistent
 metadata rather than renaming bytes into a different format.
 
 A single metadata refresh may update expiring signed URLs within the remaining deadline,
 but the media ID and selected format/quality/audio characteristics must remain identical.
+Only an expired media URL (HTTP 403 or 410, classified from the status line before any body
+is read) triggers the refresh; other upstream failures and failed media validation are
+terminal, and the failed attempt's files are removed before the retry starts.
 Re-inspection cannot pick the next-best format. Bound actual bytes regardless of reported
 size and abort when the delivery cap is exceeded, including chunked responses. There is no
 resume after a failed request; the user submits a fresh link.
@@ -79,7 +93,8 @@ reject unsupported schemes, URL userinfo, and proxy environment inheritance. Red
 limited to five; strip sensitive upstream headers on host changes.
 
 Metadata responses are capped at 8 MiB per response, thumbnails at 1 MiB and only from a
-separate thumbnail URL. Output bytes are capped at 50,000,000, workspace usage at 128 MiB.
+separate thumbnail URL. Output bytes are capped at 50,000,000, workspace usage at 128 MiB. A merge holds both
+components and its output at once, so the workspace must be at least twice the output cap.
 Parent validates a worker result path is a regular file inside its owned directory, with
 no symlinks or traversal. File existence alone is not successful download evidence: check
 size, native format, and source identity before sending. Downloader progress/file checks

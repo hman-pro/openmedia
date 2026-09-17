@@ -1,12 +1,13 @@
 # Quickstart and Validation: Media Download Workflow
 
-These commands are the acceptance guide for the implementation to be generated from this
-plan. The package, tests, Dockerfile, lockfile, and `.env.example` do not yet exist at planning
-completion. Commands below become runnable after `$speckit-tasks` and `$speckit-implement`.
+These commands are the acceptance guide for the implemented service. Controlled tests and the
+container build are runnable from the repository; live-source and Telegram checks require the
+private inputs described below and are never treated as passing when those inputs are absent.
 
 ## Prerequisites
 
-- Python 3.13 and uv; Deno 2.x, at least 2.3.0, available for local YouTube checks.
+- Python 3.13 and uv. The current validated local environment uses Python 3.13.15 and uv
+  0.12.15; local YouTube checks require Deno 2.9.6 and FFmpeg/ffprobe.
 - Docker for the Linux container build and startup checks.
 - A dedicated Telegram bot token from BotFather and two test Telegram accounts for manual
   isolation checks. Use a separate token from any running bot deployment.
@@ -18,8 +19,8 @@ Configuration and lifecycle: [contracts/runtime.md](contracts/runtime.md).
 
 ## Install and run controlled validation
 
-Implementation first generates and commits `uv.lock` from the planned dependencies. Consumers
-and validation use the lock rather than resolving new versions:
+The committed `uv.lock` is authoritative. Consumers and validation use it rather than
+resolving new versions:
 
 ```sh
 uv sync --locked --group dev
@@ -31,6 +32,11 @@ Mock Telegram and source HTTP boundaries; use an explicit loopback allowance onl
 controlled test transports. Production destination guards must remain enabled by default.
 
 The suite must prove:
+
+Preview thumbnails are optional separate photo messages; the complete format descriptions
+and keyboard always live in a text message. This keeps all eight labels readable and paging
+consistent. Runtime structured events include acknowledgment/preview elapsed time, delivery
+time since selection, outcomes, and sanitized upstream error classes for the timing audit.
 
 | Scenario | Required result |
 |---|---|
@@ -65,6 +71,10 @@ Expected: redacted startup diagnostics and polling readiness. Send a supported l
 to the bot, review metadata, select a native format, and receive a file attachment. Check that
 an image is sent as a document so its native bytes are preserved. The no-selection check must
 show no primary media file in the work directory.
+
+`--healthcheck` is for the running container. It reads the parent-written health snapshot and
+does not contact Telegram or start a second poller. It passes only when both the 15-second
+heartbeat and the last successful long-poll response are younger than 90 seconds.
 
 ## Source integration checks
 
@@ -107,6 +117,10 @@ install `/app/.venv` on the read-only image and put its executables on PATH. Den
 and EJS are bundled in the image; scratch/cache writes use `/tmp` and need no executable mount.
 Stop the local development poller before running the container with the same token.
 
+The pinned image toolchain is CPython 3.13.15, uv 0.12.15, Deno 2.9.6, and Debian FFmpeg
+`7:5.1.9-0+deb12u1`. The FFmpeg build enables GPL components; distribution obligations and
+the locked Python closure are recorded in `THIRD_PARTY_NOTICES.md`.
+
 Manually run the Telegram happy path and two-user scenarios against the container. Then:
 
 ```sh
@@ -132,8 +146,15 @@ either service. Delays from OpenMedia's own limiter or capacity are never exclud
 each excluded sample with a new request. More than 5 exclusions in a run makes it inconclusive:
 repeat it later; it does not pass. Record every exclusion with its logged cause.
 
+The request log is one JSON object per line, keyed by `request_id`. `acknowledgment` and
+`preview` records carry `elapsed_seconds` from link submission; the `delivery` record carries
+`selected_elapsed_seconds` from the accepted selection. Every request ends with one `terminal`
+record whose `external_causes` lists the excusable causes seen for that request (`429`, `5xx`,
+`connection_failure`, `retry_after`). An empty list means the sample counts, however slow it was.
+
 Use accelerated clocks for the 900s preview expiry and cleanup tests, and at least one real
 subprocess test to verify timeout kills the worker rather than just stopping its awaiter.
 Use independent accounts for SC-005. Complete SC-006 with one link and one first-page format
 selection. Review all 16 functional requirements against the contracts and record results.
-No timing, live compatibility, or image-startup checks were executed during planning.
+Record results in `validation.md`. Controlled test success cannot replace the live compatibility,
+real Telegram, clean container shutdown, or timing gates.

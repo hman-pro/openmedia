@@ -134,7 +134,7 @@ Open Graph images. Reuse relevant parsing ideas or attributed Apache-2.0 code wh
 
 | Source | Inspection and download strategy | Required acceptance evidence |
 |---|---|---|
-| YouTube video | yt-dlp metadata-only inspection; select an exact source format ID | Public video with playable native format; native audio where exposed |
+| YouTube video | yt-dlp metadata-only inspection with `player_client=default,android`; select an exact source format ID or one video+audio ID pair | Public video with a fetchable video-with-sound option, source-muxed or stream-copy merged; native audio where exposed |
 | LinkedIn video | yt-dlp LinkedIn post extractor | Public single video; identity and format preservation |
 | LinkedIn image | Parse public activity embed for exactly one explicit image attachment; bounded HTTP file fetch after selection | Single image, multiple images, unrelated preview, missing descriptive fields, mismatched identity |
 | Instagram video | yt-dlp; reject multi-item results | Public single video/reel; native audio only if independently available |
@@ -153,12 +153,49 @@ nor text, conflicting with FR-004 when an image is still available. A narrowly s
 retains the demonstrated attachment handling while allowing optional metadata to be absent.
 This is a justified custom integration under Constitution IV, not a new extraction framework.
 
-**Native-format boundary**: Select one independently downloadable source output. Never use
-yt-dlp's default combined best-video-plus-audio selection, extraction/conversion postprocessors,
-or automatic format fallback. Include existing combined audiovisual files when available;
-otherwise label video-only outputs as silent. Audio-only formats must already be exposed by
-the source. Omit choices requiring external remuxing or merging. This implements the user's
-source-format choice without adding a separate merging feature or an FFmpeg dependency.
+**Format boundary** *(amended 2026-09-16 after the T059 spike; evidence in
+`validation.md`)*: Deliver source-encoded streams only. Two kinds of choice are eligible: one
+independently downloadable source output (a file the source already muxed, silent video,
+audio-only, an image), or exactly one source video stream plus one source audio stream merged
+by FFmpeg stream copy. Never re-encode, scale, change bitrate, or convert. Never use yt-dlp's
+automatic `best` or `bestvideo+bestaudio` selection or automatic fallback: every choice names
+explicit format IDs. Extraction and conversion postprocessors stay disabled; the merger is the
+only permitted postprocessor.
+
+Merge pairs must be container-compatible without re-encoding: `avc1` or `av01` video with
+`mp4a` audio into MP4, `vp9` with `opus` into WebM. Other pairings are omitted. Offer a merged
+choice only when both components use an allowlisted protocol and the sum of their sizes is
+within the delivery cap. A known or estimated sum above the cap excludes it; an unknown sum
+also excludes the combined choice, as required by the specification. A sum within the cap
+is labeled estimated because muxing changes container overhead. Label
+merged choices as combined, since the container was produced by the service.
+
+Why merge rather than rely on source-muxed files: on current YouTube the only source-muxed
+rendition is format `18`, at most 360p. Without merging, every higher quality is silent. In
+the spike, merging raised the best deliverable-with-sound quality for a 213-second video
+from 360p to 1080p (AV1 or VP9) within 50,000,000 bytes. Stream copy costs seconds of CPU
+and loses no quality.
+
+**YouTube player clients**: Pass `--extractor-args "youtube:player_client=default,android"`.
+Spike evidence, one video in one session, 64 KiB ranged fetch per format:
+
+| Client | Format 18 | Adaptive formats |
+|---|---|---|
+| `default` | Present in one run, absent in another | Listed and fetchable (HTTP 206) |
+| `android` | Fetchable | Not listed (SABR-only experiment) |
+| `web_embedded` | Not listed | Listed but HTTP 403 |
+| `mweb` | HTTP 403 | Not listed |
+| `ios` | None: formats lack URLs (SABR-only) | None |
+
+`default` supplies fetchable adaptive streams for merging; `android` pins format 18, which
+`default`'s negotiated client dropped in the first spike run. `ios` was requested but is
+unusable today. A listed format is not evidence of a downloadable one: acceptance requires a
+successful fetch of each chosen component, and live checks must re-verify the clients because
+YouTube runs per-session streaming experiments. Changing the client list is an
+upstream-coupled decision that requires updating this section, validation evidence, and the
+T016 fixtures, because losing format 18 or the adaptive list silently removes sound options
+without failing any controlled test.
+
 The eligible download-protocol allowlist is fixed in `contracts/source-adapters.md`.
 
 **Integration controls**: Use metadata-only extraction before selection. Post/media-type
@@ -193,6 +230,7 @@ outcome. Verify anonymous access from the intended deployment environment before
 | yt-dlp | `yt-dlp[default]==2026.8.19` | Video/audio extraction; Unlicense core, retain dependency notices |
 | yt-dlp-ejs | Compatible exact version resolved by yt-dlp extra and `uv.lock` | Bundled YouTube challenge scripts; retain upstream notices |
 | Deno | `>=2.3.0,<3`; exact patch and checksum fixed in image build | yt-dlp JavaScript runtime; MIT and bundled component notices |
+| FFmpeg | Exact version and build pinned in the image; never fetched at runtime | Stream-copy merging of one video and one audio stream. Licence depends on build configuration: LGPL-2.1-or-later, or GPL-2.0-or-later when built with `--enable-gpl`. Record the configuration and retain notices |
 | Instaloader | `==4.15.3` | Instagram image metadata; MIT, with requests dependency locked |
 | LinkedIn parser precedent | ShareXtract 0.23.4 source; record exact source commit if code is reused | Apache-2.0 attribution for any adapted code; no ShareXtract runtime dependency |
 | pytest / pytest-asyncio | `pytest>=8,<10`, `pytest-asyncio>=1,<2`; exact compatible versions in lock | Development validation; retain distributed dependency notices |

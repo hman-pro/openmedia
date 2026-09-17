@@ -1,0 +1,9 @@
+{
+  "id": "7504928712690176000",
+  "webpage_url": "https://www.linkedin.com/feed/update/urn:li:activity:7504928712690176000",
+  "extractor_key": "LinkedIn",
+  "live_status": "not_live",
+  "formats": [
+    {"format_id": "720p", "url": "https://media.example.invalid/linkedin.mp4", "protocol": "https", "ext": "mp4", "vcodec": "avc1", "acodec": "mp4a", "height": 720, "filesize_approx": 3000}
+  ]
+}

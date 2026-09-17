@@ -1,0 +1,9 @@
+{
+  "id": "DdExample2",
+  "webpage_url": "https://www.instagram.com/reel/DdExample2/",
+  "extractor_key": "Instagram",
+  "live_status": "not_live",
+  "formats": [
+    {"format_id": "dash-1", "url": "https://media.example.invalid/instagram.mp4", "protocol": "https", "ext": "mp4", "vcodec": "avc1", "acodec": "mp4a", "height": 720}
+  ]
+}

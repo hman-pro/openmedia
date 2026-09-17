@@ -12,7 +12,8 @@ Build a publicly accessible Telegram bot: accept one public media link, inspect 
 show native-format choices, download only after selection, and deliver the unchanged file
 in the requesting private chat. Use Python 3.13 and python-telegram-bot with long polling
 in one container. Reuse yt-dlp for video/native audio and Instaloader for Instagram images;
-a narrow LinkedIn image parser covers the gap in those libraries.
+a narrow LinkedIn image parser covers the gap in those libraries. Where YouTube serves video
+and audio separately, FFmpeg combines one of each by stream copy; nothing is re-encoded.
 
 The design retains all five platform/media combinations in FR-002. Research establishes
 source-code feasibility; live support must still pass the release matrix. There are no
@@ -23,7 +24,8 @@ remaining product questions, and no implementation has been performed by this pl
 **Language/Version**: Python `>=3.13,<3.14`; Linux container with pinned base image.
 
 **Primary Dependencies**: python-telegram-bot 22.8, yt-dlp[default] 2026.8.19,
-Instaloader 4.15.3; Deno 2.x (at least 2.3.0) for bundled YouTube challenge scripts.
+Instaloader 4.15.3; Deno 2.x (at least 2.3.0) for bundled YouTube challenge scripts;
+FFmpeg, exact build pinned in the image, for stream-copy merging only.
 Standard-library HTML parsing and guarded HTTP for LinkedIn images. See the dependency
 and license decisions in [research.md](research.md).
 
@@ -42,8 +44,9 @@ filesystem; no inbound port. Local development uses Python 3.13 and uv.
 in 95% of 20 eligible requests; SC-003 delivery within 2 minutes for eligible files up to
 20 MB. Benchmark within the configured work-slot limit with responsive external services.
 
-**Constraints**: Native source formats only; no transcoding, merging, remuxing, credentials,
-playlists, or multi-item posts. Application delivery cap 50,000,000 bytes. Inspection 60s,
+**Constraints**: Source-encoded streams only; no transcoding, re-encoding, or conversion. One
+video and one audio stream may be merged by stream copy when the projected size fits. No
+credentials, playlists, or multi-item posts. Application delivery cap 50,000,000 bytes. Inspection 60s,
 selection expiry 900s, selected download plus sending 600s, cleanup within 900s. Public bot
 access with one active request per user and no silent job queue.
 
@@ -59,7 +62,7 @@ YouTube video, LinkedIn video/image, Instagram video/image; native audio where e
 |---|---|---|---|
 | I. Social media downloading | Pass: user journey and media matrix defined | Pass: all categories retained with explicit adapter paths | Source contract and platform acceptance matrix |
 | II. Telegram interface | Pass: link-to-file private-chat flow | Pass: handlers separated from source workers | Telegram contract; coordinator boundary |
-| III. Python by default | Pass: Python requested | Pass: one Python service; Deno only supports yt-dlp | Technical Context; research §1 and §7 |
+| III. Python by default | Pass: Python requested | Pass: one Python service; Deno supports yt-dlp and FFmpeg is a stream-copy media processor, both permitted supporting tools | Technical Context; research §1 and §7 |
 | IV. Open source reuse | Pass: evaluate existing extractors first | Pass: reuse two libraries; narrow image parser justified by missing support and optional-metadata semantics | Research §6; dependency notices |
 | V. Container deployment | Pass: one container is sufficient | Pass: bounded temporary filesystem, runtime token, image and startup checks specified | Quickstart and runtime contract |
 | Resource limits and credentials | Pass: spec specifies deadlines and access mode | Pass: capacity, kill/reap, cleanup, redaction, public-destination checks | Runtime and source contracts |
@@ -174,6 +177,7 @@ an error message alone does not count as support for a required category.
 ## Complexity Tracking
 
 No constitution violations. The LinkedIn image adapter is justified reuse-gap work under
-Principle IV; its bounded scope and alternatives are documented in research §6. The native
-format decision avoids an FFmpeg dependency. Multiple services or durable state require a
+Principle IV; its bounded scope and alternatives are documented in research §6. FFmpeg was
+added after the T059 spike for stream-copy merging only; it runs inside the existing worker
+process group and adds no service. Multiple services or durable state require a
 future requirement and plan revision.

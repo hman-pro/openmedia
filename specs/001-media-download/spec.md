@@ -57,7 +57,10 @@ Repeat for every in-scope platform and media combination.
 7. **Given** a source offers only particular file formats and quality choices, **When**
    the preview appears, **Then** only supported choices available from that source are
    offered, with no generated MP4 or MP3 alternatives; the delivered file preserves the
-   selected format. Audio-only choices appear only when available without conversion.
+   selected format. Where the source serves video and audio as separate streams, a
+   video-with-sound choice may combine exactly one of each by stream copy, without
+   re-encoding, and is labeled as combined. Audio-only choices appear only when available
+   without conversion.
 
 ---
 
@@ -174,7 +177,9 @@ requests from two different users; verify the response and destination for each.
 - **FR-006**: Offered video and audio formats and quality choices MUST be available from
   the source and supported by the service without format conversion. The service MUST
   preserve the selected source format and MUST NOT generate additional formats or quality
-  variants through conversion. Images MUST retain their available original format
+  variants through conversion. Combining one source video stream and one source audio
+  stream into a single file by stream copy is not conversion: both streams MUST keep their
+  source encoding, and the choice MUST be labeled as combined. Images MUST retain their available original format
   (Story 1.3, 1.6–1.7; image and audio-only edge cases).
 - **FR-007**: The service MUST wait for an explicit selection before downloading the
   requested media file, including when only one choice exists. Metadata and thumbnail
@@ -269,9 +274,11 @@ requests from two different users; verify the response and destination for each.
 - Formats and quality choices are limited to the source item's available options that
   the service can deliver without conversion. No standardized MP4 or MP3 output is
   promised when that format is absent from the source. Images retain their original format.
-- Because formats are not merged, the highest qualities on some platforms may be offered
-  only as silent video or separate audio-only choices; video with sound may be available
-  only at lower qualities, or not at all, for a given item.
+- Separate source video and audio streams may be combined into one file by FFmpeg stream
+  copy, without re-encoding. A combined choice is offered only when the pair is
+  container-compatible and its projected size fits the delivery limit, so the highest
+  qualities may still appear only as silent video or audio-only choices. Re-encoding,
+  scaling, bitrate changes, and format conversion remain out of scope.
 - Delivery is a direct Telegram attachment. External download hosting, file splitting,
   and automatic changes to quality to fit limits are outside scope.
 - The 15-minute selection expiry, 60-second inspection deadline, 10-minute processing

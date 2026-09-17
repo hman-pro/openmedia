@@ -1,0 +1,15 @@
+{
+  "id": "fixtureYT01",
+  "webpage_url": "https://www.youtube.com/watch?v=fixtureYT01",
+  "extractor_key": "Youtube",
+  "title": "Sanitized public video",
+  "uploader": "Example creator",
+  "duration": 12,
+  "live_status": "not_live",
+  "formats": [
+    {"format_id": "18", "url": "https://media.example.invalid/muxed", "protocol": "https", "ext": "mp4", "vcodec": "avc1.42001E", "acodec": "mp4a.40.2", "height": 360, "filesize": 1000},
+    {"format_id": "137", "url": "https://media.example.invalid/video", "protocol": "https", "ext": "mp4", "vcodec": "avc1.640028", "acodec": "none", "height": 1080, "filesize": 2000},
+    {"format_id": "140", "url": "https://media.example.invalid/audio", "protocol": "https", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 128, "filesize": 500},
+    {"format_id": "hls", "url": "https://media.example.invalid/list.m3u8", "protocol": "m3u8_native", "ext": "mp4", "vcodec": "avc1", "acodec": "mp4a"}
+  ]
+}

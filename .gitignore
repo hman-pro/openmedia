@@ -47,6 +47,13 @@ htmlcov/
 
 # Agent and editor local state
 .claude/
+.vscode/
+.idea/
+*.swp
+*.tmp
+*.log
 
-# macOS
+# OS metadata
 .DS_Store
+Thumbs.db
+CLAUDE.md

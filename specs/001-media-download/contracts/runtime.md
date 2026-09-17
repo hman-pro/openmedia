@@ -5,9 +5,10 @@
 One Linux container runs one polling bot parent and at most two source workers. Run as
 UID/GID 10001 with `--init`, a read-only image filesystem, and a writable temporary mount.
 No inbound ports, database, queue, or persistent media volume are needed. Bundle Python,
-the locked package environment, Deno, and EJS. The image must not download executable
+the locked package environment, Deno, EJS, and FFmpeg. The image must not download executable
 components at startup. Deno runs only the bundled challenge helper with its restricted
-permissions. No FFmpeg dependency is planned.
+permissions. FFmpeg is bundled for stream-copy merging only, runs inside the worker's process
+group, and is killed and reaped with it.
 
 ## Configuration
 
@@ -18,7 +19,7 @@ permissions. No FFmpeg dependency is planned.
 | OPENMEDIA_MAX_FILE_BYTES | `50000000` | Positive; cannot exceed the validated hosted API ceiling |
 | OPENMEDIA_MAX_WORKERS | `2` | Positive; shared across inspection and download-through-delivery |
 | OPENMEDIA_MAX_PENDING | `100` | Positive; preview capacity reserved when admitting inspection |
-| OPENMEDIA_WORKSPACE_BYTES | `134217728` | Per-job ceiling; must exceed maximum output size |
+| OPENMEDIA_WORKSPACE_BYTES | `134217728` | Per-job ceiling; at least twice maximum output size, since a merge holds components and output together |
 | OPENMEDIA_LOG_LEVEL | `INFO` | Reject invalid levels; upstream transport debug logs remain disabled |
 
 Fixed acceptance values: inspection 60s, selection expiry 900s, processing 600s, cleanup 900s.
