@@ -483,3 +483,53 @@ T026 and T074 (five-category live source matrix), T053 and T075 (constrained con
 real bot token, including a rebuilt image), T054 and T076 (deployment-network sources and
 two-account Telegram acceptance), and T055 and T080 (20 + 20 live timing runs). No controlled
 test is counted toward any of them.
+
+---
+
+## T026 follow-up — LinkedIn failure diagnosis
+
+**Date**: 2026-09-17
+
+**Network**: local developer machine
+
+**Versions**: as in the T091 gate above (yt-dlp 2026.08.19)
+
+The 2026-09-16 T026 attempt recorded every LinkedIn example as unavailable. These read-only
+anonymous probes used the application's own `GuardedHTTPTransport` and `YtDlpAdapter` to find
+out why. Only status codes, sizes, and parser outcomes were recorded; no post text.
+
+**User-Agent is not the cause.** The default `OpenMedia/0.1` agent and a browser agent returned
+byte-identical responses for all four embed requests tested.
+
+**The URN type is the cause.** LinkedIn `activity`, `ugcPost`, and `share` URNs are distinct
+objects even with the same digits, and a guest embed exists only under the post's own type:
+
+| Post | `share` embed | `ugcPost` embed | `activity` embed | Content once reachable |
+|---|---|---|---|---|
+| `7505650038253965312` (recorded image) | 200 | not probed | not probed | One attachment; parses. The 09-16 failure was transient. |
+| `7504928712690176000` (recorded video) | 404 | 200, public `<video data-sources>` | 404 | Video still public |
+| `7455440016459251712` | 404 | 200 | 404 | Multiple images; correctly `unsupported_collection` |
+| `7275224371206504449` | 404 | 404 | 200 | No media; yt-dlp `no_formats` |
+| `7500526685084270592` | 404 | 404 | 200 | No media; yt-dlp `no_formats` |
+
+`recognize_source_url` discards the URN type and canonicalizes every post to
+`feed/update/urn:li:activity:<digits>`, and the image adapter always requests the `share` embed.
+A post of any other type is therefore requested as an object that does not exist. The three
+search-indexed posts were also never valid single-video or single-image examples.
+
+The pinned yt-dlp `LinkedInIE` accepts only `/posts/<slug>-<id>-xxxx` and
+`feed/update/urn:li:activity:<id>`; its own test case is a `ugcPost` in the `/posts/` form.
+Handing it `feed/update/urn:li:activity:<ugcPost digits>` yields "Unable to extract video", and
+`feed/update/urn:li:ugcPost:<id>` has no matching extractor. A `/posts/` URL with an invented
+slug returns 404, so the video path cannot be confirmed without a real share link.
+
+**Decision**: preserve the URN type and the user's `/posts/` link through routing (T094). The
+video fix remains unconfirmed until T074 runs with real "Copy link to post" examples for one
+video and one single-image LinkedIn post. No LinkedIn category is counted as passing.
+
+**After T094**: through the real `SourceRouter`, adapters, and `guard_public_sockets`,
+`feed/update/urn:li:share:7505650038253965312` inspected to one exact-size JPEG choice with a
+creator, and its metadata link re-recognized to the same route; the `ugcPost` multi-image post
+`7455440016459251712` was reached and rejected as `unsupported_collection` instead of a 404.
+The locked controlled gate passed **269 tests**. This is image-path routing evidence only;
+the video path and both LinkedIn T074 categories still need real share links.

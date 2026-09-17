@@ -30,7 +30,7 @@ from openmedia.sources import (
 
 
 _ACTIVITY_URL = re.compile(
-    r"^/embed/feed/update/urn:li:(?:share|ugcPost|activity):(\d{8,32})/?$"
+    r"^/embed/feed/update/urn:li:(share|ugcPost|activity):(\d{8,32})/?$"
 )
 
 
@@ -114,10 +114,13 @@ class _EmbedParser(HTMLParser):
         return "\n".join(line.strip() for line in lines).strip() or None
 
 
-def embed_url(activity_id: str) -> str:
+def embed_url(activity_id: str, urn_kind: str = "share") -> str:
+    """Guest embed for one post; the embed exists only under the post's own URN type."""
     if not activity_id.isdigit() or not 8 <= len(activity_id) <= 32:
         raise ValueError("LinkedIn activity ID must be numeric")
-    return f"https://www.linkedin.com/embed/feed/update/urn:li:share:{activity_id}"
+    if urn_kind not in {"activity", "ugcPost", "share"}:
+        raise ValueError("LinkedIn URN type must be activity, ugcPost, or share")
+    return f"https://www.linkedin.com/embed/feed/update/urn:li:{urn_kind}:{activity_id}"
 
 
 def parse_embed(
@@ -125,15 +128,20 @@ def parse_embed(
     *,
     requested_activity_id: str,
     fetched_url: str,
+    canonical_url: str | None = None,
 ) -> InspectResult:
-    """Parse one matching guest embed and require one explicit feed attachment."""
+    """Parse one matching guest embed and require one explicit feed attachment.
+
+    ``canonical_url`` is the submitted route's canonical link; without it the link is derived
+    from the fetched embed so that it keeps the same URN type.
+    """
     parts = urlsplit(fetched_url)
     match = _ACTIVITY_URL.fullmatch(parts.path)
     if (
         parts.scheme != "https"
         or (parts.hostname or "").rstrip(".").lower() not in {"linkedin.com", "www.linkedin.com"}
         or match is None
-        or match.group(1) != requested_activity_id
+        or match.group(2) != requested_activity_id
     ):
         raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
     parser = _EmbedParser()
@@ -154,7 +162,9 @@ def parse_embed(
     mime = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[extension]
     metadata = MediaMetadata(
         platform="linkedin",
-        canonical_url=f"https://www.linkedin.com/feed/update/urn:li:activity:{requested_activity_id}",
+        # Refresh re-inspects this link, so it must name the same URN type that was fetched.
+        canonical_url=canonical_url
+        or f"https://www.linkedin.com/feed/update/urn:li:{match.group(1)}:{requested_activity_id}",
         media_id=requested_activity_id,
         # Alt text describes the attachment but is not necessarily the post caption, so only
         # the explicit commentary and actor-name elements supply these optional fields.
@@ -211,7 +221,7 @@ class LinkedInImageAdapter:
             raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="inspection")
         rate_control.acquire("linkedin", "metadata", deadline=request.deadline)
         response = transport.fetch(
-            embed_url(route.media_id),
+            embed_url(route.media_id, route.urn_kind or "share"),
             limit=request.metadata_limit,
             deadline=request.deadline,
         )
@@ -225,6 +235,7 @@ class LinkedInImageAdapter:
             html,
             requested_activity_id=route.media_id,
             fetched_url=response.url,
+            canonical_url=route.canonical_url,
         )
         reference = result.options[0].transport_ref
         assert isinstance(reference, Mapping)

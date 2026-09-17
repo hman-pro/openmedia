@@ -111,6 +111,65 @@ def test_successful_attachment_probe_still_yields_the_image_choice(tmp_path) -> 
     assert (result.options[0].extension, result.options[0].size_bytes) == ("jpg", 100)
 
 
+class RecordingProbeTransport(ProbeTransport):
+    def __init__(self) -> None:
+        super().__init__(200)
+        self.fetched: list[str] = []
+
+    def fetch(self, url, *, limit, **kwargs):
+        self.fetched.append(url)
+        return super().fetch(url, limit=limit, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("source_url", "embed_urn"),
+    [
+        (f"https://www.linkedin.com/posts/someone_words-ugcPost-{IDENTITY}-AbCd", f"urn:li:ugcPost:{IDENTITY}"),
+        (f"https://www.linkedin.com/feed/update/urn:li:activity:{IDENTITY}", f"urn:li:activity:{IDENTITY}"),
+        (f"https://www.linkedin.com/feed/update/urn:li:share:{IDENTITY}", f"urn:li:share:{IDENTITY}"),
+    ],
+)
+def test_image_adapter_requests_the_embed_under_the_posts_own_urn_type(tmp_path, source_url, embed_urn) -> None:
+    from openmedia.sources import InspectInput, recognize_source_url
+    from openmedia.sources.linkedin import LinkedInImageAdapter
+    transport = RecordingProbeTransport()
+    route = recognize_source_url(source_url)
+    request = InspectInput(source_url=route.canonical_url, request_id="0123456789abcdef0123456789abcdef",
+        work_directory=tmp_path, deadline=100)
+    result = LinkedInImageAdapter().inspect(request, transport=transport, rate_control=ProbeRate())
+    assert transport.fetched == [f"https://www.linkedin.com/embed/feed/update/{embed_urn}"]
+    assert result.metadata.media_id == IDENTITY
+    # Refresh re-inspects metadata.canonical_url, so it must still name the same URN type.
+    assert result.metadata.canonical_url == route.canonical_url
+    assert recognize_source_url(result.metadata.canonical_url) == route
+
+
+def test_router_sends_extractor_unmatchable_linkedin_routes_straight_to_the_image_adapter(tmp_path) -> None:
+    from openmedia.sources import InspectInput, SourceRouter
+    from openmedia.sources.linkedin import LinkedInImageAdapter
+
+    class MustNotRun:
+        def inspect(self, request, **kwargs):
+            raise AssertionError("yt-dlp cannot match feed/update ugcPost or share URLs")
+
+    class NoVideo:
+        calls = 0
+        def inspect(self, request, **kwargs):
+            NoVideo.calls += 1
+            raise SourceAdapterError(ErrorCategory.NO_FORMATS, stage="inspection")
+
+    def inspect(router, url):
+        request = InspectInput(source_url=url, request_id="0123456789abcdef0123456789abcdef",
+            work_directory=tmp_path, deadline=100)
+        return router.inspect(request, transport=RecordingProbeTransport(), rate_control=ProbeRate())
+
+    embed_only = SourceRouter(ytdlp=MustNotRun(), linkedin=LinkedInImageAdapter(), instagram=MustNotRun())
+    assert inspect(embed_only, f"https://www.linkedin.com/feed/update/urn:li:ugcPost:{IDENTITY}").options
+    video_first = SourceRouter(ytdlp=NoVideo(), linkedin=LinkedInImageAdapter(), instagram=MustNotRun())
+    assert inspect(video_first, f"https://www.linkedin.com/posts/someone_words-ugcPost-{IDENTITY}-AbCd").options
+    assert NoVideo.calls == 1
+
+
 def test_rejects_multiple_explicit_attachments() -> None:
     with pytest.raises(SourceAdapterError) as caught:
         parse_embed(read("linkedin-image-multiple.html"), requested_activity_id=IDENTITY, fetched_url=URL)

@@ -19,7 +19,10 @@ MAX_THUMBNAIL_BYTES = 1024 * 1024
 _REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 _YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 _INSTAGRAM_ID = re.compile(r"^[A-Za-z0-9_-]{5,64}$")
-_LINKEDIN_ACTIVITY = re.compile(r"(?:activity|ugcPost|share)[:-](\d{8,32})")
+# LinkedIn activity, ugcPost, and share URNs are distinct objects even when their digits match,
+# so the type is part of a post's identity for every request made on its behalf.
+_LINKEDIN_URN = re.compile(r"^urn:li:(activity|ugcPost|share):(\d{8,32})$")
+_LINKEDIN_POST_SLUG = re.compile(r"^[A-Za-z0-9._~%-]+?-(?:(activity|ugcPost|share)-)?(\d{8,32})(?:-[A-Za-z0-9_]+)?$")
 SUPPORTED_HOSTS = frozenset(
     {
         "youtube.com",
@@ -47,6 +50,7 @@ class SourceRoute:
     media_id: str
     canonical_url: str
     route_kind: str
+    urn_kind: str | None = None  # LinkedIn activity/ugcPost/share; None for other platforms
 
 
 def supported_host(url: str) -> bool:
@@ -155,17 +159,24 @@ def recognize_source_url(url: str) -> SourceRoute:
         )
 
     if host in {"linkedin.com", "www.linkedin.com"}:
-        decoded = parts.path.replace("%3A", ":").replace("%3a", ":")
-        match = _LINKEDIN_ACTIVITY.search(decoded)
-        if match is None:
-            # Public /posts/<slug>-<activity id>-... links end in a stable numeric ID.
-            if segments and segments[0] == "posts":
-                match = re.search(r"-(\d{8,32})(?:-|$)", segments[-1])
+        if len(segments) == 2 and segments[0] == "posts":
+            match = _LINKEDIN_POST_SLUG.fullmatch(segments[1])
+            if match is None:
+                raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
+            # The share link itself is kept: yt-dlp's LinkedInIE matches this form for every
+            # URN type. A slug without a type word predates typed slugs and names an activity.
+            urn_kind, media_id = match.group(1) or "activity", match.group(2)
+            canonical = f"https://www.linkedin.com/posts/{segments[1]}"
+            return SourceRoute("linkedin", media_id, canonical, "post", urn_kind)
+        decoded = [segment.replace("%3A", ":").replace("%3a", ":") for segment in segments]
+        match = _LINKEDIN_URN.fullmatch(decoded[2]) if len(decoded) == 3 and decoded[:2] == ["feed", "update"] else None
         if match is None:
             raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
-        media_id = match.group(1)
-        canonical = f"https://www.linkedin.com/feed/update/urn:li:activity:{media_id}"
-        return SourceRoute("linkedin", media_id, canonical, "post")
+        urn_kind, media_id = match.group(1), match.group(2)
+        canonical = f"https://www.linkedin.com/feed/update/urn:li:{urn_kind}:{media_id}"
+        # The pinned LinkedInIE matches feed/update only for activity URNs; other types can
+        # reach the guest-embed image path but never the video extractor.
+        return SourceRoute("linkedin", media_id, canonical, "post" if urn_kind == "activity" else "embed", urn_kind)
 
     raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
 
@@ -411,6 +422,8 @@ class SourceRouter:
                     raise
                 return self.adapters["yt_dlp"].inspect(request, transport=transport, rate_control=rate_control)
         if route.platform == "linkedin":
+            if route.route_kind != "post":
+                return self.adapters["linkedin_image"].inspect(request, transport=transport, rate_control=rate_control)
             try:
                 return self.adapters["yt_dlp"].inspect(request, transport=transport, rate_control=rate_control)
             except SourceAdapterError as exc:
