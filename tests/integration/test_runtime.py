@@ -324,6 +324,25 @@ async def test_timing_events_record_measured_preview_ack_and_upstream(tmp_path, 
     assert events[-1]["upstream_status_class"] == "429"
 
 
+async def test_downloading_status_names_the_selected_option(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from openmedia.coordinator import RequestRegistry
+    from openmedia.models import FormatOption, MediaMetadata
+    send = AsyncMock(return_value=SimpleNamespace(message_id=1))
+    callbacks = runtime.RuntimeCallbacks(Settings.from_env(environment(tmp_path)),
+        SimpleNamespace(bot=SimpleNamespace(send_message=send)))
+    registry = RequestRegistry()
+    request = registry.new_request(user_id=1, chat_id=1, source_url="https://youtu.be/abcDEF12345", platform="youtube", media_id="abcDEF12345")
+    await registry.admit(request)
+    option = FormatOption(3, "fixture", "140", "audio", "m4a", "audio/mp4", bitrate=129.5)
+    await registry.publish_preview(request.request_id, metadata=MediaMetadata("youtube", request.source_url, request.media_id),
+        options=(option,), preview_message_id=9)
+    await registry.claim_selection(request.request_id, user_id=1, chat_id=1, preview_message_id=9, option_id=3)
+    await callbacks.status(request, "downloading")
+    assert "4. audio · M4A · 129.5 kbps" in send.await_args.kwargs["text"]
+
+
 async def test_request_logs_separate_service_timing_from_external_failures(tmp_path, caplog):
     """Quickstart exclusion rule: only logged 429/5xx/retry_after/connection failures excuse a sample."""
     from types import SimpleNamespace
@@ -416,6 +435,45 @@ def test_check_config_is_local_and_redacts_token(
     captured = capsys.readouterr()
     assert token not in captured.out + captured.err
     assert "<redacted>" in captured.out
+
+
+def test_check_config_keeps_workspaces_but_polling_startup_sweeps_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = Settings.from_env(environment(tmp_path))
+    monkeypatch.setattr(runtime.Settings, "from_env", lambda: settings)
+    monkeypatch.setattr(runtime.shutil, "which", lambda name: f"/usr/bin/{name}")
+    workspace = tmp_path / ("b" * 32 + "-in-flight")
+    workspace.mkdir()
+    (workspace / "selected.mp4").write_bytes(b"partial")
+
+    assert runtime.main(["--check-config"]) == 0
+    assert workspace.exists(), "check-config must not delete another process's workspace"
+
+    polled: list[bool] = []
+    class FakeApplication:
+        def run_polling(self, **kwargs):
+            polled.append(workspace.exists())
+    monkeypatch.setattr(runtime, "build_application", lambda settings: (FakeApplication(), None))
+    assert runtime.main([]) == 0
+    assert polled == [False], "stale workspaces are removed before polling starts"
+
+
+def test_runtime_requires_bundled_ejs_challenge_scripts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    settings = Settings.from_env(environment(tmp_path, "123456789:never-print-this-token"))
+    monkeypatch.setattr(runtime.shutil, "which", lambda name: f"/bin/{name}")
+    real_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec",
+        lambda name, *args: None if name == "yt_dlp_ejs" else real_find_spec(name, *args))
+    with pytest.raises(ConfigError, match="EJS") as caught:
+        runtime.validate_local_runtime(settings)
+    assert "never-print-this-token" not in str(caught.value)
+    monkeypatch.setattr(importlib.util, "find_spec", real_find_spec)
+    runtime.validate_local_runtime(settings)
 
 
 def test_runtime_requires_bundled_deno_ffmpeg_and_ffprobe(

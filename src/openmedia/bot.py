@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from openmedia.models import Availability, FormatOption, MediaMetadata
@@ -18,6 +18,7 @@ from openmedia.sources import (
     SourceAdapterError,
     SourceRoute,
     recognize_source_url,
+    supported_links,
     supported_urls_in_text,
 )
 
@@ -46,7 +47,16 @@ def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
             return "The source has no downloadable native audio-only option. Choose a video or send another link."
         return "The selected native format changed or is unavailable. Submit the link again."
     if error is ErrorCategory.TOO_LARGE:
-        return "That file exceeds the delivery limit. Choose a smaller available option or link."
+        if stage == "checking":
+            return (
+                "None of the available choices fits the current delivery limit, so nothing "
+                "can be sent. Send another public link."
+            )
+        # After selection the preview is already closed, so there is nothing left to choose.
+        return (
+            "The selected file exceeds the delivery limit. Submit the link again to review "
+            "the current choices."
+        )
     if error is ErrorCategory.RATE_LIMITED:
         return "The source is busy. Retry the public link later."
     if error is ErrorCategory.TIMEOUT:
@@ -91,13 +101,38 @@ def parse_callback_data(data: str) -> CallbackAction:
     return CallbackAction(match.group(1), match.group(2), index)
 
 
-def parse_link_message(text: str, *, chat_type: str) -> SourceRoute:
+def message_links(message: Any) -> tuple[str, ...]:
+    """Supported-platform links from Telegram URL/text-link entities, else from plain text.
+
+    A ``text_link`` hides its URL behind display text, and Telegram marks scheme-less links
+    as ``url`` entities, so entities are authoritative whenever the message carries any.
+    """
+    entities = getattr(message, "entities", None) or ()
+    kinds = (MessageEntity.URL, MessageEntity.TEXT_LINK)
+    if any(entity.type in kinds for entity in entities):
+        parsed = message.parse_entities(list(kinds))
+        return supported_links(
+            entity.url if entity.type == MessageEntity.TEXT_LINK else value
+            for entity, value in parsed.items()
+            if entity.type != MessageEntity.TEXT_LINK or entity.url
+        )
+    return supported_urls_in_text(getattr(message, "text", None) or "")
+
+
+def parse_link_message(
+    text: str, *, chat_type: str, links: tuple[str, ...] | None = None
+) -> SourceRoute:
     if chat_type != "private":
         raise InputError(PRIVATE_CHAT_GUIDANCE)
-    urls = supported_urls_in_text(text)
+    urls = supported_urls_in_text(text) if links is None else supported_links(links)
     if len(urls) != 1:
         raise InputError(ONE_LINK_GUIDANCE)
     return recognize_source_url(urls[0])
+
+
+def selected_label(option: FormatOption) -> str:
+    """The numbered label a user saw in the preview, used to confirm their choice."""
+    return f"{option.option_id + 1}. {option_label(option)}"
 
 
 def _duration(seconds: float) -> str:
@@ -140,12 +175,16 @@ def build_preview(
     lines.append("")
     lines.append("Choose one native format:")
     for option in visible:
-        lines.append(f"{option.option_id + 1}. {option_label(option)}")
+        lines.append(selected_label(option))
     if metadata.media_kind == "video" and not any(option.media_type == "audio" for option in options):
         lines.append("The source has no downloadable native audio-only option.")
     excluded = [option for option in options if option.availability is Availability.EXCLUDED]
     for option in excluded[:4]:
         lines.append(f"Unavailable: {option_label(option)} — {option.unavailable_reason}")
+    if len(excluded) > 4:
+        # Keep the message short, but never let an excluded choice go unexplained.
+        reasons = "; ".join(dict.fromkeys(str(option.unavailable_reason) for option in excluded[4:]))
+        lines.append(f"{len(excluded) - 4} more choices are unavailable: {reasons[:300]}")
 
     rows = [
         [
@@ -215,11 +254,15 @@ class BotHandlers:
         chat = update.effective_chat
         if message is None or user is None or chat is None:
             return
+        links = message_links(message)
         if chat.type != "private":
-            await message.reply_text(PRIVATE_CHAT_GUIDANCE)
+            # Ordinary group chatter is ignored; only a shared link earns the private-chat
+            # pointer, and nothing from a group is ever inspected or previewed.
+            if links:
+                await message.reply_text(PRIVATE_CHAT_GUIDANCE)
             return
         try:
-            parse_link_message(message.text or "", chat_type=chat.type)
+            parse_link_message(message.text or "", chat_type=chat.type, links=links)
         except Exception as exc:
             if isinstance(exc, InputError):
                 text = str(exc)
@@ -230,12 +273,12 @@ class BotHandlers:
             await message.reply_text(text)
             return
         context.application.create_task(
-            self._submit(update, context),
+            self._submit(update, context, links),
             update=update,
             name="openmedia-inspect",
         )
 
-    async def _submit(self, update: Any, context: Any) -> None:
+    async def _submit(self, update: Any, context: Any, links: tuple[str, ...] | None = None) -> None:
         from openmedia.coordinator import WorkflowBusy
 
         try:
@@ -244,21 +287,20 @@ class BotHandlers:
                 chat_id=update.effective_chat.id,
                 text=update.effective_message.text or "",
                 chat_type=update.effective_chat.type,
+                links=message_links(update.effective_message) if links is None else links,
             )
-        except WorkflowBusy:
-            await update.effective_message.reply_text(
-                "This request or the service is busy. Please wait or retry later."
-            )
-        except SourceAdapterError as exc:
-            await update.effective_message.reply_text(
-                failure_message(exc.category, stage=exc.stage)
-            )
-        except Exception:
+        except WorkflowBusy as busy:
+            await update.effective_message.reply_text(self._admission_feedback(busy.outcome))
+        except Exception as exc:
+            # A failure after admission was already reported by the workflow's notifier;
+            # replying here too would send the user the same failure twice.
             if getattr(self.workflow, "notify_failure", None) is not None:
                 return
-            await update.effective_message.reply_text(
-                "I could not check that public item. Please send another public link."
-            )
+            if isinstance(exc, SourceAdapterError):
+                text = failure_message(exc.category, stage=exc.stage)
+            else:
+                text = "I could not check that public item. Please send another public link."
+            await update.effective_message.reply_text(text)
 
     async def callback(self, update: Any, context: Any) -> None:
         from openmedia.coordinator import SelectionOutcome
@@ -328,12 +370,30 @@ class BotHandlers:
             job.close()
             await self.workflow.registry.finalize(selection.request.request_id, state="failed")
             raise
-        for action in (query.answer, lambda: query.edit_message_reply_markup(reply_markup=None)):
+        confirmation = f"Selected {selected_label(selection.option)}"[:200]
+        for action in (
+            lambda: query.answer(confirmation),
+            lambda: query.edit_message_reply_markup(reply_markup=None),
+        ):
             try:
                 async with asyncio.timeout(2):
                     await action()
             except Exception:
                 pass
+
+    @staticmethod
+    def _admission_feedback(outcome: Any) -> str:
+        """Busy guidance per the contract table: the user's own work is not service load."""
+        from openmedia.coordinator import AdmissionOutcome
+
+        if outcome is AdmissionOutcome.USER_BUSY:
+            return (
+                "Your current request is still processing. Please wait for it to finish "
+                "before sending another link."
+            )
+        if outcome is AdmissionOutcome.INSTAGRAM_BUSY:
+            return "Instagram is busy right now. Please retry later; your link was not queued."
+        return "The service is busy right now. Please retry later; your link was not queued."
 
     @staticmethod
     def _selection_feedback(outcome: Any) -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import bisect
+import importlib.util
 import json
 import logging
 import re
@@ -21,7 +22,7 @@ from contextvars import ContextVar
 from telegram.ext import Application, ApplicationBuilder, ExtBot
 from telegram.request import HTTPXRequest
 
-from openmedia.bot import build_preview, register_handlers, send_preview
+from openmedia.bot import build_preview, register_handlers, selected_label, send_preview
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
 from openmedia.delivery import deliver_document
@@ -420,9 +421,12 @@ class RuntimeCallbacks:
             "downloading": "Downloading the selected native format…",
             "sending": "Sending the file…",
         }
+        text = labels[stage]
+        if stage == "downloading" and request.selected_option_id is not None:
+            text = f"Downloading your choice: {selected_label(request.option(request.selected_option_id))}"
         await self.application.bot.send_message(
                 chat_id=request.chat_id,
-                text=labels[stage],
+                text=text,
         )
         if stage == "checking":
             self.observe(request, "acknowledgment")
@@ -484,7 +488,12 @@ def validate_local_runtime(settings: Settings) -> None:
     for executable in ("deno", "ffmpeg", "ffprobe"):
         if shutil.which(executable) is None:
             raise ConfigError(f"required runtime executable is unavailable: {executable}")
-    sweep_work_directories(settings.work_dir, older_than=0)
+    # yt-dlp runs YouTube challenge scripts from the bundled EJS package with remote
+    # component fetching disabled, so a missing package cannot be recovered at run time.
+    if importlib.util.find_spec("yt_dlp_ejs") is None:
+        raise ConfigError("required bundled EJS challenge scripts (yt_dlp_ejs) are unavailable")
+    # Deliberately no sweep: --check-config may run beside a live bot sharing this work
+    # directory. The polling startup path removes leftovers before readiness instead.
 
 
 def build_application(settings: Settings) -> tuple[Application[Any, ...], RequestRegistry]:
@@ -584,6 +593,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"work_dir={settings.work_dir})"
         )
         return 0
+    # This process is about to own the work directory, so every leftover workspace is stale
+    # (FR-015 recovery cleanup) and is removed before polling reports readiness.
+    sweep_work_directories(settings.work_dir, older_than=0)
     application, _registry = build_application(settings)
     application.run_polling(drop_pending_updates=True, close_loop=True)
     return 0

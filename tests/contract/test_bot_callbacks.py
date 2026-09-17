@@ -34,6 +34,30 @@ async def test_claimed_job_starts_despite_callback_transport_failure(failed_call
     assert process.await_count == 1
 
 
+async def test_accepted_selection_names_the_chosen_option_after_scheduling_work():
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from openmedia.bot import BotHandlers
+    registry = RequestRegistry()
+    request = registry.new_request(user_id=1, chat_id=1, source_url="https://youtu.be/abcDEF12345", platform="youtube", media_id="abcDEF12345")
+    await registry.admit(request)
+    option = FormatOption(0, "fixture", "18", "video", "mp4", "video/mp4", height=360, includes_audio=True)
+    await registry.publish_preview(request.request_id, metadata=MediaMetadata("youtube", request.source_url, request.media_id), options=(option,), preview_message_id=9)
+    order: list[str] = []
+    query = SimpleNamespace(data=f"s:{request.request_id}:0", from_user=SimpleNamespace(id=1),
+        message=SimpleNamespace(chat=SimpleNamespace(id=1), message_id=9),
+        answer=AsyncMock(side_effect=lambda *a, **k: order.append("answer")), edit_message_reply_markup=AsyncMock())
+    jobs = []
+    def create_task(coro, **kwargs):
+        order.append("scheduled"); job = asyncio.create_task(coro); jobs.append(job); return job
+    workflow = SimpleNamespace(registry=registry, process_claimed=AsyncMock())
+    await BotHandlers(workflow).callback(SimpleNamespace(callback_query=query), SimpleNamespace(application=SimpleNamespace(create_task=create_task)))
+    await asyncio.gather(*jobs)
+    assert order == ["scheduled", "answer"]
+    assert "Selected 1. video · MP4 · 360p" in query.answer.await_args.args[0]
+
+
 @pytest.mark.parametrize("payload", [f"s:{RID}:0", f"p:{RID}:12"])
 def test_callback_grammar_and_64_byte_ceiling(payload: str) -> None:
     action = parse_callback_data(payload)

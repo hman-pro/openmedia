@@ -34,15 +34,45 @@ _ACTIVITY_URL = re.compile(
 )
 
 
+_ACTOR_NAME_CONTROL = "public_post_embed_feed-actor-name"
+_COMMENTARY_TEST_ID = "main-feed-activity-embed-card__commentary"
+
+
 class _EmbedParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.attachments: list[tuple[str, str | None]] = []
+        self.creator_parts: list[str] | None = None
+        self.caption_parts: list[str] | None = None
+        # (field, tag, open depth) while collecting one element's text; never nested.
+        self._capture: tuple[str, str, int] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() != "img":
-            return
+        tag = tag.lower()
         values = dict(attrs)
+        if self._capture is not None:
+            field, captured_tag, depth = self._capture
+            if tag == "br" and field == "caption":
+                self.caption_parts.append("\n")  # type: ignore[union-attr]
+            elif tag == captured_tag:
+                self._capture = (field, captured_tag, depth + 1)
+            # An unclosed <p> must not hide a later attachment, so images are still checked.
+            if tag != "img":
+                return
+        # Only the post's own actor link and commentary paragraph describe the post; alt
+        # text, aria-labels, and Open Graph values are never promoted to metadata.
+        if tag == "a" and values.get("data-tracking-control-name") == _ACTOR_NAME_CONTROL:
+            if self.creator_parts is None:
+                self.creator_parts = []
+                self._capture = ("creator", tag, 1)
+            return
+        if tag == "p" and values.get("data-test-id") == _COMMENTARY_TEST_ID:
+            if self.caption_parts is None:
+                self.caption_parts = []
+                self._capture = ("caption", tag, 1)
+            return
+        if tag != "img":
+            return
         classes = frozenset((values.get("class") or "").split())
         # This is the explicit high-resolution feed attachment shape observed on the
         # guest embed. Requiring all structural classes excludes avatars/reactions and
@@ -56,6 +86,32 @@ class _EmbedParser(HTMLParser):
         if parts.scheme != "https" or not parts.hostname:
             return
         self.attachments.append((url, values.get("alt")))
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._capture is None:
+            return
+        field, captured_tag, depth = self._capture
+        if tag.lower() == captured_tag:
+            self._capture = None if depth == 1 else (field, captured_tag, depth - 1)
+
+    def handle_data(self, data: str) -> None:
+        if self._capture is None:
+            return
+        target = self.creator_parts if self._capture[0] == "creator" else self.caption_parts
+        target.append(data)  # type: ignore[union-attr]
+
+    @property
+    def creator(self) -> str | None:
+        if self.creator_parts is None:
+            return None
+        return " ".join("".join(self.creator_parts).split()) or None
+
+    @property
+    def caption(self) -> str | None:
+        if self.caption_parts is None:
+            return None
+        lines = ("".join(self.caption_parts)).splitlines()
+        return "\n".join(line.strip() for line in lines).strip() or None
 
 
 def embed_url(activity_id: str) -> str:
@@ -100,9 +156,10 @@ def parse_embed(
         platform="linkedin",
         canonical_url=f"https://www.linkedin.com/feed/update/urn:li:activity:{requested_activity_id}",
         media_id=requested_activity_id,
-        # Alt text describes the attachment but is not necessarily the post caption.
-        title_or_caption=None,
-        creator=None,
+        # Alt text describes the attachment but is not necessarily the post caption, so only
+        # the explicit commentary and actor-name elements supply these optional fields.
+        title_or_caption=parser.caption,
+        creator=parser.creator,
         media_kind=MediaKind.IMAGE,
     )
     option = FormatOption(

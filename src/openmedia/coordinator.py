@@ -557,10 +557,13 @@ class MediaWorkflow:
         chat_id: int,
         text: str,
         chat_type: str,
+        links: tuple[str, ...] | None = None,
     ) -> DownloadRequest:
         from openmedia.bot import parse_link_message
 
-        route = parse_link_message(text, chat_type=chat_type)
+        # The handler passes the links it already extracted from Telegram entities, so the
+        # workflow validates exactly what the handler accepted rather than re-reading text.
+        route = parse_link_message(text, chat_type=chat_type, links=links)
         request = self.registry.new_request(
             user_id=user_id,
             chat_id=chat_id,

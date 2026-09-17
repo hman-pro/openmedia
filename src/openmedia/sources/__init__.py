@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from dataclasses import replace
-from typing import Any, Mapping, Protocol, runtime_checkable
+from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from openmedia.models import FormatOption, MediaMetadata
@@ -32,7 +32,11 @@ SUPPORTED_HOSTS = frozenset(
         "www.linkedin.com",
     }
 )
-_URL_IN_TEXT = re.compile(r"https://[^\s<>]+", re.IGNORECASE)
+_SCHEME = re.compile(r"https?://", re.IGNORECASE)
+_BARE_SUPPORTED_HOST = re.compile(
+    r"^(?:www\.|m\.)?(?:youtube\.com|youtu\.be|instagram\.com|linkedin\.com)(?:/|$)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,14 +64,42 @@ def supported_host(url: str) -> bool:
     )
 
 
+def normalize_supported_link(raw: str) -> str | None:
+    """Return an HTTPS form of a supported-platform link, or None for anything else.
+
+    Telegram marks scheme-less and ``http://`` links as URL entities; every route is rebuilt
+    as a canonical HTTPS URL later, so upgrading the scheme here changes no source identity.
+    """
+    candidate = raw.strip().rstrip(".,;:!?)]}\"'")
+    if _SCHEME.match(candidate):
+        if candidate[:7].lower() == "http://":
+            candidate = "https://" + candidate[7:]
+    elif _BARE_SUPPORTED_HOST.match(candidate):
+        candidate = "https://" + candidate
+    else:
+        return None
+    return candidate if supported_host(candidate) else None
+
+
+def supported_links(candidates: Iterable[str]) -> tuple[str, ...]:
+    """Normalize link candidates, keeping only supported-platform links in order."""
+    return tuple(link for raw in candidates if (link := normalize_supported_link(raw)))
+
+
 def supported_urls_in_text(text: str) -> tuple[str, ...]:
-    """Return supported-platform HTTPS URLs, ignoring unrelated links and punctuation."""
-    found: list[str] = []
-    for raw in _URL_IN_TEXT.findall(text):
-        candidate = raw.rstrip(".,;:!?)]}\"")
-        if supported_host(candidate):
-            found.append(candidate)
-    return tuple(found)
+    """Return supported-platform links found in plain text, ignoring unrelated links.
+
+    Each whitespace-separated token yields at most one candidate, so a supported host named
+    inside another site's URL (for example in a query string) is never counted as a link.
+    """
+    candidates: list[str] = []
+    for token in text.split():
+        scheme = _SCHEME.search(token)
+        if scheme is not None:
+            candidates.append(token[scheme.start():])
+        else:
+            candidates.append(token.lstrip("(<[{\"'"))
+    return supported_links(candidates)
 
 
 def recognize_source_url(url: str) -> SourceRoute:
@@ -518,7 +550,9 @@ __all__ = [
     "SourceRouter",
     "TransportResponse",
     "fetch_optional_thumbnail",
+    "normalize_supported_link",
     "recognize_source_url",
     "supported_host",
+    "supported_links",
     "supported_urls_in_text",
 ]
