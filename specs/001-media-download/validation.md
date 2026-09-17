@@ -399,3 +399,87 @@ After the LinkedIn extractor-key correction, the complete locked controlled gate
 1.03 seconds, with only the three already-documented python-telegram-bot deprecation warnings.
 `git diff --check` also passed. The task ledger closes 56 of 60 tasks and deliberately leaves
 T026, T053, T054, and T055 open for the external evidence described above.
+
+---
+
+## T091 — Convergence remediation and current controlled gate
+
+**Date**: 2026-09-17
+
+The sections above are accurate records of 2026-09-16 and are left unchanged. Three
+convergence reviews followed. Each reviewed the code against `spec.md`, `plan.md`, the contracts,
+and the constitution, and appended remediation tasks (Phases 7–9, T061–T093). This section
+records the controlled evidence for those remediations and corrects the requirement review.
+
+### Gate
+
+`uv sync --locked --group dev` resolved 29 packages and checked 25 installed packages without
+changing the lock. `uv run --locked pytest tests/unit tests/contract tests/integration` passed
+**255 tests** in 2.78 seconds with no failures or skips; the one deselected test is the opt-in
+`live` suite. The five warnings are the documented python-telegram-bot 22.8
+`RetryAfter.retry_after` deprecation, now emitted by two tests. `git diff --check` passed.
+The suite grew 162 → 224 (Phase 7) → 247 (Phase 8) → 255 (Phase 9).
+
+Local tool versions for this run: Python 3.13.15, python-telegram-bot 22.8, yt-dlp 2026.08.19,
+Instaloader 4.15.3, Deno 2.9.6, and **FFmpeg 9.0.1 (Homebrew)**. The container image bundles
+FFmpeg 5.1.9; the merge tests therefore prove stream-copy behavior on the development host, not
+inside the image. The image has not been rebuilt since Phase 7 changed worker environment,
+shutdown, and FFmpeg ceilings; that rebuild belongs to T075.
+
+### Remediations and their evidence
+
+| Tasks | Remediation | Controlled evidence |
+|---|---|---|
+| T061 | Secrets and signed URLs never reach parent logs | `test_parent_logs_redact_transport_and_exception_secrets`, `test_worker_diagnostics_redact_signed_urls_and_bot_tokens` |
+| T062, T082 | Failures notify once with stage and next step; notification never blocks finalization | `test_runtime_failure_is_notified_after_capacity_release`, `test_inspection_failure_and_notification_failure_release_everything`, `test_all_excluded_preview_sends_exactly_one_notice_saying_nothing_fits` |
+| T063 | Workers find bundled tools with private scratch and no secrets | `test_worker_environment_keeps_trusted_tools_and_private_scratch`, `test_worker_environment_is_minimal` |
+| T064, T092 | Absolute 60s/600s deadlines include status sends and uploads; workers stop at the request deadline less the 5s reap reserve | `test_total_inspection_deadline_includes_status_send`, `test_total_processing_deadline_marks_interrupted_upload_unknown`, `test_workers_receive_request_deadline_less_reap_reserve` |
+| T065, T077, T084 | Claimed selections always start or finalize; repeats report processing; the chosen option is named | `test_claimed_job_starts_despite_callback_transport_failure`, `test_owner_chat_message_state_and_option_bounds_are_atomic`, `test_accepted_selection_names_the_chosen_option_after_scheduling_work`, `test_downloading_status_names_the_selected_option` |
+| T066 | Shutdown cancels work, reaps child groups, cleans, and never overruns | `test_application_stop_cancels_tracked_work_before_waiting`, `test_shutdown_reaps_real_child_group_cleans_workspace_and_removes_health`, `test_application_stop_never_raises_past_its_budget` |
+| T067, T073, T086 | Thumbnail previews keep every label; absent audio-only is explained; every excluded choice is explained or summarized | `test_long_thumbnail_preview_keeps_every_option_and_audio_guidance`, `test_every_excluded_choice_is_explained_or_summarized` |
+| T068 | Delivery limit applied at inspection, including projected merges | `test_projected_oversize_and_unknown_merges_are_not_selectable`, `test_rejects_incompatible_pairs_and_excludes_exact_oversize`, `test_adapter_limits_and_fixed_output_paths_are_forwarded` |
+| T069 | One refresh for expired URLs only, exact identity kept, attempt artifacts removed | `tests/integration/test_refresh.py` (13 tests) |
+| T070 | yt-dlp and Instaloader requests are bounded and report upstream limits | `tests/contract/test_metadata_clients.py` (8 tests) |
+| T071 | FFmpeg output and peak workspace ceilings enforced while running | `test_merge_enforces_peak_workspace_limit`, `test_merge_refuses_incompatible_or_network_input_and_caps_output` |
+| T072, T089 | Descendants reaped after leader exit; cleanup retried inside the 900s ceiling; `--check-config` deletes nothing while polling startup sweeps | `test_exited_leader_with_pipe_holding_descendant_returns_and_is_reaped`, `test_transient_cleanup_retries_on_next_sweep`, `test_worst_case_sweep_alignment_stays_inside_cleanup_ceiling`, `test_check_config_keeps_workspaces_but_polling_startup_sweeps_them` |
+| T078 | Ordinary sends honor 1/s per chat and 20/s overall without cross-chat blocking | `test_send_limiter_*` (4 tests) |
+| T079 | Measured timing and external-failure attribution in logs | `test_timing_events_record_measured_preview_ack_and_upstream`, `test_request_logs_separate_service_timing_from_external_failures`, `test_telegram_failures_are_attributed_only_when_external` |
+| T081 | Links from Telegram URL/text-link entities, scheme-less and `http://` forms | `test_links_are_taken_from_telegram_url_and_text_link_entities`, `test_handler_passes_extracted_links_to_the_workflow`, `test_scheme_less_link_in_plain_text_is_recognized_without_entities` |
+| T083, T087, T088 | Distinct busy guidance; post-selection limit advice; group replies only for links | `test_busy_admission_outcomes_have_distinct_guidance`, `test_limit_failure_after_selection_advises_resubmitting`, `test_group_messages_get_guidance_only_when_they_contain_a_supported_link` |
+| T085, T093 | LinkedIn author/caption from post markup only; attachment probe status classified before headers | `test_available_creator_and_caption_come_from_the_post_markup_only`, `test_unclosed_caption_paragraph_does_not_hide_the_attachment`, `test_attachment_probe_status_is_classified_before_headers` |
+| T090 | Startup verifies bundled EJS | `test_runtime_requires_bundled_ejs_challenge_scripts` |
+
+For T085, the public embed for activity `7505650038253965312` was re-fetched anonymously on
+2026-09-17 to record the author and caption element shape (see
+`tests/fixtures/linkedin/PROVENANCE.md`). The live page parsed to one attachment with both
+fields present. This confirms the parser shape only; it is not T074 live-matrix evidence.
+
+### Corrected requirement review
+
+The 2026-09-16 review marked these rows as passing on controlled evidence. The convergence
+reviews found real gaps in them, now fixed by the tasks shown, so those earlier passes were
+incomplete:
+
+| Requirement | Gap found after the earlier review | Fixed by |
+|---|---|---|
+| FR-001 | Scheme-less, `http://`, and hyperlinked links were rejected; group chatter got replies | T081, T088 |
+| FR-004, FR-005 | Thumbnail previews could lose labels; LinkedIn images dropped available author/caption | T067, T085 |
+| FR-006, FR-008 | Expired-URL refresh was incomplete and media validation checked only a prefix | T069 |
+| FR-010 | Delivery limit not applied consistently at inspection; FFmpeg ceilings checked only afterwards | T068, T071 |
+| FR-011 | Failure notification was not wired into the real handlers, then sent twice for all-excluded previews | T062, T082 |
+| FR-012, FR-013 | Selection handoff could strand capacity; repeats looked stale; busy outcomes shared one message | T065, T077, T083 |
+| FR-014, FR-015 | Deadlines excluded status sends and uploads; cleanup retries and descendant reaping were incomplete | T064, T072, T092 |
+| US1/AC3 | The accepted choice was not identified to the user | T084 |
+| US1/AC7 | Absent native audio-only was not explained in the preview | T073 |
+| US2/AC2, US2/AC4, US2/AC5 | LinkedIn probe errors were misclassified; excluded choices could go unexplained; post-selection limit advice pointed to a closed preview | T093, T086, T087 |
+| US3/AC1, US3/AC6 | The user's own active request and service capacity received the same busy message | T083 |
+
+With these fixes, every FR-001–FR-016 row passes on controlled evidence. The live and release
+columns of the earlier review are unchanged: controlled tests are not live evidence.
+
+### Still open
+
+T026 and T074 (five-category live source matrix), T053 and T075 (constrained container with a
+real bot token, including a rebuilt image), T054 and T076 (deployment-network sources and
+two-account Telegram acceptance), and T055 and T080 (20 + 20 live timing runs). No controlled
+test is counted toward any of them.

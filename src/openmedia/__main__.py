@@ -332,20 +332,34 @@ class RuntimeCallbacks:
             self.observe(request, "source_response", upstream_status_class=status)
             self.external_failure(request.request_id, status)
 
+    def _worker_deadline(self, request_deadline: float) -> float:
+        """The instant in-worker work must stop: the request deadline less the reap reserve.
+
+        Rate grants and guarded-transport timeouts inside the worker end here, so a delay that
+        cannot finish is refused as rate_limited instead of being cut off by cancellation.
+        """
+        return request_deadline - self.supervisor.termination_grace
+
+    def _supervision_timeout(self, request_deadline: float) -> float:
+        # The supervisor spends its final termination_grace seconds reaping, so its own budget
+        # ends at the worker deadline and reaping completes by the request deadline.
+        return max(0.1, request_deadline - time.monotonic())
+
     async def inspect(self, request: DownloadRequest) -> InspectResult:
         directory = create_request_directory(self.settings.work_dir, request.request_id)
         request.work_directory = directory
+        request_deadline = request.created_at + self.settings.inspection_seconds
         input_value = InspectInput(
             source_url=request.source_url,
             request_id=request.request_id,
             work_directory=directory,
-            deadline=time.monotonic() + self.settings.inspection_seconds,
+            deadline=self._worker_deadline(request_deadline),
             output_limit=self.settings.max_file_bytes,
         )
         value = await self.supervisor.run(
             "inspect",
             inspect_payload(input_value),
-            timeout=self.settings.inspection_seconds,
+            timeout=self._supervision_timeout(request_deadline),
             on_rate_request=self.rate.handle_request,
             on_rate_limited=self.rate.handle_limited,
             on_progress=lambda event: self.upstream(request, event),
@@ -378,14 +392,14 @@ class RuntimeCallbacks:
             metadata=request.metadata,
             option=option,
             work_directory=directory,
-            deadline=deadline,
+            deadline=self._worker_deadline(deadline),
             output_limit=self.settings.max_file_bytes,
             workspace_limit=self.settings.workspace_bytes,
         )
         value = await self.supervisor.run(
             "download",
             download_payload(input_value),
-            timeout=max(0.1, deadline - time.monotonic()),
+            timeout=self._supervision_timeout(deadline),
             on_rate_request=self.rate.handle_request,
             on_rate_limited=self.rate.handle_limited,
             on_progress=lambda event: self.upstream(request, event),

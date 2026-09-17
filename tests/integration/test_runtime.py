@@ -324,6 +324,51 @@ async def test_timing_events_record_measured_preview_ack_and_upstream(tmp_path, 
     assert events[-1]["upstream_status_class"] == "429"
 
 
+class _StopWorker(Exception):
+    pass
+
+
+async def test_workers_receive_request_deadline_less_reap_reserve(tmp_path):
+    """A rate delay that would cross the request deadline is refused, not left to time out."""
+    import time
+    from types import SimpleNamespace
+    from openmedia.coordinator import RequestRegistry
+    from openmedia.models import FormatOption, MediaMetadata
+    callbacks = runtime.RuntimeCallbacks(Settings.from_env(environment(tmp_path)), SimpleNamespace(bot=None))
+    registry = RequestRegistry()
+    request = registry.new_request(user_id=1, chat_id=1, source_url="https://youtu.be/abcDEF12345", platform="youtube", media_id="abcDEF12345")
+    request.created_at = time.monotonic() - 50  # 10s of the 60s inspection deadline remain
+    callbacks.rate._cooldown_until["youtube"] = time.monotonic() + 8  # ends after deadline - reserve
+    seen = {}
+
+    async def run(operation, payload, *, timeout, on_rate_request, **kwargs):
+        seen[operation] = (payload["deadline"], timeout)
+        seen[f"{operation}-rate"] = await on_rate_request(
+            {"platform": "youtube", "request_class": "metadata", "deadline": payload["deadline"]})
+        raise _StopWorker
+
+    callbacks.supervisor.run = run
+    with pytest.raises(_StopWorker):
+        await callbacks.inspect(request)
+    deadline, timeout = seen["inspect"]
+    assert deadline == pytest.approx(request.created_at + 60 - 5)
+    assert timeout == pytest.approx(request.created_at + 60 - time.monotonic(), abs=0.5)
+    assert seen["inspect-rate"] == {"allowed": False, "delay": 0}
+
+    await registry.admit(request)
+    option = FormatOption(0, "yt_dlp", "18", "video", "mp4", "video/mp4", includes_audio=True)
+    await registry.publish_preview(request.request_id, metadata=MediaMetadata("youtube", request.source_url, request.media_id),
+        options=(option,), preview_message_id=9)
+    await registry.claim_selection(request.request_id, user_id=1, chat_id=1, preview_message_id=9, option_id=0)
+    request.processing_deadline = time.monotonic() + 10
+    with pytest.raises(_StopWorker):
+        await callbacks.download(request, option)
+    deadline, timeout = seen["download"]
+    assert deadline == pytest.approx(request.processing_deadline - 5)
+    assert timeout == pytest.approx(request.processing_deadline - time.monotonic(), abs=0.5)
+    assert seen["download-rate"] == {"allowed": False, "delay": 0}
+
+
 async def test_downloading_status_names_the_selected_option(tmp_path):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock

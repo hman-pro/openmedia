@@ -230,6 +230,17 @@ class LinkedInImageAdapter:
         assert isinstance(reference, Mapping)
         attachment = str(reference["url"])
         probe = transport.head(attachment, deadline=request.deadline)
+        # Classify the status first: an error response's content-type/length describe the
+        # error, not the attachment, so they are never used to build an image choice.
+        if probe.status == 429:
+            retry = probe.headers.get("retry-after")
+            retry_after = float(retry) if retry and retry.isdigit() else None
+            rate_control.limited("linkedin", "metadata", retry_after=retry_after)
+            raise SourceAdapterError(ErrorCategory.RATE_LIMITED, stage="inspection", retry_after=retry_after)
+        if probe.status in {403, 404, 410}:
+            raise SourceAdapterError(ErrorCategory.UNAVAILABLE, stage="inspection")
+        if not 200 <= probe.status < 300:
+            raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
         content_type = probe.headers.get("content-type", "").split(";", 1)[0].lower()
         image_format = _CONTENT_TYPES.get(content_type)
         if image_format is None:
