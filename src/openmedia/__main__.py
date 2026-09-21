@@ -505,10 +505,15 @@ class RuntimeCallbacks:
 def run_with_diagnostics(settings: Settings, run: Callable[[], None]) -> None:
     """Bracket one bot run with lifecycle entries; stopping the writer flushes what is queued."""
     stop_diagnostics = configure_diagnostics(settings)
+    log = logging.getLogger("openmedia")
     reason = "signal"  # run_polling returns normally only after SIGINT/SIGTERM/SIGABRT
     try:
         record_event("startup", origin="lifecycle", settings={
             item.name: getattr(settings, item.name) for item in fields(settings) if item.repr})
+        # The console gets one plain line each way; it never carries links or identifiers.
+        log.info("openmedia: started (diagnostic_log=%s)",
+            f"on, {settings.diagnostic_log_dir}" if settings.diagnostic_log else "off",
+            extra={"console_only": True})
         run()
     except BaseException as exc:
         reason = "error"
@@ -517,6 +522,7 @@ def run_with_diagnostics(settings: Settings, run: Callable[[], None]) -> None:
         raise
     finally:
         record_event("shutdown", origin="lifecycle", reason=reason)
+        log.info("openmedia: stopped (reason=%s)", reason, extra={"console_only": True})
         stop_diagnostics()
 
 

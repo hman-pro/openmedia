@@ -394,3 +394,19 @@ def test_worker_progress_is_debug_detail_with_nested_redaction(trace: Trace, tmp
     progress = next(entry for entry in trace.entries() if entry["stage"] == "worker_progress")
     assert progress["level"] == "DEBUG"
     assert progress["progress"] == {"upstream_status_class": "2xx", "url": "<redacted-url>"}
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_console_gets_one_start_and_one_stop_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, enabled: bool
+) -> None:
+    import openmedia.__main__ as runtime
+
+    directory = tmp_path / "logs"
+    settings = Settings(telegram_bot_token=TOKEN, diagnostic_log=enabled, diagnostic_log_dir=directory)
+    with caplog.at_level(logging.INFO, logger="openmedia"):
+        runtime.run_with_diagnostics(settings, lambda: None)
+    lines = [record.getMessage() for record in caplog.records if record.name == "openmedia"]
+    state = f"on, {directory}" if enabled else "off"
+    assert lines == [f"openmedia: started (diagnostic_log={state})", "openmedia: stopped (reason=signal)"]
+    assert directory.exists() is enabled

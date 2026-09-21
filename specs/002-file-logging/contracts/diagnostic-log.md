@@ -21,14 +21,16 @@ bytes per entry.
 
 - No file or directory is created, including by `--check-config`.
 - `OPENMEDIA_DIAGNOSTIC_LOG_DIR` and `OPENMEDIA_DIAGNOSTIC_LOG_LEVEL` are not validated.
-- Console output is byte-identical to feature 001.
+- Console output matches feature 001, plus one plain `openmedia: started (diagnostic_log=off)`
+  line at start and one `openmedia: stopped (reason=…)` line at exit.
 - Submitted links and Telegram identifiers are written nowhere.
 
 **Flag on**:
 
 - Entries go to `<dir>/openmedia-YYYY-MM-DD.log`, UTC date, append-only, mode `0600` inside a
   `0700` directory.
-- Console output is still byte-identical to feature 001. Links stay redacted there.
+- Console output still matches feature 001 plus the same start and stop lines, which name the
+  log directory. Links stay redacted there.
 - The file holds submitted links and Telegram chat and user identifiers on `received`
   entries. It holds no token, no signed media URL, no media bytes, no names or usernames.
 - A log write problem never changes a request's outcome. The console gets one line when

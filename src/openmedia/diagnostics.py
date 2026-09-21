@@ -350,6 +350,9 @@ class DroppingQueueHandler(logging.handlers.QueueHandler):
         return prepared
 
     def emit(self, record: logging.LogRecord) -> None:
+        # Console-only notices already have a richer lifecycle entry in the file.
+        if getattr(record, "console_only", False):
+            return
         try:
             prepared = self.prepare(record)
             if self.dropped:
