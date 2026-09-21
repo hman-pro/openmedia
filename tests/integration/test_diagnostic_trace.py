@@ -1,0 +1,210 @@
+"""Stage coverage of the diagnostic log across the request journeys (002, SC-002)."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock
+
+import pytest
+
+from openmedia import diagnostics
+from openmedia.config import Settings
+from openmedia.coordinator import MediaWorkflow, RequestRegistry
+from openmedia.models import DeliveryResult, FormatOption, MediaMetadata
+from openmedia.sources import DownloadResult, InspectResult
+from openmedia.workers import WorkerRemoteError
+
+TOKEN = "123456789:AAEXAMPLE-controlled-tests-only-not-a-real-token"
+LINK = "https://youtu.be/abcDEF12345"
+MEDIA_ID = "abcDEF12345"
+OPTION = FormatOption(0, "fixture", "18", "video", "mp4", "video/mp4", includes_audio=True)
+
+
+class Trace:
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
+        self.stop = diagnostics.configure_diagnostics(Settings(telegram_bot_token=TOKEN,
+            diagnostic_log=True, diagnostic_log_dir=directory))
+
+    def entries(self) -> list[dict[str, Any]]:
+        self.stop()
+        return [json.loads(line) for path in sorted(self.directory.glob("openmedia-*.log"))
+            for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+@pytest.fixture
+def trace(tmp_path: Path) -> Iterator[Trace]:
+    value = Trace(tmp_path / "logs")
+    yield value
+    value.stop()
+
+
+def stages(entries: list[dict[str, Any]], request_id: str) -> list[str]:
+    return [entry["stage"] for entry in entries if entry.get("request_id") == request_id]
+
+
+def workflow_for(registry: RequestRegistry, tmp_path: Path, **overrides: Any) -> MediaWorkflow:
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"fixture")
+    metadata = MediaMetadata("youtube", LINK, MEDIA_ID)
+    callbacks: dict[str, Any] = {
+        "inspect": AsyncMock(return_value=InspectResult(metadata=metadata, options=(OPTION,))),
+        "publish_preview": AsyncMock(return_value=7),
+        "download": AsyncMock(return_value=DownloadResult(path=path, media_id=MEDIA_ID,
+            source_format_id="18", media_type="video", extension="mp4", mime_type="video/mp4",
+            actual_bytes=7)),
+        "deliver": AsyncMock(return_value=DeliveryResult(status="confirmed", message_id=9, actual_bytes=7)),
+        "status": AsyncMock(),
+        "notify_failure": AsyncMock(),
+    }
+    callbacks.update(overrides)
+    return MediaWorkflow(registry, **callbacks)
+
+
+async def submit(workflow: MediaWorkflow) -> Any:
+    return await workflow.submit(user_id=42, chat_id=4200, text=LINK, chat_type="private")
+
+
+async def select(workflow: MediaWorkflow, request: Any) -> Any:
+    return await workflow.select(request_id=request.request_id, user_id=42, chat_id=4200,
+        preview_message_id=7, option_id=0)
+
+
+async def test_success_flow_records_every_stage(trace: Trace, tmp_path: Path) -> None:
+    workflow = workflow_for(RequestRegistry(), tmp_path)
+    request = await submit(workflow)
+    await select(workflow, request)
+    entries = trace.entries()
+    assert stages(entries, request.request_id) == ["received", "inspection_started",
+        "inspection_finished", "selection", "download_started", "download_finished", "send_started"]
+    finished = next(entry for entry in entries if entry["stage"] == "download_finished")
+    assert finished["outcome"] == "ok"
+    assert finished["bytes"] == 7
+    selection = next(entry for entry in entries if entry["stage"] == "selection")
+    assert selection["option_id"] == 0
+
+
+async def test_worker_failure_names_stage_cause_chain_and_worker_output(trace: Trace, tmp_path: Path) -> None:
+    error = WorkerRemoteError("unavailable", "download")
+    error.worker_output = "ERROR: <redacted-url> HTTP Error 403"
+    workflow = workflow_for(RequestRegistry(), tmp_path, download=AsyncMock(side_effect=error))
+    request = await submit(workflow)
+    result = await select(workflow, request)
+    assert result.status == "failed"
+    entries = trace.entries()
+    assert stages(entries, request.request_id)[-2:] == ["download_started", "download_finished"]
+    failed = entries[-1]
+    assert failed["level"] == "ERROR"
+    assert failed["outcome"] == "failed"
+    assert failed["failed_stage"] == "downloading"
+    assert failed["error_category"] == "unavailable"
+    assert failed["worker_output"] == "ERROR: <redacted-url> HTTP Error 403"
+    assert "WorkerRemoteError" in failed["error"]
+
+
+async def test_inspection_timeout_names_the_deadline(trace: Trace, tmp_path: Path) -> None:
+    async def slow(*_args: Any) -> None:
+        await asyncio.sleep(1)
+
+    workflow = workflow_for(RequestRegistry(), tmp_path, inspect=slow)
+    workflow.inspection_seconds = 0.03
+    workflow.reap_reserve = 0
+    with pytest.raises(TimeoutError):
+        await submit(workflow)
+    failed = trace.entries()[-1]
+    assert failed["stage"] == "inspection_finished"
+    assert failed["error_category"] == "timeout"
+    assert failed["deadline"] == "inspection"
+    assert failed["deadline_seconds"] == 0.03
+    assert failed["elapsed_seconds"] >= 0.03
+
+
+async def test_selection_expiry_is_recorded(trace: Trace, tmp_path: Path) -> None:
+    registry = RequestRegistry()
+    request = await submit(workflow_for(registry, tmp_path))
+    assert await registry.expire_pending(now=request.preview_expires_at + 1) == [request.request_id]
+    expired = trace.entries()[-1]
+    assert expired["stage"] == "expired"
+    assert expired["request_id"] == request.request_id
+    assert expired["deadline"] == "selection"
+    assert expired["deadline_seconds"] == 900
+
+
+async def test_refused_admission_is_recorded(trace: Trace, tmp_path: Path) -> None:
+    registry = RequestRegistry(max_workers=1)
+    gate = asyncio.Event()
+
+    async def held(*_args: Any) -> Any:
+        await gate.wait()
+        raise WorkerRemoteError("unavailable", "inspection")
+
+    first = asyncio.create_task(workflow_for(registry, tmp_path, inspect=held).submit(
+        user_id=1, chat_id=1, text=LINK, chat_type="private"))
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    with pytest.raises(Exception):
+        await workflow_for(registry, tmp_path).submit(user_id=2, chat_id=2, text=LINK, chat_type="private")
+    gate.set()
+    with pytest.raises(WorkerRemoteError):
+        await first
+    rejected = [entry for entry in trace.entries() if entry["stage"] == "rejected"]
+    assert [entry["outcome"] for entry in rejected] == ["work_busy"]
+
+
+async def test_identifiers_appear_once_and_never_on_the_console(
+    trace: Trace, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    console = logging.StreamHandler()
+    logging.getLogger().addHandler(console)
+    try:
+        workflow = workflow_for(RequestRegistry(), tmp_path)
+        request = await submit(workflow)
+        await select(workflow, request)
+        entries = trace.entries()
+    finally:
+        logging.getLogger().removeHandler(console)
+    carrying = [entry for entry in entries if {"source_url", "chat_id", "user_id"} & set(entry)]
+    assert [entry["stage"] for entry in carrying] == ["received"]
+    assert carrying[0]["source_url"] == "https://www.youtube.com/watch?v=abcDEF12345" or MEDIA_ID in carrying[0]["source_url"]
+    assert (carrying[0]["chat_id"], carrying[0]["user_id"]) == (4200, 42)
+    forbidden = {"username", "first_name", "last_name", "phone", "text"}
+    assert not any(forbidden & set(entry) for entry in entries)
+    captured = capsys.readouterr()
+    assert MEDIA_ID not in captured.err
+    assert "source_url" not in captured.err
+
+
+async def test_failed_worker_carries_its_sanitized_stderr() -> None:
+    import sys
+
+    from openmedia.workers import WorkerError, WorkerSupervisor
+
+    script = ("import sys; sys.stderr.write('ERROR: https://cdn.example/v?sig=abc denied\\n'); "
+        "sys.stderr.flush(); sys.exit(3)")
+    worker = WorkerSupervisor([sys.executable, "-c", script], termination_grace=0.5)
+    with pytest.raises(WorkerError) as exc_info:
+        await worker.run("inspect", {}, timeout=5)
+    output = exc_info.value.worker_output
+    assert "denied" in output
+    assert "sig=abc" not in output
+
+
+async def test_runtime_cleanup_is_recorded(trace: Trace, tmp_path: Path) -> None:
+    import openmedia.__main__ as runtime
+    from openmedia.workers import create_request_directory
+
+    work = tmp_path / "work"
+    work.mkdir(mode=0o700)
+    callbacks = runtime.RuntimeCallbacks(Settings(telegram_bot_token=TOKEN, work_dir=work), object())
+    request = RequestRegistry().new_request(user_id=1, chat_id=1, source_url=LINK,
+        platform="youtube", media_id=MEDIA_ID)
+    request.work_directory = create_request_directory(work, request.request_id)
+    await callbacks.cleanup(request)
+    cleanup = trace.entries()[-1]
+    assert (cleanup["stage"], cleanup["outcome"]) == ("cleanup", "removed")
+    assert cleanup["request_id"] == request.request_id

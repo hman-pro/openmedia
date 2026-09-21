@@ -294,6 +294,11 @@ class WorkerSupervisor:
             except BaseException:
                 stderr_task.cancel()
                 self.last_stderr = b""
+            # last_stderr is shared by concurrent workers, so the sanitized capture travels on
+            # the failure itself for the diagnostic log (002 research §7).
+            failure = sys.exc_info()[1]
+            if failure is not None and self.last_stderr:
+                failure.worker_output = self.last_stderr.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
 
     async def _read_protocol(
         self,

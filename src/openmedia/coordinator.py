@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 import time
 from collections import OrderedDict
@@ -12,6 +13,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, AsyncIterator
 
+from openmedia.diagnostics import event
 from openmedia.models import (
     DeliveryResult,
     DownloadRequest,
@@ -408,6 +410,7 @@ class RequestRegistry:
     async def expire_pending(self, *, now: float | None = None) -> list[str]:
         current = self.monotonic() if now is None else now
         expired: list[str] = []
+        expired_requests: list[DownloadRequest] = []
         async with self._registry_lock:
             for request in list(self.requests_by_id.values()):
                 if (
@@ -416,8 +419,12 @@ class RequestRegistry:
                     and current >= request.preview_expires_at
                 ):
                     expired.append(request.request_id)
+                    expired_requests.append(request)
                     self._terminalize_locked(request, RequestState.EXPIRED, current)
             self._prune_terminal_locked(current)
+        for request in expired_requests:
+            event("expired", request=request, level=logging.WARNING, deadline="selection",
+                deadline_seconds=self.selection_seconds)
         return expired
 
     def terminal(self, request_id: str) -> TerminalRecord | None:
@@ -571,15 +578,21 @@ class MediaWorkflow:
             platform=route.platform,
             media_id=route.media_id,
         )
+        # The only entry that carries the link and Telegram identifiers (002 research §6).
+        event("received", request=request, source_url=request.source_url,
+            chat_id=request.chat_id, user_id=request.user_id)
         admission = await self.registry.admit(request)
         if admission.outcome not in {AdmissionOutcome.ADMITTED, AdmissionOutcome.REPLACED}:
+            event("rejected", request=request, level=logging.WARNING, outcome=admission.outcome.value)
             raise WorkflowBusy(admission.outcome)
         try:
             async with asyncio.timeout(max(0, request.created_at + self.inspection_seconds - self.reap_reserve - self.registry.monotonic())):
                 await self._status(request, "checking")
+                event("inspection_started", request=request)
                 result = await self._inspect(request)
                 if result.metadata.media_id != request.media_id:
                     raise WorkflowError("inspection returned a different media identity")
+                event("inspection_finished", request=request, outcome="ok", options=len(result.options))
                 preview_message_id = await self._publish_preview(request, result)
                 published = await self.registry.publish_preview(
                     request.request_id,
@@ -625,11 +638,14 @@ class MediaWorkflow:
     ) -> DeliveryResult:
         """Continue a selection already atomically claimed by a short callback handler."""
         request_id = request.request_id
+        event("selection", request=request, option_id=option.option_id)
         try:
             async with asyncio.timeout(max(0, (request.processing_deadline or self.registry.monotonic()) - self.reap_reserve - self.registry.monotonic())):
                 await self._status(request, "downloading")
+                event("download_started", request=request, option_id=option.option_id)
                 downloaded = await self._download(request, option)
                 self._validate_download(request, option, downloaded)
+                event("download_finished", request=request, outcome="ok", bytes=downloaded.actual_bytes)
                 if not await self.registry.transition(
                     request_id,
                     expected=RequestState.DOWNLOADING,
@@ -637,6 +653,7 @@ class MediaWorkflow:
                 ):
                     raise WorkflowError("download result belongs to a stale request")
                 await self._status(request, "sending")
+                event("send_started", request=request, bytes=downloaded.actual_bytes)
                 delivered = await self._deliver(request, downloaded)
                 terminal = (
                     RequestState.COMPLETED
@@ -677,10 +694,28 @@ class MediaWorkflow:
         result = DeliveryResult(status="unknown" if unknown else "failed", error_category=category,
             failed_stage=stage, next_step=("Check this chat before submitting the link again." if unknown
                 else failure_message(category, stage=stage)))
+        self._record_failure(request, exc, stage, result)
         await self.registry.finalize(request.request_id, state=RequestState.FAILED, delivery_result=result)
         if not isinstance(exc, asyncio.CancelledError):
             result = await self._notify(request, result)
         return result
+
+    def _record_failure(
+        self, request: DownloadRequest, exc: BaseException, stage: str, result: DeliveryResult
+    ) -> None:
+        finished = {"checking": "inspection_finished", "downloading": "download_finished"}
+        deadline: dict[str, Any] = {}
+        if result.error_category == "timeout":
+            deadline = ({"deadline": "inspection", "deadline_seconds": self.inspection_seconds}
+                if stage == "checking"
+                else {"deadline": "processing", "deadline_seconds": self.registry.processing_seconds})
+        cancelled = isinstance(exc, asyncio.CancelledError)
+        event(finished.get(stage, "delivery"), request=request,
+            level=logging.WARNING if cancelled else logging.ERROR,
+            outcome="cancelled" if cancelled else str(result.status),
+            error_category=result.error_category, failed_stage=stage,
+            worker_output=getattr(exc, "worker_output", None),
+            exc_info=(type(exc), exc, exc.__traceback__), **deadline)
 
     async def _notify(self, request: DownloadRequest, result: DeliveryResult) -> DeliveryResult:
         if self.notify_failure is not None:

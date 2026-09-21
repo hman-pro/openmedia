@@ -55,7 +55,7 @@ One JSON object per line. Keys appear in this order; absent keys are omitted, no
 | `error_category` | string | failures | Existing category values |
 | `failed_stage` | string | failures | Existing values |
 | `deadline` | string | deadline expiry | `inspection`, `selection`, `processing`, `cleanup` |
-| `deadline_seconds` | integer | deadline expiry | 60, 900, 600, 900 |
+| `deadline_seconds` | number | deadline expiry | The configured value: 60, 900, 600 |
 | `error` | string | failures | Full formatted exception chain; redacted |
 | `worker_output` | string | worker failure | Sanitized stderr capture (§7) |
 | `bytes` | integer | download, delivery | File size, never content |
@@ -77,6 +77,7 @@ Existing names are unchanged so feature 001's timing audit keeps parsing the con
 | Stage | Origin | New | Logger |
 |---|---|---|---|
 | `received` | request | yes | `openmedia.diagnostic` |
+| `rejected` | request | yes | `openmedia.diagnostic` |
 | `acknowledgment` | request | no | `openmedia` |
 | `inspection_started`, `inspection_finished` | request | yes | `openmedia.diagnostic` |
 | `source_response` | request | no | `openmedia` |

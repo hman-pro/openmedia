@@ -24,7 +24,7 @@ from openmedia.bot import build_preview, register_handlers, selected_label, send
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
 from openmedia.delivery import deliver_document
-from openmedia.diagnostics import REQUEST_CONTEXT, configure_diagnostics, redact
+from openmedia.diagnostics import REQUEST_CONTEXT, configure_diagnostics, event, redact
 from openmedia.models import DeliveryResult, DownloadRequest, FormatOption
 from openmedia.sources import DownloadInput, DownloadResult, InspectInput, InspectResult
 from openmedia.workers import (
@@ -447,9 +447,12 @@ class RuntimeCallbacks:
         if directory is not None:
             try:
                 cleanup_request_directory(directory, owned_root=self.settings.work_dir)
-            except OSError:
+                event("cleanup", request=request, outcome="removed")
+            except OSError as exc:
                 self.failed_cleanup.add(directory)
                 logging.getLogger("openmedia").warning("workspace cleanup deferred")
+                event("cleanup", request=request, level=logging.WARNING, outcome="deferred",
+                    exc_info=(type(exc), exc, exc.__traceback__))
 
     async def notify_failure(self, request: DownloadRequest, result: DeliveryResult) -> None:
         self.terminal(request, outcome=result.status.value, error_category=result.error_category,
