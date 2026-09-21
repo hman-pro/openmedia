@@ -14,6 +14,12 @@ INSPECTION_SECONDS = 60
 SELECTION_SECONDS = 900
 PROCESSING_SECONDS = 600
 CLEANUP_SECONDS = 900
+# Diagnostic log limits are fixed like the deadlines (specs/002-file-logging, FR-010/FR-017).
+DIAGNOSTIC_LOG_MAX_DAYS = 14
+DIAGNOSTIC_LOG_MAX_BYTES = 50_000_000
+DIAGNOSTIC_ENTRY_MAX_BYTES = 65_536
+DIAGNOSTIC_QUEUE_RECORDS = 10_000
+DIAGNOSTIC_REOPEN_SECONDS = 60
 
 _FIXED_PREFIXES = (
     "OPENMEDIA_INSPECTION",
@@ -56,6 +62,9 @@ class Settings:
     max_pending: int = 100
     workspace_bytes: int = 128 * 1024 * 1024
     log_level: str = "INFO"
+    diagnostic_log: bool = False
+    diagnostic_log_dir: Path = Path("/var/log/openmedia")
+    diagnostic_log_level: str = "DEBUG"
     inspection_seconds: int = field(default=INSPECTION_SECONDS, init=False)
     selection_seconds: int = field(default=SELECTION_SECONDS, init=False)
     processing_seconds: int = field(default=PROCESSING_SECONDS, init=False)
@@ -109,6 +118,11 @@ class Settings:
         if log_level not in _LOG_LEVELS or logging.getLevelName(log_level) == "Level INFO":
             raise ConfigError("OPENMEDIA_LOG_LEVEL must be CRITICAL, ERROR, WARNING, INFO, or DEBUG")
 
+        raw_flag = values.get("OPENMEDIA_DIAGNOSTIC_LOG", "0")
+        if raw_flag not in {"0", "1"}:
+            raise ConfigError("OPENMEDIA_DIAGNOSTIC_LOG must be 0 or 1")
+        diagnostic_log = raw_flag == "1"
+
         return cls(
             telegram_bot_token=token,
             work_dir=work_dir,
@@ -117,6 +131,7 @@ class Settings:
             max_pending=max_pending,
             workspace_bytes=workspace_bytes,
             log_level=log_level,
+            diagnostic_log=diagnostic_log,
         )
 
     @property

@@ -8,7 +8,6 @@ import bisect
 import importlib.util
 import json
 import logging
-import re
 import os
 import shutil
 import sys
@@ -17,7 +16,6 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeVar
 from contextlib import suppress
-from contextvars import ContextVar
 
 from telegram.ext import Application, ApplicationBuilder, ExtBot
 from telegram.request import HTTPXRequest
@@ -26,6 +24,7 @@ from openmedia.bot import build_preview, register_handlers, selected_label, send
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
 from openmedia.delivery import deliver_document
+from openmedia.diagnostics import REQUEST_CONTEXT, configure_diagnostics, redact
 from openmedia.models import DeliveryResult, DownloadRequest, FormatOption
 from openmedia.sources import DownloadInput, DownloadResult, InspectInput, InspectResult
 from openmedia.workers import (
@@ -52,7 +51,6 @@ SWEEP_INTERVAL_SECONDS = 60.0
 # The only logged causes that may excuse an acceptance-timing sample (quickstart exclusion rule).
 EXTERNAL_FAILURE_CLASSES = frozenset({"429", "5xx", "connection_failure", "retry_after"})
 MAX_TRACKED_EXTERNAL_REQUESTS = 1000
-REQUEST_CONTEXT: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
 class SafeLogFormatter(logging.Formatter):
@@ -63,16 +61,14 @@ class SafeLogFormatter(logging.Formatter):
         self.secrets = secrets
 
     def format(self, record: logging.LogRecord) -> str:
-        rendered = super().format(record)
-        for secret in self.secrets:
-            if secret:
-                rendered = rendered.replace(secret, "<redacted>")
-        rendered = re.sub(r"https?://[^\s\"'<>]+", "<redacted-url>", rendered)
-        return re.sub(r"\b\d{6,}:[A-Za-z0-9_-]+", "<redacted-token>", rendered)
+        return redact(super().format(record), self.secrets)
 
 
 def configure_logging(settings: Settings) -> None:
     handler = logging.StreamHandler()
+    # The handler owns the console level so the diagnostic file can lower the root level
+    # without adding a single line to the console.
+    handler.setLevel(settings.log_level)
     handler.setFormatter(SafeLogFormatter("%(message)s", secrets=(settings.telegram_bot_token,)))
     logging.basicConfig(level=settings.log_level, handlers=[handler], force=True)
     for name in ("httpx", "httpcore", "telegram", "urllib3", "requests"):
@@ -610,8 +606,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     # This process is about to own the work directory, so every leftover workspace is stale
     # (FR-015 recovery cleanup) and is removed before polling reports readiness.
     sweep_work_directories(settings.work_dir, older_than=0)
-    application, _registry = build_application(settings)
-    application.run_polling(drop_pending_updates=True, close_loop=True)
+    stop_diagnostics = configure_diagnostics(settings)
+    try:
+        application, _registry = build_application(settings)
+        application.run_polling(drop_pending_updates=True, close_loop=True)
+    finally:
+        stop_diagnostics()
     return 0
 
 
