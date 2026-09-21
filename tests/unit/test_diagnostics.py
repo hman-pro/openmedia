@@ -212,3 +212,183 @@ class TestConfigureDiagnostics:
         before = (root.level, list(root.handlers))
         diagnostics.configure_diagnostics(settings_for(tmp_path))()
         assert (root.level, list(root.handlers)) == before
+
+
+DAY = "2026-09-21"
+
+
+def lifecycle(created: float, **fields: Any) -> logging.LogRecord:
+    return make_record(created=created, origin="lifecycle", stage="sweep", **fields)
+
+
+def day_file(directory: Path, day: str, size: int = 0) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"openmedia-{day}.log"
+    path.write_bytes(b"x" * max(0, size - 1) + (b"\n" if size else b""))
+    return path
+
+
+class TestDayBoundaryAndAppend:
+    def handler(self, directory: Path, **kwargs: Any) -> DailyFileHandler:
+        handler = DailyFileHandler(directory, **kwargs)
+        handler.setFormatter(JsonLineFormatter(secrets=(TOKEN,)))
+        return handler
+
+    def test_each_entry_lands_in_the_file_for_its_own_utc_date(self, tmp_path: Path) -> None:
+        handler = self.handler(tmp_path)
+        handler.emit(lifecycle(at("2026-09-21T23:59:59.900")))
+        before = (tmp_path / "openmedia-2026-09-21.log").read_bytes()
+        handler.emit(lifecycle(at("2026-09-22T00:00:00.100")))
+        handler.emit(lifecycle(at("2026-09-22T00:00:01")))
+        handler.close()
+        assert (tmp_path / "openmedia-2026-09-21.log").read_bytes() == before
+        for path in tmp_path.glob("openmedia-*.log"):
+            for line in path.read_text().splitlines():
+                assert json.loads(line)["ts"][:10] == path.name[len("openmedia-"):-len(".log")]
+        assert len((tmp_path / "openmedia-2026-09-22.log").read_text().splitlines()) == 2
+
+    def test_a_restart_appends_to_the_same_day(self, tmp_path: Path) -> None:
+        first = self.handler(tmp_path)
+        first.emit(lifecycle(at("2026-09-21T10:00:00"), run=1))
+        first.close()
+        second = self.handler(tmp_path)
+        second.emit(lifecycle(at("2026-09-21T11:00:00"), run=2))
+        second.close()
+        assert [entry["run"] for entry in read_entries(tmp_path)] == [1, 2]
+
+    def test_a_torn_last_line_is_closed_before_the_next_entry(self, tmp_path: Path) -> None:
+        path = tmp_path / f"openmedia-{DAY}.log"
+        path.write_text('{"ts":"2026-09-21T09:00:00.000Z","lev')
+        handler = self.handler(tmp_path)
+        handler.emit(lifecycle(at("2026-09-21T10:00:00")))
+        handler.close()
+        lines = path.read_text().splitlines()
+        assert lines[0] == '{"ts":"2026-09-21T09:00:00.000Z","lev'
+        assert json.loads(lines[1])["stage"] == "sweep"
+
+
+class TestRetention:
+    def test_old_day_files_are_removed_by_name_not_mtime(self, tmp_path: Path) -> None:
+        import os
+
+        old = day_file(tmp_path, "2026-09-07", 10)   # 14 days before: out
+        kept = day_file(tmp_path, "2026-09-08", 10)  # 13 days before: the 14th file
+        os.utime(old, None)  # a fresh mtime must not save it
+        os.utime(kept, (0, 0))  # an ancient mtime must not condemn it
+        diagnostics.apply_retention(tmp_path, DAY)
+        assert not old.exists()
+        assert kept.exists()
+
+    def test_total_size_is_bounded_oldest_first_and_today_survives(self, tmp_path: Path) -> None:
+        for day in ("2026-09-18", "2026-09-19", "2026-09-20", DAY):
+            day_file(tmp_path, day, 400)
+        remaining = diagnostics.apply_retention(tmp_path, DAY, max_bytes=1000)
+        assert sorted(path.name for path in tmp_path.iterdir()) == [
+            "openmedia-2026-09-20.log", f"openmedia-{DAY}.log"]
+        assert remaining == 400
+
+    def test_unrelated_files_are_never_touched(self, tmp_path: Path) -> None:
+        tmp_path.joinpath("notes.log").write_text("mine")
+        tmp_path.joinpath("openmedia-2020-01-01.log.bak").write_text("mine")
+        tmp_path.joinpath("openmedia-2020-13-45.log").write_text("not a date")
+        diagnostics.apply_retention(tmp_path, DAY, max_bytes=1)
+        assert len(list(tmp_path.iterdir())) == 3
+
+    def test_a_missing_directory_is_not_created(self, tmp_path: Path) -> None:
+        assert diagnostics.apply_retention(tmp_path / "absent", DAY) == 0
+        assert not (tmp_path / "absent").exists()
+
+    def test_writing_three_times_the_limit_stays_under_it(self, tmp_path: Path) -> None:
+        limit = 20_000
+        handler = DailyFileHandler(tmp_path, max_bytes=limit)
+        handler.setFormatter(JsonLineFormatter(secrets=()))
+        start = at("2026-09-10T12:00:00")
+        written = 0
+        for day in range(6):
+            for index in range(12):
+                handler.emit(lifecycle(start + day * 86400 + index, msg="x" * 900))
+                written += 900
+                assert sum(path.stat().st_size for path in tmp_path.iterdir()) <= limit
+        handler.close()
+        assert written >= 3 * limit
+        assert sorted(path.name for path in tmp_path.iterdir())[-1] == "openmedia-2026-09-15.log"
+
+    def test_a_full_day_pauses_until_tomorrow_with_one_notice(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        handler = DailyFileHandler(tmp_path, max_bytes=2_000)
+        handler.setFormatter(JsonLineFormatter(secrets=()))
+        for index in range(10):
+            handler.emit(lifecycle(at("2026-09-21T10:00:00") + index, msg="x" * 400))
+        path = tmp_path / f"openmedia-{DAY}.log"
+        assert path.exists() and path.stat().st_size <= 2_000
+        assert capsys.readouterr().err.count("size limit") == 1
+        handler.emit(lifecycle(at("2026-09-22T00:00:01"), msg="new day"))
+        handler.close()
+        assert (tmp_path / "openmedia-2026-09-22.log").exists()
+        assert not path.exists()  # yesterday made room for today
+
+
+class TestFailureIsolation:
+    def test_unwritable_directory_never_raises_and_notices_once(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        now = [1000.0]
+        directory = tmp_path / "logs"
+        handler = DailyFileHandler(directory, clock=lambda: now[0])
+        handler.setFormatter(JsonLineFormatter(secrets=()))
+        handler.emit(lifecycle(at("2026-09-21T10:00:00")))
+        directory.chmod(0o500)
+        try:
+            for index in range(5):
+                handler.emit(lifecycle(at("2026-09-22T10:00:00") + index))
+            assert capsys.readouterr().err.count("diagnostic log unavailable") == 1
+
+            # No retry before the reopen interval, even once the directory is healthy again.
+            directory.chmod(0o700)
+            now[0] += 59
+            handler.emit(lifecycle(at("2026-09-22T10:01:00")))
+            assert not (directory / "openmedia-2026-09-22.log").exists()
+
+            now[0] += 2
+            handler.emit(lifecycle(at("2026-09-22T10:02:00"), msg="back"))
+        finally:
+            directory.chmod(0o700)
+            handler.close()
+        entries = [json.loads(line) for line in (directory / "openmedia-2026-09-22.log").read_text().splitlines()]
+        assert [entry["stage"] for entry in entries] == ["log_recovered", "sweep"]
+        assert entries[0]["lost"] == 6
+        assert capsys.readouterr().err.count("diagnostic log recovered") == 1
+
+    def test_a_full_queue_drops_without_blocking_and_reports_the_count(self) -> None:
+        import queue
+        import time as clock
+
+        pending: queue.Queue[logging.LogRecord] = queue.Queue(2)
+        feeder = diagnostics.DroppingQueueHandler(pending)
+        started = clock.monotonic()
+        for _ in range(5):  # nobody is draining: the writer is stalled
+            feeder.emit(lifecycle(at("2026-09-21T10:00:00")))
+        assert clock.monotonic() - started < 0.5
+        assert feeder.dropped == 3
+        pending.get_nowait()
+        feeder.emit(lifecycle(at("2026-09-21T10:00:01")))
+        pending.get_nowait()
+        assert pending.get_nowait().diagnostic_dropped == 3
+        assert feeder.dropped == 0
+
+    def test_an_oversized_entry_is_cut_in_order_and_stays_valid(self) -> None:
+        formatter = JsonLineFormatter(secrets=(), max_bytes=2_000)
+        record = make_record(origin="request", stage="download_finished", request_id=REQUEST_ID,
+            msg="m" * 300, error="e" * 5_000, worker_output="w" * 300)
+        line = formatter.format(record)
+        assert len(line.encode()) + 1 <= 2_000
+        entry = json.loads(line)
+        assert entry["truncated"] is True
+        assert entry["request_id"] == REQUEST_ID
+        assert len(entry["error"]) < 5_000 and entry["error"].endswith("[truncated]")
+        assert entry["worker_output"] == "w" * 300  # the error alone made enough room
+        assert entry["msg"] == "m" * 300
+
+    def test_a_normal_entry_is_not_marked_truncated(self) -> None:
+        assert "truncated" not in render(make_record(origin="lifecycle", stage="startup"))

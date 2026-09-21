@@ -208,3 +208,87 @@ async def test_runtime_cleanup_is_recorded(trace: Trace, tmp_path: Path) -> None
     cleanup = trace.entries()[-1]
     assert (cleanup["stage"], cleanup["outcome"]) == ("cleanup", "removed")
     assert cleanup["request_id"] == request.request_id
+
+
+def lifecycle_settings(directory: Path) -> Settings:
+    return Settings(telegram_bot_token=TOKEN, diagnostic_log=True, diagnostic_log_dir=directory)
+
+
+def test_two_runs_share_one_day_file_with_lifecycle_entries(tmp_path: Path) -> None:
+    import openmedia.__main__ as runtime
+
+    directory = tmp_path / "logs"
+    runtime.run_with_diagnostics(lifecycle_settings(directory), lambda: None)
+    runtime.run_with_diagnostics(lifecycle_settings(directory), lambda: None)
+    files = list(directory.iterdir())
+    assert len(files) == 1
+    text = files[0].read_text()
+    entries = [json.loads(line) for line in text.splitlines()]
+    assert [entry["stage"] for entry in entries] == ["startup", "shutdown", "startup", "shutdown"]
+    assert entries[1]["reason"] == "signal"
+    assert entries[0]["origin"] == "lifecycle"
+    assert entries[0]["settings"]["max_workers"] == 2
+    assert "telegram_bot_token" not in entries[0]["settings"]
+    assert TOKEN not in text
+
+
+def test_a_crash_is_recorded_with_its_error_chain(tmp_path: Path) -> None:
+    import openmedia.__main__ as runtime
+
+    def explode() -> None:
+        raise RuntimeError("polling died")
+
+    directory = tmp_path / "logs"
+    with pytest.raises(RuntimeError):
+        runtime.run_with_diagnostics(lifecycle_settings(directory), explode)
+    entries = [json.loads(line) for path in directory.iterdir() for line in path.read_text().splitlines()]
+    assert [entry["stage"] for entry in entries] == ["startup", "crash", "shutdown"]
+    assert entries[1]["level"] == "CRITICAL"
+    assert "polling died" in entries[1]["error"]
+    assert entries[2]["reason"] == "error"
+
+
+async def test_an_unwritable_log_never_changes_a_request_outcome(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    async def journey(name: str) -> tuple[str, list[str]]:
+        calls: list[str] = []
+
+        async def status(_request: Any, stage: str) -> None:
+            calls.append(stage)
+
+        workflow = workflow_for(RequestRegistry(), tmp_path / name, status=status)
+        request = await submit(workflow)
+        result = await select(workflow, request)
+        return str(result.status), calls
+
+    (tmp_path / "baseline").mkdir()
+    (tmp_path / "broken").mkdir()
+    baseline = await journey("baseline")
+
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("")
+    stop = diagnostics.configure_diagnostics(lifecycle_settings(blocker / "logs"))
+    try:
+        broken = await journey("broken")
+    finally:
+        stop()
+    assert broken == baseline
+    assert capsys.readouterr().err.count("diagnostic log unavailable") == 1
+
+
+async def test_a_sweep_that_did_work_is_recorded(trace: Trace, tmp_path: Path) -> None:
+    import openmedia.__main__ as runtime
+
+    work = tmp_path / "work"
+    work.mkdir(mode=0o700)
+    callbacks = runtime.RuntimeCallbacks(Settings(telegram_bot_token=TOKEN, work_dir=work), object())
+    registry = RequestRegistry()
+    request = await submit(workflow_for(registry, tmp_path))
+    registry.monotonic = lambda: request.preview_expires_at + 1
+    await callbacks.sweep_once(registry)
+    await callbacks.sweep_once(registry)  # nothing left to do: no second entry
+    sweeps = [entry for entry in trace.entries() if entry["stage"] == "sweep"]
+    assert len(sweeps) == 1
+    assert sweeps[0]["origin"] == "sweep"
+    assert sweeps[0]["expired"] == 1

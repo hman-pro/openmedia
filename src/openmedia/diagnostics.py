@@ -14,15 +14,23 @@ import logging.handlers
 import os
 import queue
 import re
+import sys
 import time
 import traceback
 from collections.abc import Callable
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from openmedia.config import DIAGNOSTIC_QUEUE_RECORDS, Settings
+from openmedia.config import (
+    DIAGNOSTIC_ENTRY_MAX_BYTES,
+    DIAGNOSTIC_LOG_MAX_BYTES,
+    DIAGNOSTIC_LOG_MAX_DAYS,
+    DIAGNOSTIC_QUEUE_RECORDS,
+    DIAGNOSTIC_REOPEN_SECONDS,
+    Settings,
+)
 
 
 LOGGER_NAME = "openmedia.diagnostic"
@@ -31,7 +39,12 @@ QUIET_LIBRARIES = ("httpx", "httpcore", "telegram", "urllib3", "requests")
 
 _URL = re.compile(r"https?://[^\s\"'<>]+")
 _TOKEN = re.compile(r"\b\d{6,}:[A-Za-z0-9_-]+")
+_DAY_FILE = re.compile(r"openmedia-(\d{4}-\d{2}-\d{2})\.log")
 _DISABLED = logging.CRITICAL + 1
+_TRUNCATION_MARK = "…[truncated]"
+# Cut order when an entry is too large (FR-017): the bulkiest diagnostic text goes first.
+_CUT_ORDER = ("error", "worker_output", "msg")
+_CORE_KEYS = ("ts", "level", "origin", "stage", "request_id", "truncated")
 # Entry keys after ts/level/origin/stage, in file order (data-model.md). Unknown keys follow.
 _FIELD_ORDER = (
     "request_id", "msg", "platform", "elapsed_seconds", "source_url", "chat_id", "user_id",
@@ -75,9 +88,12 @@ def _json_object(message: str) -> dict[str, Any] | None:
 class JsonLineFormatter(logging.Formatter):
     """Render one record as one redacted JSON line."""
 
-    def __init__(self, *, secrets: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self, *, secrets: tuple[str, ...] = (), max_bytes: int = DIAGNOSTIC_ENTRY_MAX_BYTES
+    ) -> None:
         super().__init__()
         self.secrets = secrets
+        self.max_bytes = max_bytes
 
     def entry(self, record: logging.LogRecord) -> dict[str, Any]:
         fields = dict(getattr(record, "diagnostic", None) or {})
@@ -116,19 +132,108 @@ class JsonLineFormatter(logging.Formatter):
             entry[key] = value
         return entry
 
+    @staticmethod
+    def _dump(entry: dict[str, Any]) -> str:
+        return json.dumps(entry, separators=(",", ":"), ensure_ascii=False, default=str)
+
     def format(self, record: logging.LogRecord) -> str:
-        return json.dumps(self.entry(record), separators=(",", ":"), ensure_ascii=False, default=str)
+        entry = self.entry(record)
+        line = self._dump(entry)
+        budget = self.max_bytes - 1  # the newline
+        if len(line.encode("utf-8")) <= budget:
+            return line
+        entry["truncated"] = True
+        for key in _CUT_ORDER:
+            value = entry.get(key)
+            if not isinstance(value, str):
+                continue
+            # Every character is at least one encoded byte, so cutting `excess` characters
+            # always frees at least `excess` bytes.
+            excess = len(self._dump(entry).encode("utf-8")) - budget + len(_TRUNCATION_MARK.encode("utf-8"))
+            entry[key] = value[: max(0, len(value) - excess)] + _TRUNCATION_MARK
+            line = self._dump(entry)
+            if len(line.encode("utf-8")) <= budget:
+                return line
+        return self._dump({key: entry[key] for key in _CORE_KEYS if key in entry})
+
+
+def apply_retention(
+    directory: Path,
+    today: str,
+    *,
+    max_days: int = DIAGNOSTIC_LOG_MAX_DAYS,
+    max_bytes: int = DIAGNOSTIC_LOG_MAX_BYTES,
+    reserve: int | None = None,
+) -> int:
+    """Remove whole day files, oldest first; return the bytes still held by other days.
+
+    Only ``openmedia-YYYY-MM-DD.log`` names with a real date are considered, so a wrong
+    directory setting cannot delete anything else. Age comes from the name, never mtime.
+    Today's file is never removed; ``reserve`` is the room it needs (its current size when
+    not given).
+    """
+    current = date.fromisoformat(today)
+    others: list[tuple[date, Path, int]] = []
+    try:
+        candidates = list(Path(directory).iterdir())
+    except OSError:
+        return 0
+    for path in candidates:
+        match = _DAY_FILE.fullmatch(path.name)
+        if match is None or match.group(1) == today or path.is_symlink() or not path.is_file():
+            continue
+        try:
+            others.append((date.fromisoformat(match.group(1)), path, path.stat().st_size))
+        except (ValueError, OSError):
+            continue
+    if reserve is None:
+        try:
+            reserve = (Path(directory) / f"openmedia-{today}.log").stat().st_size
+        except OSError:
+            reserve = 0
+    others.sort()
+    held = sum(size for _day, _path, size in others)
+    for day, path, size in others:
+        if (current - day).days < max_days and held + reserve <= max_bytes:
+            continue
+        try:
+            path.unlink()
+            held -= size
+        except OSError:
+            continue
+    return held
 
 
 class DailyFileHandler(logging.Handler):
-    """Append each record to ``openmedia-YYYY-MM-DD.log`` for the record's own UTC date."""
+    """Append each record to ``openmedia-YYYY-MM-DD.log`` for the record's own UTC date.
 
-    def __init__(self, directory: Path, *, clock: Callable[[], float] = time.time) -> None:
+    States (data-model.md): closed, open(day), paused(day) when today's file alone reaches the
+    storage limit, and degraded after a write or open failure. No state ever raises into the
+    caller: a log problem must not change a request's outcome (FR-011).
+    """
+
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        clock: Callable[[], float] = time.time,
+        max_bytes: int = DIAGNOSTIC_LOG_MAX_BYTES,
+        max_days: int = DIAGNOSTIC_LOG_MAX_DAYS,
+        reopen_seconds: float = DIAGNOSTIC_REOPEN_SECONDS,
+    ) -> None:
         super().__init__()
         self.directory = Path(directory)
         self.clock = clock
+        self.max_bytes = max_bytes
+        self.max_days = max_days
+        self.reopen_seconds = reopen_seconds
         self._day: str | None = None
         self._stream: IO[str] | None = None
+        self._size = 0
+        self._other_bytes = 0
+        self._paused_day: str | None = None
+        self._retry_at: float | None = None  # not None means degraded
+        self._lost = 0
 
     @staticmethod
     def day_of(timestamp: float) -> str:
@@ -137,27 +242,79 @@ class DailyFileHandler(logging.Handler):
     def path_for(self, day: str) -> Path:
         return self.directory / f"openmedia-{day}.log"
 
+    def _retain(self, day: str, reserve: int = 0) -> None:
+        self._other_bytes = apply_retention(self.directory, day, max_days=self.max_days,
+            max_bytes=self.max_bytes, reserve=reserve)
+
     def _open(self, day: str) -> IO[str]:
         self._close_stream()
         self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        descriptor = os.open(self.path_for(day), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        self._stream = os.fdopen(descriptor, "a", encoding="utf-8")
-        self._day = day
-        return self._stream
+        path = self.path_for(day)
+        descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        stream = os.fdopen(descriptor, "a", encoding="utf-8")
+        self._stream, self._day = stream, day
+        self._size = path.stat().st_size
+        if self._size:
+            # A killed process can leave a torn last line; keep it from swallowing the next entry.
+            with path.open("rb") as existing:
+                existing.seek(-1, os.SEEK_END)
+                if existing.read(1) != b"\n":
+                    stream.write("\n")
+                    stream.flush()
+                    self._size += 1
+        self._retain(day, reserve=self._size)
+        return stream
 
     def _close_stream(self) -> None:
         stream, self._stream, self._day = self._stream, None, None
         if stream is not None:
-            stream.close()
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+    def _write(self, record: logging.LogRecord) -> None:
+        day = self.day_of(record.created)
+        if day == self._paused_day:
+            return
+        stream = self._stream if self._stream is not None and day == self._day else self._open(day)
+        data = self.format(record) + "\n"
+        needed = len(data.encode("utf-8"))
+        if self._other_bytes + self._size + needed > self.max_bytes:
+            self._retain(day, reserve=self._size + needed)
+            if self._other_bytes + self._size + needed > self.max_bytes:
+                self._paused_day = day
+                print("openmedia: diagnostic log reached its size limit; paused until the next UTC day",
+                    file=sys.stderr)
+                return
+        stream.write(data)
+        stream.flush()
+        self._size += needed
+
+    def _recovered(self, record: logging.LogRecord) -> logging.LogRecord:
+        notice = logging.LogRecord(LOGGER_NAME, logging.WARNING, __file__, 0, "log_recovered", None, None)
+        notice.created = record.created
+        notice.diagnostic = {"origin": "lifecycle", "stage": "log_recovered", "lost": self._lost}
+        return notice
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            day = self.day_of(record.created)
-            stream = self._stream if self._stream is not None and day == self._day else self._open(day)
-            stream.write(self.format(record) + "\n")
-            stream.flush()
-        except Exception:
-            self.handleError(record)
+            if self._retry_at is not None:
+                if self.clock() < self._retry_at:
+                    self._lost += 1
+                    return
+                self._write(self._recovered(record))
+                self._retry_at, self._lost = None, 0
+                print("openmedia: diagnostic log recovered", file=sys.stderr)
+            self._write(record)
+        except Exception as exc:
+            self._close_stream()
+            self._lost += 1
+            if self._retry_at is None:
+                # One line per outage, never one per entry, and never a traceback with paths.
+                print(f"openmedia: diagnostic log unavailable ({type(exc).__name__}); requests continue",
+                    file=sys.stderr)
+            self._retry_at = self.clock() + self.reopen_seconds
 
     def close(self) -> None:
         with self.lock:  # type: ignore[union-attr]
@@ -208,6 +365,7 @@ def configure_diagnostics(settings: Settings) -> Callable[[], None]:
         return lambda: None
 
     level = logging.getLevelNamesMapping()[settings.diagnostic_log_level]
+    apply_retention(settings.diagnostic_log_dir, DailyFileHandler.day_of(time.time()))
     writer = DailyFileHandler(settings.diagnostic_log_dir)
     writer.setFormatter(JsonLineFormatter(secrets=(settings.telegram_bot_token,)))
     pending: queue.Queue[logging.LogRecord] = queue.Queue(DIAGNOSTIC_QUEUE_RECORDS)

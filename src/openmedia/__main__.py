@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeVar
 from contextlib import suppress
+from dataclasses import fields
 
 from telegram.ext import Application, ApplicationBuilder, ExtBot
 from telegram.request import HTTPXRequest
@@ -462,30 +463,58 @@ class RuntimeCallbacks:
             chat_id=request.chat_id, text=f"The {result.failed_stage} stage {outcome}. {result.next_step}")
 
     async def maintain(self, registry: RequestRegistry) -> None:
-        log = logging.getLogger("openmedia")
         while True:
             await asyncio.sleep(SWEEP_INTERVAL_SECONDS)
-            # One failing step must not end maintenance: expiry, retries, and sweeps all recur.
+            await self.sweep_once(registry)
+
+    async def sweep_once(self, registry: RequestRegistry) -> None:
+        log = logging.getLogger("openmedia")
+        expired = cleanup_retried = cleanup_failed = swept = 0
+        # One failing step must not end maintenance: expiry, retries, and sweeps all recur.
+        try:
+            expired = len(await registry.expire_pending())
+        except Exception:
+            log.warning("pending expiry failed; retrying on next sweep")
+        for directory in tuple(self.failed_cleanup):
             try:
-                await registry.expire_pending()
-            except Exception:
-                log.warning("pending expiry failed; retrying on next sweep")
-            for directory in tuple(self.failed_cleanup):
-                try:
-                    cleanup_request_directory(directory, owned_root=self.settings.work_dir)
-                    self.failed_cleanup.discard(directory)
-                except OSError:
-                    log.warning("workspace cleanup retry failed")
-                except ValueError:
-                    # Not an owned workspace any more; the age sweep covers whatever remains.
-                    self.failed_cleanup.discard(directory)
-            try:
-                sweep_work_directories(
-                    self.settings.work_dir,
-                    older_than=sweep_threshold(self.settings.cleanup_seconds),
-                )
-            except Exception:
-                log.warning("workspace sweep failed; retrying on next sweep")
+                cleanup_request_directory(directory, owned_root=self.settings.work_dir)
+                self.failed_cleanup.discard(directory)
+                cleanup_retried += 1
+            except OSError:
+                cleanup_failed += 1
+                log.warning("workspace cleanup retry failed")
+            except ValueError:
+                # Not an owned workspace any more; the age sweep covers whatever remains.
+                self.failed_cleanup.discard(directory)
+        try:
+            removed = sweep_work_directories(
+                self.settings.work_dir,
+                older_than=sweep_threshold(self.settings.cleanup_seconds),
+            )
+            swept = len(removed)
+        except Exception:
+            log.warning("workspace sweep failed; retrying on next sweep")
+        if expired or cleanup_retried or cleanup_failed or swept:
+            event("sweep", origin="sweep", expired=expired, cleanup_retried=cleanup_retried,
+                cleanup_failed=cleanup_failed, swept=swept)
+
+
+def run_with_diagnostics(settings: Settings, run: Callable[[], None]) -> None:
+    """Bracket one bot run with lifecycle entries; stopping the writer flushes what is queued."""
+    stop_diagnostics = configure_diagnostics(settings)
+    reason = "signal"  # run_polling returns normally only after SIGINT/SIGTERM/SIGABRT
+    try:
+        event("startup", origin="lifecycle", settings={
+            item.name: getattr(settings, item.name) for item in fields(settings) if item.repr})
+        run()
+    except BaseException as exc:
+        reason = "error"
+        event("crash", origin="lifecycle", level=logging.CRITICAL,
+            exc_info=(type(exc), exc, exc.__traceback__))
+        raise
+    finally:
+        event("shutdown", origin="lifecycle", reason=reason)
+        stop_diagnostics()
 
 
 def validate_local_runtime(settings: Settings) -> None:
@@ -609,12 +638,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     # This process is about to own the work directory, so every leftover workspace is stale
     # (FR-015 recovery cleanup) and is removed before polling reports readiness.
     sweep_work_directories(settings.work_dir, older_than=0)
-    stop_diagnostics = configure_diagnostics(settings)
-    try:
+    def poll() -> None:
         application, _registry = build_application(settings)
         application.run_polling(drop_pending_updates=True, close_loop=True)
-    finally:
-        stop_diagnostics()
+
+    run_with_diagnostics(settings, poll)
     return 0
 
 
