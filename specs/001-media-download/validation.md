@@ -540,3 +540,53 @@ creator, and its metadata link re-recognized to the same route; the `ugcPost` mu
 `7455440016459251712` was reached and rejected as `unsupported_collection` instead of a 404.
 The locked controlled gate passed **269 tests**. This is image-path routing evidence only;
 the video path and both LinkedIn T074 categories still need real share links.
+
+---
+
+## T074 partial — LinkedIn live probe and T095 (2026-09-21)
+
+**Scope**: LinkedIn video and LinkedIn image only, run outside the container (T053/T075 are on
+hold) from a development machine, anonymously, with yt-dlp 2026.8.19 and FFmpeg/ffprobe 9.0.2.
+The probe repeated the `tests/live/test_sources.py` sequence per case: recognize, inspect
+through the real `SourceRouter` and `GuardedHTTPTransport`, download the smallest selectable
+choice, `validate_owned_file`, delete. T074 stays open: the required five-category run through
+the live suite still needs YouTube and both Instagram examples.
+
+**Sanitization**: both examples were supplied as `lnkd.in` share links and resolved from the
+301 `Location` header only. The `utm_*` and `rcm=` share-tracking parameters are not recorded;
+only the URN type and numeric identity are kept here.
+
+| Case | Source identity | Before T095 | After T095 |
+|---|---|---|---|
+| LinkedIn video | `ugcPost` `7507745133358940161`, `/posts/` link with a percent-encoded non-Latin slug | Fail: `no_formats` from `normalize_info`, surfaced as `unavailable` after the image-adapter fallback | Pass: inspect 1.2 s, two selectable native MP4 choices of unknown size; format `1` downloaded unchanged, 13,989,818 bytes, MP4 signature and ffprobe check of exactly one video plus one audio stream passed |
+| LinkedIn image | `share` `7507478518860132352`, `/posts/` link | Pass | Pass: inspect 1.4 s, one exact-size JPEG choice with creator, 153,775 bytes downloaded and matching the advertised size |
+
+**Cause of the video failure**: the pinned `LinkedIn` extractor returned two progressive MP4
+renditions with `vcodec`, `acodec`, dimensions, and sizes all `None`, distinguished only by
+`tbr` (477 and 652 kbps). `normalize_info` coerced a `None` codec to `"none"`, so an unknown
+stream was read as an absent one and both renditions were dropped. The controlled suite did not
+catch it because `tests/fixtures/ytdlp/linkedin-video.json` carries explicit `avc1`/`mp4a`
+codecs, a height, and an approximate size that the live extractor does not supply. The T094
+routing fix is confirmed for the video path: the `ugcPost` `/posts/` link reached the extractor
+and matched.
+
+**T095**: `None` now means unknown-and-present and only `"none"` means absent, per codec. No
+codec is stored in `transport_ref` for an unknown stream, so the post-download codec-family
+comparison is skipped while the stream-count check still runs; a rendition that turned out to
+lack audio would fail as `format_unavailable` rather than be delivered mislabeled. Evidence:
+`test_unknown_codecs_are_present_not_absent`, `test_unknown_codecs_never_pair_for_merging`, and
+the real-shape fixture `linkedin-video-progressive.json`. Locked controlled gate:
+`uv run --locked pytest tests/unit tests/contract tests/integration` — **345 passed**.
+
+**Findings recorded, not fixed**:
+
+1. `lnkd.in` share links are rejected as `unsupported_url`; LinkedIn's share action now hands
+   out this form. Supporting it means one guarded redirect lookup before recognition whose
+   target must itself be a supported host. Scope decision, no task yet.
+2. LinkedIn video choices have unknown size until download, so the 50,000,000-byte limit is
+   enforced only after selection. A guarded HEAD probe, as the image adapter already does, would
+   give exact sizes at preview time.
+3. When yt-dlp fails on a `/posts/` link the router falls back to the image adapter, which
+   replaces the original category (here `no_formats`) with `unavailable`.
+4. The video inspection returned no creator; whether the extractor exposes one for this post
+   was not examined.

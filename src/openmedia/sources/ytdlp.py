@@ -172,8 +172,9 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
     video_only: list[Mapping[str, Any]] = []
     audio_only: list[Mapping[str, Any]] = []
     for item in candidates:
-        video_codec = str(item.get("vcodec") or "none").lower()
-        audio_codec = str(item.get("acodec") or "none").lower()
+        # yt-dlp reports an unknown codec as None and an absent stream as "none".
+        video_codec = str(item["vcodec"]).lower() if item.get("vcodec") else None
+        audio_codec = str(item["acodec"]).lower() if item.get("acodec") else None
         has_video = video_codec != "none"
         has_audio = audio_codec != "none"
         if not has_video and not has_audio:

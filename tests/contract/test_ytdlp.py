@@ -85,3 +85,27 @@ def test_estimated_and_unknown_sizes_remain_distinct() -> None:
     insta = normalize_info(load("instagram-video.json"), max_file_bytes=50_000_000)
     assert linked.options[0].size_kind is SizeKind.ESTIMATED
     assert insta.options[0].size_kind is SizeKind.UNKNOWN
+
+
+def test_unknown_codecs_are_present_not_absent() -> None:
+    from openmedia.presentation import option_label
+
+    result = normalize_info(load("linkedin-video-progressive.json"), max_file_bytes=50_000_000)
+    assert [option.source_format_id for option in result.options if option.availability is Availability.SELECTABLE] != []
+    assert {option.source_format_id for option in result.options} == {"0", "1"}
+    for option in result.options:
+        assert option.media_type is MediaType.VIDEO
+        assert option.includes_audio is True
+        assert option.availability is Availability.SELECTABLE
+        assert option.size_kind is SizeKind.UNKNOWN
+        assert not option.transport_ref.get("vcodec")
+        assert not option.transport_ref.get("acodec")
+    assert len({option_label(option) for option in result.options}) == 2
+
+
+def test_unknown_codecs_never_pair_for_merging() -> None:
+    info = {"extractor_key": "Youtube", "id": "abcDEF12345", "webpage_url": "https://youtu.be/abcDEF12345",
+        "formats": [{"format_id": "v", "protocol": "https", "url": "https://cdn.invalid/v", "ext": "mp4", "vcodec": None, "acodec": "none", "filesize": 1_000},
+                    {"format_id": "a", "protocol": "https", "url": "https://cdn.invalid/a", "ext": "m4a", "vcodec": "none", "acodec": None, "filesize": 1_000}]}
+    result = normalize_info(info, max_file_bytes=50_000_000)
+    assert {option.source_format_id for option in result.options} == {"v", "a"}
