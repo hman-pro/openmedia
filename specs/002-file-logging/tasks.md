@@ -145,10 +145,10 @@ unwritable path, exits 0 for a good one, and with the flag off creates no file o
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T032 [P] Apply the four amendments listed in `specs/002-file-logging/contracts/diagnostic-log.md` to `specs/001-media-download/contracts/runtime.md` and `specs/001-media-download/contracts/source-adapters.md`, each marked "(amended by 002)".
-- [ ] T033 [P] Document the flag in `README.md`: the three variables, the `-v openmedia-logs:/var/log/openmedia` mount added to the existing `docker run` example, the local `OPENMEDIA_DIAGNOSTIC_LOG_DIR=$PWD/logs` recipe, the `grep`/`jq` trace commands from quickstart §2, and a plain statement that the files contain submitted links and Telegram identifiers for up to 14 days.
-- [ ] T034 [P] Update `CLAUDE.md`: add `specs/002-file-logging/` rows to "Where truth lives", and add one constraint bullet: links and Telegram identifiers are logged only through `openmedia.diagnostic`, never through a logger that reaches the console.
-- [ ] T035 Run quickstart §1 to §4 and record commands, results, and date in `specs/002-file-logging/validation.md`. Run the container check in quickstart §5 if Docker and a test token are available; otherwise record it as "not run", never as passed.
+- [X] T032 [P] Apply the four amendments listed in `specs/002-file-logging/contracts/diagnostic-log.md` to `specs/001-media-download/contracts/runtime.md` and `specs/001-media-download/contracts/source-adapters.md`, each marked "(amended by 002)".
+- [X] T033 [P] Document the flag in `README.md`: the three variables, the `-v openmedia-logs:/var/log/openmedia` mount added to the existing `docker run` example, the local `OPENMEDIA_DIAGNOSTIC_LOG_DIR=$PWD/logs` recipe, the `grep`/`jq` trace commands from quickstart §2, and a plain statement that the files contain submitted links and Telegram identifiers for up to 14 days.
+- [X] T034 [P] Update `CLAUDE.md`: add `specs/002-file-logging/` rows to "Where truth lives", and add one constraint bullet: links and Telegram identifiers are logged only through `openmedia.diagnostic`, never through a logger that reaches the console.
+- [X] T035 Run quickstart §1 to §4 and record commands, results, and date in `specs/002-file-logging/validation.md`. Run the container check in quickstart §5 if Docker and a test token are available; otherwise record it as "not run", never as passed.
 
 ---
 

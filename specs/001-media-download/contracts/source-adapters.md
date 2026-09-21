@@ -4,6 +4,8 @@
 
 The parent calls a supervised worker through bounded newline-delimited JSON on stdin/stdout.
 Worker stderr is captured and sanitized, never forwarded verbatim to users or routine logs.
+The one permitted destination is the flagged diagnostic file of feature 002, which receives the
+sanitized capture as `worker_output` on a failure entry (amended by 002).
 Maximum serialized inspection result is 2 MiB; oversized/malformed results fail inspection.
 Operations are fixed enum values, not arbitrary commands. No Telegram token or user/chat ID
 is sent to the worker. Spawn using an argument array and a minimal environment.

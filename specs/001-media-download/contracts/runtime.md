@@ -4,7 +4,8 @@
 
 One Linux container runs one polling bot parent and at most two source workers. Run as
 UID/GID 10001 with `--init`, a read-only image filesystem, and a writable temporary mount.
-No inbound ports, database, queue, or persistent media volume are needed. Bundle Python,
+No inbound ports, database, queue, or persistent media volume are needed. When the diagnostic
+flag is on, an optional log volume is mounted at `OPENMEDIA_DIAGNOSTIC_LOG_DIR` (amended by 002). Bundle Python,
 the locked package environment, Deno, EJS, and FFmpeg. The image must not download executable
 components at startup. Deno runs only the bundled challenge helper with its restricted
 permissions. FFmpeg is bundled for stream-copy merging only, runs inside the worker's process
@@ -21,6 +22,9 @@ group, and is killed and reaped with it.
 | OPENMEDIA_MAX_PENDING | `100` | Positive; preview capacity reserved when admitting inspection |
 | OPENMEDIA_WORKSPACE_BYTES | `134217728` | Per-job ceiling; at least twice maximum output size, since a merge holds components and output together |
 | OPENMEDIA_LOG_LEVEL | `INFO` | Reject invalid levels; upstream transport debug logs remain disabled |
+| OPENMEDIA_DIAGNOSTIC_LOG | `0` | Development feature flag; only `0` or `1`. Off creates nothing on disk (amended by 002) |
+| OPENMEDIA_DIAGNOSTIC_LOG_DIR | `/var/log/openmedia` | Flag on only: absolute, outside `OPENMEDIA_WORK_DIR`, creatable and writable (amended by 002) |
+| OPENMEDIA_DIAGNOSTIC_LOG_LEVEL | `DEBUG` | Flag on only: same level names as `OPENMEDIA_LOG_LEVEL` (amended by 002) |
 
 Fixed acceptance values: inspection 60s, selection expiry 900s, processing 600s, cleanup 900s.
 Changing them requires a spec update, rather than undocumented environment overrides.
@@ -72,7 +76,10 @@ uploads are never automatically repeated.
 Implementation commits `uv.lock` and exact image/tool version or digest pins. Runtime builds
 use locked dependencies and retain third-party notices; dev tools are excluded from the
 runtime layer. `.env`, local media, `.git`, credentials, and test fixture artifacts are
-excluded by `.dockerignore`. Log rotation is configured by the container runtime.
+excluded by `.dockerignore`, as are `logs/` and `*.log`. Log rotation of console output is
+configured by the container runtime; the diagnostic day files manage their own retention, 14
+day files and 50,000,000 bytes (amended by 002; see
+[002 contract](../../002-file-logging/contracts/diagnostic-log.md)).
 
 The build/startup smoke test and live source matrix are required before claiming deployment
 readiness. This contract specifies the future image; planning does not build or deploy it.
