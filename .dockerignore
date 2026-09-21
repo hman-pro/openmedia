@@ -51,6 +51,10 @@ media/
 *.mp3
 *.opus
 
+# Diagnostic logs — may contain links and Telegram identifiers (002, FR-016).
+logs/
+*.log
+
 # Python and tooling caches.
 __pycache__/
 *.py[cod]

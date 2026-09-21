@@ -42,7 +42,10 @@ RUN uv sync --locked --no-dev --no-editable --compile-bytecode \
     && ffprobe -version \
     && groupadd --gid 10001 openmedia \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent openmedia \
-    && chown -R 10001:10001 /app
+    && chown -R 10001:10001 /app \
+    && mkdir -p /var/log/openmedia \
+    && chown 10001:10001 /var/log/openmedia \
+    && chmod 0700 /var/log/openmedia
 
 ENV UV_OFFLINE=1
 

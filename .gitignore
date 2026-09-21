@@ -23,6 +23,10 @@ media/
 # Sanitized tiny fixtures are versioned on purpose (T004).
 !tests/fixtures/**
 
+# Diagnostic logs — may contain links and Telegram identifiers (002, FR-016).
+logs/
+*.log
+
 # Live-check artifacts — machine-local, may contain real URLs.
 tests/live/manifest.local.*
 specs/**/validation.local.md
