@@ -122,6 +122,24 @@ class Settings:
         if raw_flag not in {"0", "1"}:
             raise ConfigError("OPENMEDIA_DIAGNOSTIC_LOG must be 0 or 1")
         diagnostic_log = raw_flag == "1"
+        # Location and detail are validated only when the flag is on (002 FR-013): a stale
+        # value must not stop a bot that is not using the diagnostic log.
+        diagnostic_log_dir = Path("/var/log/openmedia")
+        diagnostic_log_level = "DEBUG"
+        if diagnostic_log:
+            raw_log_dir = values.get("OPENMEDIA_DIAGNOSTIC_LOG_DIR", str(diagnostic_log_dir))
+            diagnostic_log_dir = Path(os.path.normpath(raw_log_dir)) if raw_log_dir else Path("")
+            if not diagnostic_log_dir.is_absolute() or "\x00" in raw_log_dir:
+                raise ConfigError("OPENMEDIA_DIAGNOSTIC_LOG_DIR must be an absolute path")
+            # The work directory is emptied at every start, which would delete the logs.
+            normalized_work_dir = Path(os.path.normpath(work_dir))
+            if diagnostic_log_dir == normalized_work_dir or normalized_work_dir in diagnostic_log_dir.parents:
+                raise ConfigError("OPENMEDIA_DIAGNOSTIC_LOG_DIR must be outside OPENMEDIA_WORK_DIR")
+            diagnostic_log_level = values.get("OPENMEDIA_DIAGNOSTIC_LOG_LEVEL", "DEBUG").upper()
+            if diagnostic_log_level not in _LOG_LEVELS:
+                raise ConfigError(
+                    "OPENMEDIA_DIAGNOSTIC_LOG_LEVEL must be CRITICAL, ERROR, WARNING, INFO, or DEBUG"
+                )
 
         return cls(
             telegram_bot_token=token,
@@ -132,6 +150,8 @@ class Settings:
             workspace_bytes=workspace_bytes,
             log_level=log_level,
             diagnostic_log=diagnostic_log,
+            diagnostic_log_dir=diagnostic_log_dir,
+            diagnostic_log_level=diagnostic_log_level,
         )
 
     @property

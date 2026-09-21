@@ -90,6 +90,7 @@ Existing names are unchanged so feature 001's timing audit keeps parsing the con
 | `cleanup` | request | yes | `openmedia.diagnostic` |
 | `expired` | request | yes | `openmedia.diagnostic` |
 | `terminal` | request | no | `openmedia` |
+| `worker_progress` (DEBUG) | request | yes | `openmedia.diagnostic` |
 | `startup`, `shutdown`, `crash` | lifecycle | yes | `openmedia.diagnostic` |
 | `sweep` | sweep | yes | `openmedia.diagnostic` |
 | `log_recovered` | lifecycle | yes | `openmedia.diagnostic` |

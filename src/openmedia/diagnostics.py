@@ -126,11 +126,17 @@ class JsonLineFormatter(logging.Formatter):
             value = fields.get(key)
             if value is None:
                 continue
-            if isinstance(value, str):
-                clean = redact_secrets if key in _KEEPS_URL else redact
-                value = clean(value, self.secrets)
-            entry[key] = value
+            entry[key] = self._clean(value, redact_secrets if key in _KEEPS_URL else redact)
         return entry
+
+    def _clean(self, value: Any, clean: Callable[[str, tuple[str, ...]], str]) -> Any:
+        if isinstance(value, str):
+            return clean(value, self.secrets)
+        if isinstance(value, dict):
+            return {str(key): self._clean(item, clean) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._clean(item, clean) for item in value]
+        return value
 
     @staticmethod
     def _dump(entry: dict[str, Any]) -> str:

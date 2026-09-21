@@ -130,14 +130,14 @@ unwritable path, exits 0 for a good one, and with the flag off creates no file o
 
 ### Tests for User Story 3
 
-- [ ] T027 [P] [US3] Extend `tests/unit/test_config_diagnostics.py`: flag on rejects a directory that is not "absolute, no NUL, not equal to or inside `work_dir`" and a level outside `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`; flag off accepts any value for both without error (FR-013); error text names the variable and contains no token.
-- [ ] T028 [P] [US3] Add tests in `tests/unit/test_diagnostics.py` and `tests/integration/test_diagnostic_trace.py`: flag off leaves zero files and zero directories under the configured path after a full request flow and after `main(["--check-config"])` (SC-008); flag on, `--check-config` with an unwritable directory returns 2 with a message naming the path and reason, and with a writable one returns 0, leaves the directory empty (probe removed), and writes no entries; `--healthcheck` never creates the directory; `OPENMEDIA_DIAGNOSTIC_LOG_LEVEL=INFO` drops `DEBUG` entries from the file while `DEBUG` keeps them.
+- [X] T027 [P] [US3] Extend `tests/unit/test_config_diagnostics.py`: flag on rejects a directory that is not "absolute, no NUL, not equal to or inside `work_dir`" and a level outside `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`; flag off accepts any value for both without error (FR-013); error text names the variable and contains no token.
+- [X] T028 [P] [US3] Add tests in `tests/unit/test_diagnostics.py` and `tests/integration/test_diagnostic_trace.py`: flag off leaves zero files and zero directories under the configured path after a full request flow and after `main(["--check-config"])` (SC-008); flag on, `--check-config` with an unwritable directory returns 2 with a message naming the path and reason, and with a writable one returns 0, leaves the directory empty (probe removed), and writes no entries; `--healthcheck` never creates the directory; `OPENMEDIA_DIAGNOSTIC_LOG_LEVEL=INFO` drops `DEBUG` entries from the file while `DEBUG` keeps them.
 
 ### Implementation for User Story 3
 
-- [ ] T029 [US3] Add the flag-on directory and level validation to `Settings.from_env` in `src/openmedia/config.py` per T027, reusing the `_LOG_LEVELS` set.
-- [ ] T030 [US3] In `validate_local_runtime` in `src/openmedia/__main__.py`, when `settings.diagnostic_log` is true: create the directory with mode `0700`, reject a symlink or non-directory, write and unlink `.diagnostic-probe`, and raise `ConfigError(f"OPENMEDIA_DIAGNOSTIC_LOG_DIR {path} is not writable: {reason}")` on `OSError`. Skip entirely when the flag is off. Add `diagnostic_log=on|off` (and the directory when on) to the `--check-config` success line.
-- [ ] T031 [US3] Apply `settings.diagnostic_log_level` to the file handler in `configure_diagnostics` in `src/openmedia/diagnostics.py`, emit worker protocol messages and coalesced progress as `logging.DEBUG` events from `src/openmedia/__main__.py`, and make T027 and T028 pass.
+- [X] T029 [US3] Add the flag-on directory and level validation to `Settings.from_env` in `src/openmedia/config.py` per T027, reusing the `_LOG_LEVELS` set.
+- [X] T030 [US3] In `validate_local_runtime` in `src/openmedia/__main__.py`, when `settings.diagnostic_log` is true: create the directory with mode `0700`, reject a symlink or non-directory, write and unlink `.diagnostic-probe`, and raise `ConfigError(f"OPENMEDIA_DIAGNOSTIC_LOG_DIR {path} is not writable: {reason}")` on `OSError`. Skip entirely when the flag is off. Add `diagnostic_log=on|off` (and the directory when on) to the `--check-config` success line.
+- [X] T031 [US3] Apply `settings.diagnostic_log_level` to the file handler in `configure_diagnostics` in `src/openmedia/diagnostics.py`, emit worker protocol messages and coalesced progress as `logging.DEBUG` events from `src/openmedia/__main__.py`, and make T027 and T028 pass.
 
 **Checkpoint**: All three stories work independently; `uv run pytest` is green.
 

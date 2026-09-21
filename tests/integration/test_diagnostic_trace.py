@@ -292,3 +292,105 @@ async def test_a_sweep_that_did_work_is_recorded(trace: Trace, tmp_path: Path) -
     assert len(sweeps) == 1
     assert sweeps[0]["origin"] == "sweep"
     assert sweeps[0]["expired"] == 1
+
+
+class TestCommandLineModes:
+    def patch(self, monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+        import openmedia.__main__ as runtime
+
+        monkeypatch.setattr(runtime.Settings, "from_env", lambda: settings)
+        monkeypatch.setattr(runtime.shutil, "which", lambda name: f"/usr/bin/{name}")
+        monkeypatch.setattr(runtime, "build_application", lambda settings: pytest.fail("must not poll"))
+
+    def settings(self, tmp_path: Path, directory: Path, *, enabled: bool) -> Settings:
+        work = tmp_path / "work"
+        return Settings(telegram_bot_token=TOKEN, work_dir=work, diagnostic_log=enabled,
+            diagnostic_log_dir=directory)
+
+    def test_flag_off_check_config_creates_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import openmedia.__main__ as runtime
+
+        directory = tmp_path / "logs"
+        self.patch(monkeypatch, self.settings(tmp_path, directory, enabled=False))
+        assert runtime.main(["--check-config"]) == 0
+        assert not directory.exists()
+        assert "diagnostic_log=off" in capsys.readouterr().out
+
+    def test_flag_on_check_config_probes_and_leaves_an_empty_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import openmedia.__main__ as runtime
+
+        directory = tmp_path / "logs"
+        self.patch(monkeypatch, self.settings(tmp_path, directory, enabled=True))
+        assert runtime.main(["--check-config"]) == 0
+        assert directory.is_dir()
+        assert list(directory.iterdir()) == []
+        assert f"diagnostic_log=on ({directory})" in capsys.readouterr().out
+
+    def test_flag_on_unwritable_directory_exits_two_naming_path_and_reason(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import openmedia.__main__ as runtime
+
+        blocker = tmp_path / "file"
+        blocker.write_text("")
+        directory = blocker / "logs"
+        self.patch(monkeypatch, self.settings(tmp_path, directory, enabled=True))
+        assert runtime.main(["--check-config"]) == 2
+        error = capsys.readouterr().err
+        assert "OPENMEDIA_DIAGNOSTIC_LOG_DIR" in error
+        assert str(directory) in error
+        assert "NotADirectoryError" in error or "Not a directory" in error
+        assert TOKEN not in error
+
+    def test_healthcheck_never_touches_the_log_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import openmedia.__main__ as runtime
+
+        directory = tmp_path / "logs"
+        self.patch(monkeypatch, self.settings(tmp_path, directory, enabled=True))
+        runtime.main(["--healthcheck"])
+        assert not directory.exists()
+
+
+async def test_flag_off_full_flow_leaves_no_files(tmp_path: Path) -> None:
+    directory = tmp_path / "logs"
+    stop = diagnostics.configure_diagnostics(Settings(telegram_bot_token=TOKEN,
+        diagnostic_log=False, diagnostic_log_dir=directory))
+    try:
+        workflow = workflow_for(RequestRegistry(), tmp_path)
+        await select(workflow, await submit(workflow))
+    finally:
+        stop()
+    assert not directory.exists()
+
+
+@pytest.mark.parametrize(("level", "expected"), [("INFO", ["kept"]), ("DEBUG", ["detail", "kept"])])
+def test_detail_level_filters_the_file(tmp_path: Path, level: str, expected: list[str]) -> None:
+    stop = diagnostics.configure_diagnostics(Settings(telegram_bot_token=TOKEN, diagnostic_log=True,
+        diagnostic_log_dir=tmp_path, diagnostic_log_level=level))
+    try:
+        diagnostics.event("detail", origin="lifecycle", level=logging.DEBUG)
+        diagnostics.event("kept", origin="lifecycle")
+    finally:
+        stop()
+    entries = [json.loads(line) for path in tmp_path.iterdir() for line in path.read_text().splitlines()]
+    assert [entry["stage"] for entry in entries] == expected
+
+
+def test_worker_progress_is_debug_detail_with_nested_redaction(trace: Trace, tmp_path: Path) -> None:
+    import openmedia.__main__ as runtime
+
+    work = tmp_path / "work"
+    work.mkdir(mode=0o700)
+    callbacks = runtime.RuntimeCallbacks(Settings(telegram_bot_token=TOKEN, work_dir=work), object())
+    request = RequestRegistry().new_request(user_id=1, chat_id=1, source_url=LINK,
+        platform="youtube", media_id=MEDIA_ID)
+    callbacks.upstream(request, {"upstream_status_class": "2xx", "url": "https://cdn.example/v?sig=abc"})
+    progress = next(entry for entry in trace.entries() if entry["stage"] == "worker_progress")
+    assert progress["level"] == "DEBUG"
+    assert progress["progress"] == {"upstream_status_class": "2xx", "url": "<redacted-url>"}

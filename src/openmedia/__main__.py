@@ -25,7 +25,8 @@ from openmedia.bot import build_preview, register_handlers, selected_label, send
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
 from openmedia.delivery import deliver_document
-from openmedia.diagnostics import REQUEST_CONTEXT, configure_diagnostics, event, redact
+from openmedia.diagnostics import REQUEST_CONTEXT, configure_diagnostics, redact
+from openmedia.diagnostics import event as record_event  # `event` names worker messages here
 from openmedia.models import DeliveryResult, DownloadRequest, FormatOption
 from openmedia.sources import DownloadInput, DownloadResult, InspectInput, InspectResult
 from openmedia.workers import (
@@ -324,6 +325,8 @@ class RuntimeCallbacks:
             "elapsed_seconds": round(time.monotonic() - request.created_at, 4), **values}, separators=(",", ":")))
 
     def upstream(self, request: DownloadRequest, event: Mapping[str, Any]) -> None:
+        record_event("worker_progress", request=request, level=logging.DEBUG, progress={
+            key: value for key, value in event.items() if isinstance(value, (str, int, float, bool))})
         status = event.get("upstream_status_class")
         if status in {"2xx", "3xx", "4xx", "429", "5xx", "connection_failure"}:
             self.observe(request, "source_response", upstream_status_class=status)
@@ -448,11 +451,11 @@ class RuntimeCallbacks:
         if directory is not None:
             try:
                 cleanup_request_directory(directory, owned_root=self.settings.work_dir)
-                event("cleanup", request=request, outcome="removed")
+                record_event("cleanup", request=request, outcome="removed")
             except OSError as exc:
                 self.failed_cleanup.add(directory)
                 logging.getLogger("openmedia").warning("workspace cleanup deferred")
-                event("cleanup", request=request, level=logging.WARNING, outcome="deferred",
+                record_event("cleanup", request=request, level=logging.WARNING, outcome="deferred",
                     exc_info=(type(exc), exc, exc.__traceback__))
 
     async def notify_failure(self, request: DownloadRequest, result: DeliveryResult) -> None:
@@ -495,7 +498,7 @@ class RuntimeCallbacks:
         except Exception:
             log.warning("workspace sweep failed; retrying on next sweep")
         if expired or cleanup_retried or cleanup_failed or swept:
-            event("sweep", origin="sweep", expired=expired, cleanup_retried=cleanup_retried,
+            record_event("sweep", origin="sweep", expired=expired, cleanup_retried=cleanup_retried,
                 cleanup_failed=cleanup_failed, swept=swept)
 
 
@@ -504,16 +507,16 @@ def run_with_diagnostics(settings: Settings, run: Callable[[], None]) -> None:
     stop_diagnostics = configure_diagnostics(settings)
     reason = "signal"  # run_polling returns normally only after SIGINT/SIGTERM/SIGABRT
     try:
-        event("startup", origin="lifecycle", settings={
+        record_event("startup", origin="lifecycle", settings={
             item.name: getattr(settings, item.name) for item in fields(settings) if item.repr})
         run()
     except BaseException as exc:
         reason = "error"
-        event("crash", origin="lifecycle", level=logging.CRITICAL,
+        record_event("crash", origin="lifecycle", level=logging.CRITICAL,
             exc_info=(type(exc), exc, exc.__traceback__))
         raise
     finally:
-        event("shutdown", origin="lifecycle", reason=reason)
+        record_event("shutdown", origin="lifecycle", reason=reason)
         stop_diagnostics()
 
 
@@ -536,6 +539,24 @@ def validate_local_runtime(settings: Settings) -> None:
         raise ConfigError("required bundled EJS challenge scripts (yt_dlp_ejs) are unavailable")
     # Deliberately no sweep: --check-config may run beside a live bot sharing this work
     # directory. The polling startup path removes leftovers before readiness instead.
+    if settings.diagnostic_log:
+        validate_diagnostic_directory(settings.diagnostic_log_dir)
+
+
+def validate_diagnostic_directory(directory: Path) -> None:
+    """Fail before start instead of logging to nowhere. Only ever called with the flag on."""
+    probe = directory / ".diagnostic-probe"
+    try:
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if directory.is_symlink() or not directory.is_dir():
+            raise NotADirectoryError("not an owned directory")
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError as exc:
+        reason = exc.strerror or str(exc)
+        raise ConfigError(
+            f"OPENMEDIA_DIAGNOSTIC_LOG_DIR {directory} is not writable: {type(exc).__name__}: {reason}"
+        ) from exc
 
 
 def build_application(settings: Settings) -> tuple[Application[Any, ...], RequestRegistry]:
@@ -632,7 +653,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check_config:
         print(
             f"openmedia: configuration valid (token={settings.redacted_token}, "
-            f"work_dir={settings.work_dir})"
+            f"work_dir={settings.work_dir}, diagnostic_log="
+            f"{f'on ({settings.diagnostic_log_dir})' if settings.diagnostic_log else 'off'})"
         )
         return 0
     # This process is about to own the work directory, so every leftover workspace is stale
