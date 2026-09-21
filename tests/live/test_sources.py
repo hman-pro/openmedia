@@ -10,20 +10,33 @@ from openmedia.sources import DownloadInput, InspectInput, SourceRouter, recogni
 
 
 class LiveRateControl:
-    """One process-owned Instagram interval shared across successive adapter calls."""
+    """Production Instagram request spacing, plus a polite pause between Instagram cases."""
+
+    REQUEST_SPACING = 1.0
+    CASE_SPACING = 60.0
 
     def __init__(self) -> None:
-        self.last_instagram_request = 0.0
+        self.last_request: dict[str, float] = {}
+        self.last_instagram_case: float | None = None
+
+    def begin_case(self, platform: str) -> None:
+        if platform != "instagram":
+            return
+        if self.last_instagram_case is not None:
+            time.sleep(max(0.0, self.CASE_SPACING - (time.monotonic() - self.last_instagram_case)))
+        self.last_instagram_case = time.monotonic()
 
     def acquire(self, platform: str, request_class: str, *, deadline: float) -> float:
         if platform != "instagram":
             return 0
-        delay = max(0.0, 60.0 - (time.monotonic() - self.last_instagram_request))
-        if time.monotonic() + delay >= deadline:
+        # Mirrors ParentRateController: one second per request class, refused past the deadline.
+        now = time.monotonic()
+        delay = max(0.0, self.REQUEST_SPACING - (now - self.last_request.get(request_class, -10.0)))
+        if now + delay >= deadline:
             pytest.fail("Instagram spacing would exceed the current live-test deadline")
         if delay:
             time.sleep(delay)
-        self.last_instagram_request = time.monotonic()
+        self.last_request[request_class] = now + delay
         return delay
 
     def limited(self, platform: str, request_class: str, *, retry_after: float | None) -> None:
@@ -49,6 +62,7 @@ def test_required_source_matrix(live_manifest: list[dict[str, object]], tmp_path
         case = by_case[case_id]
         url = str(case["url"])
         route = recognize_source_url(url)
+        rate.begin_case(route.platform)
         work = tmp_path / f"case-{index}"
         work.mkdir()
         inspected = router.inspect(

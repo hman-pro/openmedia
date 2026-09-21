@@ -590,3 +590,55 @@ the real-shape fixture `linkedin-video-progressive.json`. Locked controlled gate
    replaces the original category (here `no_formats`) with `unavailable`.
 4. The video inspection returned no creator; whether the extractor exposes one for this post
    was not examined.
+
+### Five-category live suite attempt (2026-09-21) — blocked at Instagram image
+
+Run outside the container with a private gitignored manifest covering all five categories.
+
+1. **Harness (T096)**: the first run failed in 0.11 s because `LiveRateControl` spaced every
+   Instagram HTTP request by 60 s while one inspection makes at least two requests inside the
+   60 s inspect deadline. The harness now mirrors `ParentRateController` within a case and
+   pauses 60 s between Instagram cases. The rerun reached Instagram.
+2. **Instagram image, open**: through `SourceRouter` and the guarded transport, the GraphQL
+   metadata query returned **HTTP 403**, surfaced as `unavailable`. Minutes later, unwrapped
+   Instaloader 4.15.3 inspected the same shortcode anonymously from the same network
+   successfully, so the source was reachable and the difference is on our side of the
+   boundary. Observed structural differences, cause not yet proven: `MetadataHTTP.fetch`
+   removes the `Cookie` header; `GuardedHTTPTransport` returns response headers as a dict, so
+   repeated `Set-Cookie` headers collapse to one and are never placed in the session; and the
+   client is `http.client` rather than urllib3. Instaloader's anonymous flow obtains a
+   `csrftoken` from `instagram.com/` and presents it on the GraphQL request. One scratch
+   experiment re-adding cookies was invalid because of the header collapse and is not counted
+   either way. The T017 closure evidence used unwrapped Instaloader, so the Instagram image
+   path has no passing live evidence through the product's own transport.
+3. **Example unsuitable**: the supplied `/p/` post is `GraphSidecar` with 15 items, a
+   carousel the scope excludes. A single-image (`GraphImage`) example is still needed.
+4. The suite stops at the first failure, so Instagram video and YouTube were not reached in
+   this run. T026/T074 stay open.
+
+### Spare-link probe and cookie experiment (2026-09-21/22)
+
+Scratch probes repeating the live-suite sequence through `SourceRouter` and
+`GuardedHTTPTransport`, outside the container. None of this closes T026/T074.
+
+| Case | Inspect | Download | Note |
+|---|---|---|---|
+| YouTube video `9kkspssvcLc` (323 s) | Pass, 1.3 s, 160 choices | Muxed `18` pass (14,534,789 bytes, 360p with sound). Adaptive `160` (144p, 1.3 MiB) **fail**: `ConnectionResetError` from the media host mid-read, leaked unclassified | Smallest-choice rule in the live suite would pick the failing adaptive stream |
+| YouTube Short `U00Aosfvr0Q` (66 s) | Pass, 1.6 s, **1,006 choices** | Smallest choice failed with the same connection reset | Audio variants `-0/-1/-2` multiply every video/audio pair; up to 21 choices share one identical label |
+| Instagram reels `Ddb2BEIsyQK`, `DcmK_-kNuev` | **Fail**: yt-dlp "Instagram sent an empty media response", surfaced as `unavailable` | not reached | Unwrapped yt-dlp 2026.8.19 inspected the first reel anonymously from the same network (8 formats) |
+
+**Cookie experiment (Instagram image)**: with the guarded transport otherwise unchanged, a
+scratch patch kept the response's full `Set-Cookie` list, placed it in Instaloader's
+per-operation session, and let the resulting `Cookie` header through `MetadataHTTP.fetch`. The
+GraphQL query then returned **200** and the 15-item carousel was correctly rejected as
+`unsupported_collection`; with cookies stripped the same query returned 403 on both earlier
+runs. The HTTP client is therefore not the cause: dropping the anonymous per-session cookies
+is. Whether the same holds for the yt-dlp Instagram video path is likely (same wrapper, same
+stripping, unwrapped yt-dlp works) but not yet shown.
+
+**New findings, not fixed**: (5) both Instagram categories fail live through the product's
+transport while the unwrapped libraries succeed; (6) a YouTube adaptive stream from the
+`default` client was reset by the media host while muxed `18` downloaded, which questions the
+"fetchable adaptive streams" evidence in research §6; (7) `ConnectionResetError` during
+download is not mapped to a `SourceAdapterError` category; (8) YouTube previews can carry
+hundreds of choices with indistinguishable labels.
