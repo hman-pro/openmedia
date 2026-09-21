@@ -484,6 +484,13 @@ real bot token, including a rebuilt image), T054 and T076 (deployment-network so
 two-account Telegram acceptance), and T055 and T080 (20 + 20 live timing runs). No controlled
 test is counted toward any of them.
 
+**On hold (2026-09-21)**: T053 and T075 are paused by operator decision and stay open. T055 and
+T080 wait with them, because timing taken outside the constrained container would not be
+acceptance evidence. T026/T074 and the non-container parts of T054/T076 proceed; any result
+gathered before the hold is lifted is recorded as run outside the container. FR-014, FR-015,
+and the live-shutdown portion of SC-007 keep their T053 evidence gap, so feature 001 is not
+reported complete while the hold stands.
+
 ---
 
 ## T026 follow-up — LinkedIn failure diagnosis
