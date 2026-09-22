@@ -1,10 +1,11 @@
 # Third-Party Notices
 
-OpenMedia does not select an application distribution license. This file records the
-third-party runtime closure and source/notice obligations for the container defined by the
-repository. The corresponding license texts remain in the installed Python distributions and
-Debian packages. Anyone distributing the image must preserve those texts and satisfy the
-copyleft source-availability obligations noted below.
+OpenMedia's own source code is released under the MIT License (see [`LICENSE`](LICENSE)).
+That license covers this repository's code only, not the components listed here. This file
+records the third-party runtime closure and source/notice obligations for the container
+defined by the repository. The corresponding license texts remain in the installed Python
+distributions and Debian packages. Anyone distributing the image must preserve those texts
+and satisfy the copyleft source-availability obligations noted below.
 
 ## Runtime tools
 

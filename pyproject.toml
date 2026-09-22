@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Telegram bot that delivers one public media link in a native upstream format, unchanged."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
+license = "MIT"
+license-files = ["LICENSE"]
 
 # Pinned exactly: research.md §7 requires a reviewable dependency closure, and uv.lock
 # records the transitive set these produce.

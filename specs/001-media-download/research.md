@@ -240,6 +240,13 @@ The dependency license inventory belongs in `THIRD_PARTY_NOTICES.md` during impl
 No project distribution license is chosen by this plan. Preserve the individual dependency
 licenses and attribution; exact dependency closure and notices must be checked with the lock.
 
+**Amendment (2026-09-22)**: the project owner has since chosen the MIT License for OpenMedia's
+own source code, recorded in `LICENSE`, `pyproject.toml`, and the header of
+`THIRD_PARTY_NOTICES.md`. This is an explicit owner decision taken after planning, not a
+silently adopted license, so the T051 audit condition still holds. The third-party obligations
+above are unchanged: MIT covers this repository's code only, and the bundled GPL/LGPL
+components keep their own terms.
+
 YouTube support needs both the EJS package and a supported JavaScript runtime. Bundle EJS
 at build time, disable runtime remote component fetching, and give Deno no extra filesystem
 or network permissions. Deno is an auxiliary tool, not another backend service.
