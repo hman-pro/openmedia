@@ -312,6 +312,8 @@ class TransportResponse:
     status: int
     headers: Mapping[str, str]
     body: bytes
+    # Repeated Set-Cookie headers cannot share the header mapping; values stay out of repr.
+    set_cookies: tuple[str, ...] = field(default=(), repr=False)
 
 
 @runtime_checkable

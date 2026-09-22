@@ -194,3 +194,99 @@ def test_worker_child_applies_the_socket_guard_around_library_code(monkeypatch, 
     events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert events[-1] == {"event": "error", "category": "unsafe_destination", "stage": None}
     assert socket.getaddrinfo is guarded_before
+
+
+# --------------------------------------------------------------------------------------
+# Source-issued anonymous cookies live for one Instagram operation and go nowhere else.
+# --------------------------------------------------------------------------------------
+
+
+class CookieTransport:
+    """Issues cookies on the first response and records every outgoing header set."""
+
+    def __init__(self, issued=("csrftoken=issued-token; Path=/; Secure", "mid=issued-mid; Path=/"), final_host=None):
+        self.issued, self.final_host, self.sent = issued, final_host, []
+        self.on_request = self.on_response = None
+
+    def fetch(self, url, **kwargs):
+        self.sent.append((url, dict(kwargs["headers"])))
+        final = url if self.final_host is None else f"https://{self.final_host}/"
+        cookies = self.issued if len(self.sent) == 1 else ()
+        return TransportResponse(final, 200, {"content-type": "application/json"}, b"{}", cookies)
+
+
+def cookie_client(transport, platform="instagram"):
+    return MetadataHTTP(transport, library_rate(), SimpleNamespace(deadline=10, metadata_limit=32), platform)
+
+
+def sent_cookie(headers):
+    return next((value for key, value in headers.items() if key.lower() == "cookie"), None)
+
+
+def test_instagram_operation_returns_only_source_issued_cookies():
+    transport = CookieTransport()
+    client = cookie_client(transport)
+    client.fetch("https://www.instagram.com/", headers={"Cookie": "sessionid=operator-secret"})
+    client.fetch("https://www.instagram.com/graphql/query", method="POST", data=b"q", headers={"Cookie": "sessionid=operator-secret"})
+    assert sent_cookie(transport.sent[0][1]) is None
+    assert sent_cookie(transport.sent[1][1]) == "csrftoken=issued-token; mid=issued-mid"
+    assert "operator-secret" not in repr(transport.sent)
+    assert "issued-token" not in repr(client) and "issued-token" not in repr(vars(client).keys())
+
+
+def test_requests_session_receives_issued_cookies_for_the_csrf_header():
+    transport = CookieTransport()
+    client = cookie_client(transport)
+    with client.requests():
+        session = requests.Session()
+        session.get("https://www.instagram.com/")
+        assert session.cookies.get("csrftoken") == "issued-token"
+        session.post("https://www.instagram.com/graphql/query", data=b"q")
+    assert sent_cookie(transport.sent[1][1]) == "csrftoken=issued-token; mid=issued-mid"
+
+
+def test_ytdlp_path_uses_the_same_operation_jar():
+    transport = CookieTransport()
+    client = cookie_client(transport)
+    with client.bound():
+        client.ytdlp(Request("https://www.instagram.com/reel/abc/"))
+        client.ytdlp(Request("https://www.instagram.com/graphql/query", data=b"q"))
+    assert sent_cookie(transport.sent[1][1]) == "csrftoken=issued-token; mid=issued-mid"
+
+
+@pytest.mark.parametrize("platform,url", [("youtube", "https://www.youtube.com/watch?v=x"), ("linkedin", "https://www.linkedin.com/posts/x")])
+def test_other_platforms_never_record_or_send_cookies(platform, url):
+    transport = CookieTransport()
+    client = cookie_client(transport, platform)
+    client.fetch(url)
+    client.fetch(url, headers={"Cookie": "a=b"})
+    assert [sent_cookie(headers) for _url, headers in transport.sent] == [None, None]
+
+
+def test_jar_is_bound_to_instagram_hosts_in_both_directions():
+    transport = CookieTransport()
+    client = cookie_client(transport)
+    client.fetch("https://www.instagram.com/")
+    client.fetch("https://scontent.cdninstagram.com/image")
+    client.fetch("https://instagram.com.evil.invalid/")
+    assert [sent_cookie(headers) for _url, headers in transport.sent[1:]] == [None, None]
+
+    foreign = CookieTransport(final_host="tracker.example.invalid")
+    client = cookie_client(foreign)
+    client.fetch("https://www.instagram.com/")
+    client.fetch("https://www.instagram.com/graphql/query")
+    assert sent_cookie(foreign.sent[1][1]) is None, "cookies set by a non-Instagram final host are not recorded"
+
+
+def test_operations_share_no_cookies():
+    first, second = CookieTransport(), CookieTransport(issued=())
+    cookie_client(first).fetch("https://www.instagram.com/")
+    other = cookie_client(second)
+    other.fetch("https://www.instagram.com/")
+    other.fetch("https://www.instagram.com/graphql/query")
+    assert [sent_cookie(headers) for _url, headers in second.sent] == [None, None]
+
+
+def test_no_cookie_file_is_configured_for_ytdlp():
+    from openmedia.sources.ytdlp import YTDLP_OPTIONS
+    assert YTDLP_OPTIONS["cookiefile"] is None

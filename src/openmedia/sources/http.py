@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 from io import BytesIO
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 from openmedia.sources import ErrorCategory, SourceAdapterError
 
@@ -10,24 +11,46 @@ from openmedia.sources import ErrorCategory, SourceAdapterError
 class MetadataHTTP:
     def __init__(self, transport, rate, request, platform):
         self.transport, self.rate, self.request, self.platform = transport, rate, request, platform
+        # Cookies Instagram issues to a logged-out visitor, held for this one operation only.
+        self._cookies: dict[str, str] = {}
+
+    def __repr__(self):
+        return f"MetadataHTTP(platform={self.platform!r})"
+
+    def _carries_cookies(self, url):
+        host = (urlsplit(str(url)).hostname or "").rstrip(".").lower()
+        return self.platform == "instagram" and (host == "instagram.com" or host.endswith(".instagram.com"))
+
+    def _record_cookies(self, response):
+        if not self._carries_cookies(response.url):
+            return
+        for line in response.set_cookies:
+            name, separator, value = line.split(";", 1)[0].partition("=")
+            if separator and name.strip():
+                self._cookies[name.strip()] = value.strip()
 
     def fetch(self, url, *, method="GET", headers=None, data=None):
         headers = {key: value for key, value in dict(headers or {}).items()
             if key.lower() not in {"cookie", "authorization", "proxy-authorization", "accept-encoding"}}
         headers["Accept-Encoding"] = "identity"
+        # Caller-supplied cookies were dropped above; only this operation's jar is ever sent.
+        if self._cookies and self._carries_cookies(url):
+            headers["Cookie"] = "; ".join(f"{name}={value}" for name, value in self._cookies.items())
         if data is not None and not isinstance(data, bytes):
             if isinstance(data, str):
                 data = data.encode()
             else:
                 raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
         try:
-            return self.transport.fetch(str(url), method=method, data=data, headers=headers,
+            response = self.transport.fetch(str(url), method=method, data=data, headers=headers,
                 limit=self.request.metadata_limit, deadline=self.request.deadline)
         except (ConnectionError, TimeoutError, OSError):
             observe = getattr(self.rate, "observe", None)
             if observe:
                 observe(self.platform, None)
             raise
+        self._record_cookies(response)
+        return response
 
     @contextmanager
     def bound(self):
@@ -72,6 +95,10 @@ class MetadataHTTP:
             wrapped.headers.update(response.headers)
             wrapped._content = response.body
             wrapped.request = request
+            # Instaloader derives its X-CSRFToken header from the session's own jar.
+            if self._carries_cookies(response.url):
+                for name, value in self._cookies.items():
+                    session.cookies.set(name, value, domain=".instagram.com", path="/")
             wrapped.encoding = requests.utils.get_encoding_from_headers(wrapped.headers)
             return wrapped
         with self.bound(), patch.object(requests.Session, "send", send):

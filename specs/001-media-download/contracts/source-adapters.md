@@ -44,8 +44,12 @@ parent maps the category to the Telegram contract.
 
 Retain sanitized real upstream examples with provenance and expected media identity in
 fixtures. Unit-made synthetic examples supplement but do not replace real source-shape
-fixtures and release smoke checks. Never add login, account cookies, or paid-service fallback
-when anonymous inspection fails.
+fixtures and release smoke checks. Never add login, account cookies, a cookie file, or
+paid-service fallback when anonymous inspection fails. Cookies a source issues to a logged-out
+visitor may be held in memory for one worker operation and discarded; they are never
+persisted, shared across requests, or supplied by an operator. Only the Instagram metadata
+client carries them, only between Instagram hosts, and a caller-supplied `Cookie` header is
+always removed.
 
 ## Exact source-format downloads
 

@@ -172,3 +172,16 @@ def test_actual_file_size_is_enforced(tmp_path: Path) -> None:
     output.write_bytes(b"12345")
     with pytest.raises(ResponseTooLarge):
         validate_owned_file(output, tmp_path, max_bytes=4)
+
+
+def test_repeated_set_cookie_headers_survive_outside_the_header_dict(monkeypatch):
+    import io
+    from types import SimpleNamespace
+    pairs = [("Set-Cookie", "csrftoken=abc; Path=/; Secure"), ("Content-Type", "text/html"), ("set-cookie", "mid=xyz; Path=/")]
+    response = SimpleNamespace(status=200, read=io.BytesIO(b"ok").read, getheader=lambda name: None, getheaders=lambda: pairs)
+    transport = GuardedHTTPTransport()
+    monkeypatch.setattr(transport, "_open", lambda *args, **kwargs: (SimpleNamespace(close=lambda: None), response, "https://example.invalid"))
+    result = transport.fetch("https://example.invalid", limit=100)
+    assert result.set_cookies == ("csrftoken=abc; Path=/; Secure", "mid=xyz; Path=/")
+    assert "abc" not in repr(result) and "xyz" not in repr(result)
+    assert transport.head("https://example.invalid").set_cookies == result.set_cookies

@@ -642,3 +642,38 @@ transport while the unwrapped libraries succeed; (6) a YouTube adaptive stream f
 "fetchable adaptive streams" evidence in research §6; (7) `ConnectionResetError` during
 download is not mapped to a `SourceAdapterError` category; (8) YouTube previews can carry
 hundreds of choices with indistinguishable labels.
+
+### T097 — operation-scoped anonymous cookies (2026-09-22)
+
+**Rule change**, approved by the project owner: cookies a source issues to a logged-out
+visitor may be held in memory for one worker operation and discarded; never persisted, shared
+across requests, or supplied by an operator. Recorded in `CLAUDE.md` and
+`contracts/source-adapters.md`.
+
+**Implementation**: `TransportResponse.set_cookies` carries repeated `Set-Cookie` headers
+(excluded from `repr`, and removed from the shared header mapping); `MetadataHTTP` keeps one
+jar per instance, active for the Instagram platform and Instagram hosts only, and builds the
+outgoing `Cookie` header from that jar alone, so library defaults and caller-supplied cookies
+are still dropped. Stricter than the scratch experiment, which passed Instaloader's whole
+header through. Controlled gate: `uv run --locked pytest tests/unit tests/contract
+tests/integration` — **354 passed**.
+
+**Live, through `SourceRouter` and the guarded transport, outside the container**:
+
+| Case | Before | After |
+|---|---|---|
+| Instagram `/p/` carousel (15 items) | `unavailable` (GraphQL 403) | `unsupported_collection`, the correct rejection; the jar-only variant is accepted by Instagram |
+| Instagram reel | `unavailable` (yt-dlp "empty media response") | unchanged — the jar is not the cause |
+
+**Reel cause, shown but not fixed**: `curl_cffi` is absent, so yt-dlp skips its logged-out
+GraphQL query and falls back to parsing the post page. `MetadataHTTP.ytdlp` forwards only the
+headers on the `Request` object; yt-dlp adds its standard headers (`User-Agent`, `Accept`,
+`Accept-Language`, `Sec-Fetch-Mode`) later, in the request handler this wrapper replaces. The
+page request therefore left with the transport default `User-Agent: OpenMedia/0.1`, and
+Instagram returned a page (668,549 bytes) without the embedded media data. A scratch run that
+merged yt-dlp's standard headers under the request headers received the media data (758,797
+bytes) and inspected the reel to 8 selectable choices. Finding 9: three of those choices
+share the label "video · MP4 · with sound · size unknown".
+
+**Still open**: a live `GraphImage` single-image example for T097(f); the reel header fix;
+T026/T074.

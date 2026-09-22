@@ -44,8 +44,11 @@ Phases are strictly sequential: Setup → Foundational → US1 → US2 → US3 �
 - **Delivery cap is 50,000,000 bytes because Telegram's hosted Bot API caps uploads at
   50 MB.** Raising it needs a local Bot API server, which is a second service and a plan
   revision.
-- **Anonymous access only.** No stored cookies, logins, or source credentials. A category
-  that needs authentication is a scope decision, not an implementation detail.
+- **Anonymous access only.** No stored cookies, logins, or source credentials. Cookies a
+  source issues to a logged-out visitor may be held in memory for one worker operation and
+  discarded; they are never persisted, shared across requests, or supplied by an operator
+  (`MetadataHTTP` jar, Instagram hosts only). A category that needs authentication is a
+  scope decision, not an implementation detail.
 - **State lives in memory.** Bounded maps and tombstones. Introducing a database, queue,
   or second service needs a plan revision first.
 - **Deadlines are fixed in code**, not configurable: 60s inspect, 900s selection expiry,

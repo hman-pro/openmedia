@@ -157,6 +157,15 @@ def redirect_headers(
     }
 
 
+def _single_headers(response: http.client.HTTPResponse) -> dict[str, str]:
+    # Set-Cookie repeats and carries values; it travels in TransportResponse.set_cookies instead.
+    return {name.lower(): value for name, value in response.getheaders() if name.lower() != "set-cookie"}
+
+
+def _set_cookies(response: http.client.HTTPResponse) -> tuple[str, ...]:
+    return tuple(value for name, value in response.getheaders() if name.lower() == "set-cookie")
+
+
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     """Connect to a validated address while verifying the original TLS hostname."""
 
@@ -214,8 +223,8 @@ class GuardedHTTPTransport:
             url, headers=headers, deadline=deadline, method="HEAD"
         )
         try:
-            response_headers = {name.lower(): value for name, value in response.getheaders()}
-            return TransportResponse(final_url, response.status, response_headers, b"")
+            response_headers = _single_headers(response)
+            return TransportResponse(final_url, response.status, response_headers, b"", _set_cookies(response))
         finally:
             connection.close()
 
@@ -237,7 +246,7 @@ class GuardedHTTPTransport:
             body = self.policy.collect_chunks(
                 iter(lambda: response.read(self.chunk_size), b""), limit=limit
             )
-            response_headers = {name.lower(): value for name, value in response.getheaders()}
+            response_headers = _single_headers(response)
             encoding = response_headers.get("content-encoding", "identity").lower()
             if encoding in {"gzip", "deflate"}:
                 decoder = zlib.decompressobj(16 + zlib.MAX_WBITS if encoding == "gzip" else zlib.MAX_WBITS)
@@ -250,7 +259,7 @@ class GuardedHTTPTransport:
                 response_headers["content-length"] = str(len(body))
             elif encoding != "identity":
                 raise NetworkBoundaryError("unsupported metadata encoding")
-            return TransportResponse(final_url, response.status, response_headers, body)
+            return TransportResponse(final_url, response.status, response_headers, body, _set_cookies(response))
         finally:
             connection.close()
 
