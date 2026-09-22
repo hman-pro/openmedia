@@ -290,3 +290,27 @@ def test_operations_share_no_cookies():
 def test_no_cookie_file_is_configured_for_ytdlp():
     from openmedia.sources.ytdlp import YTDLP_OPTIONS
     assert YTDLP_OPTIONS["cookiefile"] is None
+
+
+def test_ytdlp_requests_carry_the_extractor_standard_headers():
+    from yt_dlp.utils.networking import std_headers
+    transport = CookieTransport(issued=())
+    client = cookie_client(transport, "youtube")
+    with client.bound():
+        client.ytdlp(Request("https://www.youtube.com/watch?v=x"))
+        client.ytdlp(Request("https://www.youtube.com/watch?v=x", headers={"User-Agent": "extractor-choice", "X-Extra": "1"}))
+    bare, overridden = (headers for _url, headers in transport.sent)
+    assert bare["User-Agent"] == std_headers["User-Agent"] != "OpenMedia/0.1"
+    assert {"Accept", "Accept-Language", "Sec-Fetch-Mode"} <= bare.keys()
+    assert overridden["User-Agent"] == "extractor-choice" and overridden["X-Extra"] == "1"
+    assert overridden["Accept"] == std_headers["Accept"]
+
+
+def test_only_the_ytdlp_path_adds_standard_headers():
+    transport = CookieTransport(issued=())
+    client = cookie_client(transport, "linkedin")
+    client.fetch("https://www.linkedin.com/embed/x")
+    with client.requests():
+        requests.get("https://www.instagram.com/")
+    # The requests session brings Instaloader's own User-Agent; only std_headers would add these two.
+    assert all({"Accept-Language", "Sec-Fetch-Mode"}.isdisjoint(headers) for _url, headers in transport.sent)

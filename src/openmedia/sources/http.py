@@ -79,7 +79,10 @@ class MetadataHTTP:
         from yt_dlp.networking.exceptions import HTTPError
         if isinstance(request, str):
             request = Request(request)
-        response = self.fetch(request.url, method=request.method, headers=request.headers, data=request.data)
+        # The replaced request handler would add these; extractors rely on a browser-like set.
+        from yt_dlp.utils.networking import std_headers
+        headers = {**std_headers, **dict(request.headers)}
+        response = self.fetch(request.url, method=request.method, headers=headers, data=request.data)
         wrapped = Response(BytesIO(response.body), response.url, response.headers, status=response.status)
         if response.status >= 400:
             raise HTTPError(wrapped)

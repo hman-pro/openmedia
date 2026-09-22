@@ -677,3 +677,17 @@ share the label "video · MP4 · with sound · size unknown".
 
 **Still open**: a live `GraphImage` single-image example for T097(f); the reel header fix;
 T026/T074.
+
+### T098 — yt-dlp standard headers (2026-09-22)
+
+`MetadataHTTP.ytdlp` now merges `yt_dlp.utils.networking.std_headers` beneath each request's
+own headers; the transport default and the Instaloader/LinkedIn paths are unchanged. Evidence:
+`test_ytdlp_requests_carry_the_extractor_standard_headers`,
+`test_only_the_ytdlp_path_adds_standard_headers`; controlled gate **356 passed**.
+
+Live, through `SourceRouter` and the guarded transport, outside the container: reel
+`Ddb2BEIsyQK` inspected in 3.9 s to 8 selectable choices with a creator (no duration);
+progressive format `1` downloaded unchanged, 3,599,614 bytes, and passed the MP4 signature and
+ffprobe stream checks. **Instagram video now has passing live evidence through the product's
+transport.** Finding 9 stands: formats `1`–`3` share one label. Still open: a `GraphImage`
+single-image example (T097 f), then the five-category suite for T026/T074.
