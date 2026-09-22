@@ -64,11 +64,12 @@ docker build --tag openmedia:local .
 docker run --rm --env-file .env \
   --read-only --cpus=2 --memory=2g \
   --tmpfs /tmp:rw,noexec,nosuid,size=536870912,mode=1777 \
+  -e OPENMEDIA_DIAGNOSTIC_LOG=1 -v openmedia-logs:/var/log/openmedia \
   openmedia:local python -m openmedia --check-config
 ```
 
 The image runs as UID/GID 10001, exposes no ports, bundles EJS/Deno/FFmpeg, and performs no
 runtime executable downloads. Deployment, live-source, real Telegram, and timing checks remain
-separate release gates. With the diagnostic flag on, add a volume, because the image filesystem
-is read-only: `-e OPENMEDIA_DIAGNOSTIC_LOG=1 -v openmedia-logs:/var/log/openmedia`. Current evidence is recorded in
+separate release gates. The last two flags turn the diagnostic log on and mount a named volume
+for it, because the image filesystem is read-only; drop both to run with the log off. Current evidence is recorded in
 [`specs/001-media-download/validation.md`](specs/001-media-download/validation.md).

@@ -410,3 +410,55 @@ def test_console_gets_one_start_and_one_stop_line(
     state = f"on, {directory}" if enabled else "off"
     assert lines == [f"openmedia: started (diagnostic_log={state})", "openmedia: stopped (reason=signal)"]
     assert directory.exists() is enabled
+
+
+async def test_runtime_journey_puts_every_fr002_stage_in_one_trace(
+    trace: Trace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 001 stages reach the file through the root logger; prove it end to end (SC-002)."""
+    from types import SimpleNamespace
+
+    import openmedia.__main__ as runtime
+    from openmedia.workers import create_request_directory
+
+    work = tmp_path / "work"
+    work.mkdir(mode=0o700)
+    bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=7)))
+    callbacks = runtime.RuntimeCallbacks(Settings(telegram_bot_token=TOKEN, work_dir=work),
+        SimpleNamespace(bot=bot))
+
+    async def send_preview(*_args: Any, **_kwargs: Any) -> int:
+        return 7
+
+    async def deliver_document(*_args: Any, **_kwargs: Any) -> DeliveryResult:
+        return DeliveryResult(status="confirmed", message_id=9, actual_bytes=7)
+
+    monkeypatch.setattr(runtime, "send_preview", send_preview)
+    monkeypatch.setattr(runtime, "deliver_document", deliver_document)
+
+    async def download(request: Any, _option: Any) -> DownloadResult:
+        # The real download creates the workspace; deliver and cleanup need it to exist.
+        request.work_directory = create_request_directory(work, request.request_id)
+        path = request.work_directory / "video.mp4"
+        path.write_bytes(b"fixture")
+        return DownloadResult(path=path, media_id=MEDIA_ID, source_format_id="18",
+            media_type="video", extension="mp4", mime_type="video/mp4", actual_bytes=7)
+
+    workflow = workflow_for(RequestRegistry(), tmp_path, status=callbacks.status,
+        publish_preview=callbacks.preview, download=download, deliver=callbacks.deliver,
+        cleanup=callbacks.cleanup)
+    request = await submit(workflow)
+    result = await select(workflow, request)
+    assert result.status == "confirmed"
+
+    entries = trace.entries()
+    seen = stages(entries, request.request_id)
+    expected = ["received", "acknowledgment", "inspection_started", "inspection_finished", "preview",
+        "selection", "download_started", "download_finished", "send_started", "delivery", "terminal",
+        "cleanup"]
+    assert [stage for stage in seen if stage in expected] == expected, seen
+    by_stage = {entry["stage"]: entry for entry in entries if entry.get("request_id") == request.request_id}
+    assert by_stage["delivery"]["outcome"] == "confirmed"
+    assert by_stage["terminal"]["outcome"] == "confirmed"
+    assert by_stage["cleanup"]["outcome"] == "removed"
+    assert all(entry["origin"] == "request" for entry in by_stage.values())

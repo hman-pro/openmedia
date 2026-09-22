@@ -28,8 +28,9 @@ Run on 2026-09-21 on macOS (Darwin 25.6.0), Python 3.13, Docker 29.8.0, branch
 ## Limitations
 
 - The `acknowledgment`, `preview`, `delivery`, and `terminal` stages come from feature 001's
-  `observe()` and reach the file through the root logger. That path is unit-tested with a
-  synthetic record, not through a full `RuntimeCallbacks` journey with the fake Telegram
-  transport.
+  `observe()` and reach the file through the root logger. Since Phase 7 (2026-09-22),
+  `test_runtime_journey_puts_every_fr002_stage_in_one_trace` drives real `RuntimeCallbacks`
+  methods with the transport patched and proves all twelve FR-002 stages under one
+  `request_id`; the full suite is 357 passed.
 - The unwritable-directory tests rely on POSIX permissions and would not fail as intended if
   the suite ran as root.

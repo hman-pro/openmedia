@@ -61,6 +61,12 @@ One JSON object per line. Keys appear in this order; absent keys are omitted, no
 | `bytes` | integer | download, delivery | File size, never content |
 | `dropped` | integer | after queue overflow | Records dropped since the last written entry |
 | `truncated` | boolean | when cut | Entry exceeded `DIAGNOSTIC_ENTRY_MAX_BYTES` |
+| `options` | integer | `inspection_finished` | Number of format options found |
+| `progress` | object | `worker_progress` (DEBUG) | Scalar fields of one worker protocol message |
+| `settings` | object | `startup` | Effective `Settings` without `telegram_bot_token` |
+| `reason` | string | `shutdown` | `signal` or `error` |
+| `expired`, `cleanup_retried`, `cleanup_failed`, `swept` | integer | `sweep` | Counts from one maintenance pass |
+| `lost` | integer | `log_recovered` | Entries not written while the handler was degraded |
 
 **Validation rules**
 

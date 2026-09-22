@@ -193,3 +193,11 @@ independent in content, so they parallelize only if each author owns one class.
 4. **Close the documents**: Phase 6.
 
 Stop after each phase, run `uv run pytest`, commit, then continue.
+
+---
+
+## Phase 7: Convergence
+
+- [X] T036 [US1] Extend `tests/integration/test_diagnostic_trace.py` so a flag-on success journey through `RuntimeCallbacks` (build it as `tests/integration/test_runtime.py` does, with a `SimpleNamespace` bot and `deliver_document` patched) proves that `acknowledgment`, `preview`, `delivery`, `terminal`, and `cleanup` land in the day file under the same `request_id` as the `openmedia.diagnostic` stages, closing the root-logger path noted under Limitations in `specs/002-file-logging/validation.md` per SC-002 / US1-AC1 (partial)
+- [X] T037 [P] Add `-e OPENMEDIA_DIAGNOSTIC_LOG=1` and `-v openmedia-logs:/var/log/openmedia` to the runnable `docker run` example in the "Container" section of `README.md`, instead of naming the mount only in the prose below it, per T033 / contract: Deployment (partial)
+- [X] T038 [P] List the entry keys the code already writes but the "Log Entry" table omits in `specs/002-file-logging/data-model.md`: `lost` (`log_recovered`), `options` (`inspection_finished`), `progress` (`worker_progress`), `expired`, `cleanup_retried`, `cleanup_failed`, `swept` (`sweep`), `settings` (`startup`), `reason` (`shutdown`), per data-model: Log Entry / Constitution Governance (unrequested)
