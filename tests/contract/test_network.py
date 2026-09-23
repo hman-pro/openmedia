@@ -292,3 +292,20 @@ def test_head_without_following_still_enforces_the_endpoint_policy(monkeypatch, 
     with pytest.raises(UnsafeDestination):
         transport.head(url, follow_redirects=False)
     assert opened == []
+
+
+def test_head_without_following_reports_its_status_to_the_response_hook(monkeypatch):
+    # The worker's rate-limit hook must see a 429 on the short-link HEAD, as for any request.
+    seen: list[int] = []
+    opened = _scripted_connections(monkeypatch, [429])
+    transport = GuardedHTTPTransport(policy=PublicEndpointPolicy(resolver=answer("93.184.216.34")))
+
+    def hook(status, headers):
+        seen.append(status)
+        raise RuntimeError("rate limited")
+
+    transport.on_response = hook
+    with pytest.raises(RuntimeError, match="rate limited"):
+        transport.head("https://lnkd.in/p/dAjqaykT", follow_redirects=False)
+    assert seen == [429]
+    assert len(opened) == 1

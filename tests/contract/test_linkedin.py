@@ -188,3 +188,165 @@ def test_rejects_absent_unrelated_or_mismatched_identity(html: str, url: str) ->
     with pytest.raises(SourceAdapterError) as caught:
         parse_embed(html, requested_activity_id=IDENTITY, fetched_url=url)
     assert caught.value.category in {ErrorCategory.UNAVAILABLE, ErrorCategory.INVALID_SOURCE_RESPONSE}
+
+
+# --- resolve_short_link (T009) ---------------------------------------------------------------
+
+SHORT_URL = "https://lnkd.in/p/dMhfr6kG"
+POST_PATH = "/posts/sample-author_sample-text-ugcPost-7508434034927017984-lwx-/"
+POST_URL = f"https://www.linkedin.com{POST_PATH}"
+TRACKED_POST_URL = (
+    f"{POST_URL}?utm_source=social_share_send&utm_medium=ios_app&rcm=ACoAAA&utm_campaign=copy_link"
+)
+
+
+class ShortLinkTransport:
+    """Answers the single HEAD with a scripted response, or raises a scripted error."""
+
+    def __init__(self, log: list, *, status: int = 301, location: str | None = None,
+            raises: BaseException | None = None) -> None:
+        self.log = log
+        self.status = status
+        self.location = location
+        self.raises = raises
+        self.heads: list[tuple[str, dict]] = []
+
+    def head(self, url, **kwargs):
+        from openmedia.sources import TransportResponse
+        self.log.append("head")
+        self.heads.append((url, kwargs))
+        if self.raises is not None:
+            raise self.raises
+        headers = {"content-type": "text/html"}
+        if self.location is not None:
+            headers["location"] = self.location
+        return TransportResponse(url, self.status, headers, b"", set_cookies=("JSESSIONID=x",))
+
+    def fetch(self, url, **kwargs):
+        self.log.append("fetch")
+        raise AssertionError("short-link resolution must not fetch")
+
+    def download(self, url, destination, **kwargs):
+        self.log.append("download")
+        raise AssertionError("short-link resolution must not download")
+
+
+class ShortLinkRate:
+    def __init__(self, log: list) -> None:
+        self.log = log
+        self.acquired: list[tuple[str, str, float | None]] = []
+
+    def acquire(self, platform, request_class, *, deadline):
+        self.log.append("acquire")
+        self.acquired.append((platform, request_class, deadline))
+        return 0
+
+    def limited(self, platform, request_class, *, retry_after):
+        raise AssertionError("no rate limiting expected")
+
+
+def resolve_with(*, status: int = 301, location: str | None = None, raises: BaseException | None = None,
+        deadline: float | None = None):
+    """Run resolve_short_link once; return (outcome, transport, rate, deadline, log)."""
+    import time
+
+    from openmedia.sources.linkedin import resolve_short_link
+
+    log: list[str] = []
+    transport = ShortLinkTransport(log, status=status, location=location, raises=raises)
+    rate = ShortLinkRate(log)
+    deadline = time.monotonic() + 60 if deadline is None else deadline
+    try:
+        outcome = resolve_short_link(SHORT_URL, transport=transport, rate_control=rate, deadline=deadline)
+    except SourceAdapterError as error:
+        outcome = error
+    return outcome, transport, rate, deadline, log
+
+
+def assert_single_head(transport: ShortLinkTransport, rate: ShortLinkRate, deadline: float, log: list) -> None:
+    assert log == ["acquire", "head"]
+    assert rate.acquired == [("linkedin", "metadata", deadline)]
+    assert len(transport.heads) == 1
+    url, kwargs = transport.heads[0]
+    assert url == SHORT_URL
+    assert kwargs.get("follow_redirects") is False
+    headers = kwargs.get("headers") or {}
+    assert not any(name.lower() == "cookie" for name in headers)
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_short_link_redirect_resolves_to_the_post_without_tracking(status) -> None:
+    outcome, transport, rate, deadline, log = resolve_with(status=status, location=TRACKED_POST_URL)
+    assert outcome == POST_URL
+    assert "?" not in outcome and "utm_" not in outcome and "rcm" not in outcome
+    assert_single_head(transport, rate, deadline, log)
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_short_link_redirect_to_a_feed_update_resolves(status) -> None:
+    feed = "https://linkedin.com/feed/update/urn:li:activity:7508434097229369345"
+    outcome, transport, rate, deadline, log = resolve_with(status=status, location=feed)
+    assert outcome == feed
+    assert_single_head(transport, rate, deadline, log)
+
+
+def assert_resolution_error(outcome, category: ErrorCategory, detail: str) -> None:
+    assert isinstance(outcome, SourceAdapterError), outcome
+    assert outcome.category is category
+    assert outcome.detail == detail
+    assert outcome.stage == "inspection"
+
+
+@pytest.mark.parametrize(
+    ("status", "location", "category", "detail"),
+    [
+        (404, None, ErrorCategory.SHORT_LINK_UNRESOLVED, "not_found"),
+        (410, None, ErrorCategory.SHORT_LINK_UNRESOLVED, "not_found"),
+        (200, None, ErrorCategory.SHORT_LINK_UNRESOLVED, "no_redirect"),
+        (500, None, ErrorCategory.SHORT_LINK_UNRESOLVED, "no_redirect"),
+        (403, None, ErrorCategory.SHORT_LINK_UNRESOLVED, "no_redirect"),
+        (301, None, ErrorCategory.SHORT_LINK_UNRESOLVED, "no_redirect"),
+        (301, "https://lnkd.in/p/other", ErrorCategory.SHORT_LINK_UNRESOLVED, "too_many_redirects"),
+        (301, "/p/other", ErrorCategory.SHORT_LINK_UNRESOLVED, "too_many_redirects"),
+        (301, "https://example.com/", ErrorCategory.SHORT_LINK_NOT_POST, "outside_linkedin"),
+        (301, f"http://www.linkedin.com{POST_PATH}", ErrorCategory.SHORT_LINK_NOT_POST, "outside_linkedin"),
+        (301, f"https://de.linkedin.com{POST_PATH}", ErrorCategory.SHORT_LINK_NOT_POST, "outside_linkedin"),
+        (301, f"https://user@www.linkedin.com{POST_PATH}", ErrorCategory.SHORT_LINK_NOT_POST, "outside_linkedin"),
+        (301, f"https://www.linkedin.com:8443{POST_PATH}", ErrorCategory.SHORT_LINK_NOT_POST, "outside_linkedin"),
+        (301, "https://www.linkedin.com/in/someone/", ErrorCategory.SHORT_LINK_NOT_POST, "not_a_post"),
+        (301, "https://www.linkedin.com/jobs/view/123/", ErrorCategory.SHORT_LINK_NOT_POST, "not_a_post"),
+    ],
+)
+def test_short_link_failure_outcomes(status, location, category, detail) -> None:
+    outcome, transport, rate, deadline, log = resolve_with(status=status, location=location)
+    assert_resolution_error(outcome, category, detail)
+    assert_single_head(transport, rate, deadline, log)
+
+
+def test_short_link_timeout_before_the_deadline_is_timed_out() -> None:
+    outcome, transport, rate, deadline, log = resolve_with(raises=TimeoutError())
+    assert_resolution_error(outcome, ErrorCategory.SHORT_LINK_UNRESOLVED, "timed_out")
+    assert_single_head(transport, rate, deadline, log)
+
+
+def test_short_link_timeout_after_the_deadline_propagates_unchanged() -> None:
+    import time
+
+    from openmedia.sources.linkedin import resolve_short_link
+
+    original = TimeoutError("deadline")
+    log: list[str] = []
+    transport = ShortLinkTransport(log, raises=original)
+    rate = ShortLinkRate(log)
+    deadline = time.monotonic() - 1
+    with pytest.raises(TimeoutError) as caught:
+        resolve_short_link(SHORT_URL, transport=transport, rate_control=rate, deadline=deadline)
+    assert caught.value is original
+    assert_single_head(transport, rate, deadline, log)
+
+
+@pytest.mark.parametrize("error", [ConnectionResetError(), ConnectionRefusedError()])
+def test_short_link_connection_failure_is_unreachable(error) -> None:
+    outcome, transport, rate, deadline, log = resolve_with(raises=error)
+    assert_resolution_error(outcome, ErrorCategory.SHORT_LINK_UNRESOLVED, "unreachable")
+    assert_single_head(transport, rate, deadline, log)

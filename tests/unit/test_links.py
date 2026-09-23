@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from openmedia.bot import ONE_LINK_GUIDANCE, InputError, parse_link_message
 from openmedia.sources import (
     ErrorCategory,
     SourceAdapterError,
+    SourceRoute,
+    normalize_supported_link,
     recognize_source_url,
     supported_urls_in_text,
 )
@@ -85,6 +88,54 @@ def test_linkedin_routes_without_a_single_post_identity_are_rejected(url) -> Non
     assert caught.value.category is ErrorCategory.UNSUPPORTED_URL
 
 
+HYPHEN_CODE = f"{LI}/posts/sample-author_sample-text-ugcPost-7508434034927017984-lwx-"
+
+
+@pytest.mark.parametrize(
+    ("url", "canonical", "urn_kind", "media_id"),
+    [
+        # Research R6: the trailing code may contain hyphens, including a trailing one.
+        (f"{HYPHEN_CODE}/", HYPHEN_CODE, "ugcPost", "7508434034927017984"),
+        (f"{HYPHEN_CODE}/?utm_source=x&rcm=y", HYPHEN_CODE, "ugcPost", "7508434034927017984"),
+        # A digit-heavy prefix that contains a type word still takes the rightmost one.
+        (f"{LI}/posts/share-fan-8346721bb_x-ugcPost-7508434034927017984-lwx-",
+            f"{LI}/posts/share-fan-8346721bb_x-ugcPost-7508434034927017984-lwx-", "ugcPost", "7508434034927017984"),
+        # Telegram may pass a pasted non-Latin slug raw or percent-encoded.
+        (f"{LI}/posts/sample-author_سلام-دنیا-share-7508424761698410497-2cX9",
+            f"{LI}/posts/sample-author_سلام-دنیا-share-7508424761698410497-2cX9", "share", "7508424761698410497"),
+        (f"{LI}/posts/sample-author_%D8%B3%D9%84%D8%A7%D9%85-share-7508424761698410497-2cX9",
+            f"{LI}/posts/sample-author_%D8%B3%D9%84%D8%A7%D9%85-share-7508424761698410497-2cX9",
+            "share", "7508424761698410497"),
+    ],
+)
+def test_linkedin_post_slug_accepts_any_trailing_code(url, canonical, urn_kind, media_id) -> None:
+    route = recognize_source_url(url)
+    assert (route.canonical_url, route.urn_kind, route.media_id, route.route_kind) == (
+        canonical, urn_kind, media_id, "post",
+    )
+    assert recognize_source_url(route.canonical_url) == route
+
+
+def test_linkedin_post_identity_ignores_the_trailing_code() -> None:
+    lwx = recognize_source_url(f"{HYPHEN_CODE}/")
+    abcd = recognize_source_url(f"{LI}/posts/sample-author_sample-text-ugcPost-7508434034927017984-abcd/")
+    assert (lwx.urn_kind, lwx.media_id) == (abcd.urn_kind, abcd.media_id)
+    assert lwx.canonical_url != abcd.canonical_url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"{LI}/posts/sample-author_sample-text-ugcPost-7508434034927017984-{'a' * 33}",
+        f"{LI}/posts/sample-author_sample-text-ugcPost-7508434034927017984-lw.x",
+    ],
+)
+def test_linkedin_post_slug_rejects_a_long_or_dotted_code(url) -> None:
+    with pytest.raises(SourceAdapterError) as caught:
+        recognize_source_url(url)
+    assert caught.value.category is ErrorCategory.UNSUPPORTED_URL
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -96,3 +147,56 @@ def test_rejects_collection_and_live_routes(url: str) -> None:
     with pytest.raises(SourceAdapterError) as caught:
         recognize_source_url(url)
     assert caught.value.category is ErrorCategory.UNSUPPORTED_COLLECTION
+
+
+SHORT = "https://lnkd.in/p/dMhfr6kG"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://lnkd.in/p/dMhfr6kG",
+        "http://lnkd.in/p/dMhfr6kG",
+        "lnkd.in/p/dMhfr6kG",
+        "https://lnkd.in/p/dMhfr6kG?trk=x",
+    ],
+)
+def test_linkedin_short_link_is_recognized_and_query_dropped(raw: str) -> None:
+    # Bare and http forms reach recognition only through the same normalization the bot uses.
+    link = normalize_supported_link(raw)
+    assert link is not None
+    assert recognize_source_url(link) == SourceRoute("linkedin", "dMhfr6kG", SHORT, "short_link", None)
+
+
+@pytest.mark.parametrize("code", ["a", "A-z_09", "x" * 32])
+def test_linkedin_short_code_alphabet_and_length(code: str) -> None:
+    route = recognize_source_url(f"https://lnkd.in/p/{code}")
+    assert (route.media_id, route.canonical_url, route.route_kind) == (
+        code, f"https://lnkd.in/p/{code}", "short_link",
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"{SHORT}#frag",
+        "https://lnkd.in/p/" + "x" * 33,
+        "https://lnkd.in/p/",
+        "https://lnkd.in/p/bad.code",
+        "https://lnkd.in/dMhfr6kG",
+        "https://lnkd.in/p/a/b",
+        "https://www.lnkd.in/p/dMhfr6kG",
+    ],
+)
+def test_linkedin_short_link_outside_the_p_route_is_rejected(url: str) -> None:
+    with pytest.raises(SourceAdapterError) as caught:
+        recognize_source_url(url)
+    assert caught.value.category is ErrorCategory.UNSUPPORTED_URL
+
+
+def test_short_link_counts_as_a_link_so_two_links_get_one_link_guidance() -> None:
+    text = "see https://lnkd.in/p/dMhfr6kG and https://youtu.be/abcdefghijk"
+    assert supported_urls_in_text(text) == (SHORT, "https://youtu.be/abcdefghijk")
+    with pytest.raises(InputError) as caught:
+        parse_link_message(text, chat_type="private")
+    assert str(caught.value) == ONE_LINK_GUIDANCE

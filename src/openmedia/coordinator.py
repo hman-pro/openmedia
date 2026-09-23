@@ -576,6 +576,32 @@ StatusCallable = Callable[[DownloadRequest, str], Awaitable[Any]]
 CleanupCallable = Callable[[DownloadRequest], Awaitable[Any]]
 
 
+def _bind_identity(request: DownloadRequest, result: InspectResult) -> None:
+    """Check that inspection describes the requested media, rebinding a resolved short link.
+
+    A LinkedIn short link names no post until the worker resolves it, so its request adopts the
+    post identity that inspection returns. Every other request keeps a strict equality check.
+    """
+    from openmedia.sources import SourceAdapterError, recognize_source_url
+
+    if recognize_source_url(request.source_url).route_kind == "short_link":
+        try:
+            route = recognize_source_url(result.metadata.canonical_url)
+        except SourceAdapterError as exc:
+            raise WorkflowError("inspection returned a different media identity") from exc
+        if (
+            route.platform != "linkedin"
+            or route.route_kind not in {"post", "embed"}
+            or route.media_id != result.metadata.media_id
+        ):
+            raise WorkflowError("inspection returned a different media identity")
+        request.source_url = route.canonical_url
+        request.media_id = route.media_id
+        return
+    if result.metadata.media_id != request.media_id:
+        raise WorkflowError("inspection returned a different media identity")
+
+
 class MediaWorkflow:
     """Small orchestration layer for the inspect → choose → download → send journey."""
 
@@ -639,8 +665,7 @@ class MediaWorkflow:
                 await self._status(request, "checking")
                 event("inspection_started", request=request)
                 result = await self._inspect(request)
-                if result.metadata.media_id != request.media_id:
-                    raise WorkflowError("inspection returned a different media identity")
+                _bind_identity(request, result)
                 choice_set = choose(
                     result.options,
                     media_kind=result.metadata.media_kind,

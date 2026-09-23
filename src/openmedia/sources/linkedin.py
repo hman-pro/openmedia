@@ -9,10 +9,11 @@ article-preview images.
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Mapping
 from dataclasses import replace
 from html.parser import HTMLParser
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from openmedia.models import Availability, FormatOption, MediaKind, MediaMetadata, SizeKind
 from openmedia.sources import (
@@ -112,6 +113,76 @@ class _EmbedParser(HTMLParser):
             return None
         lines = ("".join(self.caption_parts)).splitlines()
         return "\n".join(line.strip() for line in lines).strip() or None
+
+
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_RESOLVED_HOSTS = frozenset({"linkedin.com", "www.linkedin.com"})
+_UNRESOLVED = {"not_found", "no_redirect", "too_many_redirects", "timed_out", "unreachable"}
+
+
+def _resolution_error(outcome: str) -> SourceAdapterError:
+    category = (
+        ErrorCategory.SHORT_LINK_UNRESOLVED if outcome in _UNRESOLVED else ErrorCategory.SHORT_LINK_NOT_POST
+    )
+    return SourceAdapterError(category, stage="inspection", detail=outcome)
+
+
+def resolve_short_link(
+    url: str,
+    *,
+    transport: GuardedTransport,
+    rate_control: RateController,
+    deadline: float,
+) -> str:
+    """Resolve an ``lnkd.in/p/<code>`` share link to its LinkedIn post address.
+
+    Exactly one anonymous ``HEAD`` is made, and its redirect is read, never followed: the
+    destination is validated here without being contacted (research R3/R4). A failure raises
+    ``SourceAdapterError`` whose ``detail`` is one data-model "ResolutionOutcome" name. The
+    response's cookies are never read, and the destination is never logged.
+    """
+    rate_control.acquire("linkedin", "metadata", deadline=deadline)
+    try:
+        response = transport.head(url, follow_redirects=False, deadline=deadline)
+    except TimeoutError:
+        # Past the overall deadline the parent reports its ordinary inspection timeout.
+        if time.monotonic() < deadline:
+            raise _resolution_error("timed_out") from None
+        raise
+    except ConnectionError:
+        raise _resolution_error("unreachable") from None
+
+    if response.status in {404, 410}:
+        raise _resolution_error("not_found")
+    location = response.headers.get("location")
+    if response.status not in _REDIRECT_STATUSES or not location:
+        raise _resolution_error("no_redirect")
+    try:
+        parts = urlsplit(urljoin(url, location))
+        host = (parts.hostname or "").rstrip(".").lower()
+        port = parts.port
+    except ValueError:
+        raise _resolution_error("outside_linkedin") from None
+    if host == "lnkd.in":
+        # Following it would be a second hop.
+        raise _resolution_error("too_many_redirects")
+    if (
+        parts.scheme != "https"
+        or host not in _RESOLVED_HOSTS
+        or parts.username is not None
+        or parts.password is not None
+        or port not in {None, 443}
+    ):
+        raise _resolution_error("outside_linkedin")
+    # Query and fragment carry only share tracking; the path keeps the post's own code.
+    resolved = urlunsplit(("https", host, parts.path, "", ""))
+    try:
+        route = recognize_source_url(resolved)
+    except SourceAdapterError:
+        raise _resolution_error("not_a_post") from None
+    if route.platform != "linkedin" or route.route_kind not in {"post", "embed"}:
+        raise _resolution_error("not_a_post")
+    return resolved
 
 
 def embed_url(activity_id: str, urn_kind: str = "share") -> str:

@@ -344,3 +344,171 @@ def test_adapter_forwards_range_bytes_for_each_merge_component(tmp_path: Path, m
         work_directory=tmp_path, deadline=100, output_limit=50_000_000, workspace_limit=128 * 1024 * 1024)
     YtDlpAdapter().download(request, transport=transport, rate_control=Rate())
     assert transport.ranges == [("component-video", 10_485_760), ("component-audio", None)]
+
+
+SHORT_LINK = "https://lnkd.in/p/dAjqaykT"
+RESOLVED_POST = "https://www.linkedin.com/posts/sample-author_sample-text-share-7508424761698410497-2cX9/"
+SHORT_LINK_ALLOWED_HOSTS = {"lnkd.in", "www.linkedin.com", "linkedin.com", "media.example.invalid"}
+
+
+class ShortLinkTransport(Transport):
+    """Scripted `head` answer for the short link; records every URL requested."""
+
+    def __init__(self, head_response: TransportResponse | None = None, head_error: BaseException | None = None) -> None:
+        super().__init__()
+        self.head_response = head_response
+        self.head_error = head_error
+        self.urls: list[str] = []
+
+    def fetch(self, url, *, limit, **kwargs):
+        self.urls.append(url)
+        return super().fetch(url, limit=limit, **kwargs)
+
+    def head(self, url, **kwargs):
+        self.urls.append(url)
+        self.calls.append(("head", None))
+        if self.head_error is not None:
+            raise self.head_error
+        if self.head_response is not None and url == SHORT_LINK:
+            return self.head_response
+        return super().head(url, **kwargs)
+
+    def download(self, url, destination, **kwargs):
+        self.urls.append(url)
+        return super().download(url, destination, **kwargs)
+
+
+class StubInspectAdapter:
+    """Records every InspectInput and touches only the fixture media host."""
+
+    def __init__(self, name: str, *, error: SourceAdapterError | None = None) -> None:
+        self.name = name
+        self.error = error
+        self.requests: list[InspectInput] = []
+
+    def inspect(self, request, *, transport, rate_control):
+        self.requests.append(request)
+        transport.head("https://media.example.invalid/media", deadline=request.deadline)
+        if self.error is not None:
+            raise self.error
+        metadata = MediaMetadata(
+            platform="linkedin",
+            canonical_url=request.source_url,
+            media_id="7508424761698410497",
+            media_kind="video" if self.name == "yt_dlp" else "image",
+        )
+        option = FormatOption(
+            option_id=0,
+            adapter=self.name,
+            source_format_id="source-id",
+            media_type="video" if self.name == "yt_dlp" else "image",
+            extension="mp4" if self.name == "yt_dlp" else "jpg",
+            mime_type="video/mp4" if self.name == "yt_dlp" else "image/jpeg",
+            includes_audio=True if self.name == "yt_dlp" else None,
+            transport_ref={"url": "https://media.example.invalid/media"},
+        )
+        return InspectResult(metadata, (option,))
+
+    def download(self, request, **kwargs):  # pragma: no cover - not used by inspect tests
+        raise AssertionError("download is not expected during inspect")
+
+
+def _redirect_to(location: str, status: int = 301) -> TransportResponse:
+    return TransportResponse(SHORT_LINK, status, {"location": location}, b"", set_cookies=("JSESSIONID=x",))
+
+
+def _assert_hosts_allowed(transport: ShortLinkTransport) -> None:
+    from urllib.parse import urlsplit
+
+    hosts = {urlsplit(url).hostname for url in transport.urls}
+    assert hosts <= SHORT_LINK_ALLOWED_HOSTS, hosts
+
+
+def test_router_resolves_short_link_before_calling_ytdlp(tmp_path: Path) -> None:
+    transport = ShortLinkTransport(
+        _redirect_to(RESOLVED_POST + "?utm_source=x&rcm=y"),
+    )
+    ytdlp = StubInspectAdapter("yt_dlp")
+    image = StubInspectAdapter("linkedin_image")
+    router = SourceRouter(ytdlp=ytdlp, instagram=StubInspectAdapter("instagram_image"), linkedin=image)
+
+    result = router.inspect(inspect_input(tmp_path, SHORT_LINK), transport=transport, rate_control=Rate())
+
+    assert [request.source_url for request in ytdlp.requests] == [RESOLVED_POST]
+    assert image.requests == []
+    assert result.metadata.canonical_url == RESOLVED_POST
+    assert transport.urls[0] == SHORT_LINK
+    _assert_hosts_allowed(transport)
+
+
+def test_router_short_link_falls_back_to_image_adapter_with_resolved_input(tmp_path: Path) -> None:
+    transport = ShortLinkTransport(_redirect_to(RESOLVED_POST + "?utm_source=x&rcm=y"))
+    ytdlp = StubInspectAdapter(
+        "yt_dlp",
+        error=SourceAdapterError(ErrorCategory.UNAVAILABLE, stage="inspection"),
+    )
+    image = StubInspectAdapter("linkedin_image")
+    router = SourceRouter(ytdlp=ytdlp, instagram=StubInspectAdapter("instagram_image"), linkedin=image)
+
+    result = router.inspect(inspect_input(tmp_path, SHORT_LINK), transport=transport, rate_control=Rate())
+
+    assert [request.source_url for request in ytdlp.requests] == [RESOLVED_POST]
+    assert [request.source_url for request in image.requests] == [RESOLVED_POST]
+    assert image.requests[0] == ytdlp.requests[0]
+    assert result.options[0].adapter == "linkedin_image"
+    _assert_hosts_allowed(transport)
+
+
+@pytest.mark.parametrize(
+    ("transport", "category", "detail"),
+    [
+        (lambda: ShortLinkTransport(TransportResponse(SHORT_LINK, 404, {}, b"")), ErrorCategory.SHORT_LINK_UNRESOLVED, "not_found"),
+        (lambda: ShortLinkTransport(TransportResponse(SHORT_LINK, 200, {"content-type": "text/html"}, b"<html></html>")),
+            ErrorCategory.SHORT_LINK_UNRESOLVED, "no_redirect"),
+        (lambda: ShortLinkTransport(_redirect_to("https://lnkd.in/p/other")), ErrorCategory.SHORT_LINK_UNRESOLVED,
+            "too_many_redirects"),
+        (lambda: ShortLinkTransport(head_error=ConnectionRefusedError()), ErrorCategory.SHORT_LINK_UNRESOLVED, "unreachable"),
+        (lambda: ShortLinkTransport(_redirect_to("https://example.com/")), ErrorCategory.SHORT_LINK_NOT_POST,
+            "outside_linkedin"),
+        (lambda: ShortLinkTransport(_redirect_to("https://www.linkedin.com/in/someone/")), ErrorCategory.SHORT_LINK_NOT_POST,
+            "not_a_post"),
+    ],
+)
+def test_router_short_link_resolution_failure_calls_no_adapter(
+    tmp_path: Path, transport, category: ErrorCategory, detail: str
+) -> None:
+    transport = transport()
+    ytdlp = StubInspectAdapter("yt_dlp")
+    instagram = StubInspectAdapter("instagram_image")
+    image = StubInspectAdapter("linkedin_image")
+    router = SourceRouter(ytdlp=ytdlp, instagram=instagram, linkedin=image)
+
+    with pytest.raises(SourceAdapterError) as caught:
+        router.inspect(inspect_input(tmp_path, SHORT_LINK), transport=transport, rate_control=Rate())
+
+    assert caught.value.category is category
+    assert caught.value.detail == detail
+    assert caught.value.stage == "inspection"
+    assert ytdlp.requests == []
+    assert instagram.requests == []
+    assert image.requests == []
+    assert transport.urls == [SHORT_LINK]
+    _assert_hosts_allowed(transport)
+
+
+def test_router_short_link_rate_limit_propagates_unchanged_and_calls_no_adapter(tmp_path: Path) -> None:
+    # In the worker, a 429 on the short-link HEAD is turned into RATE_LIMITED by the transport's
+    # response hook before resolve_short_link sees a status (quickstart §2 row "429").
+    limited = SourceAdapterError(ErrorCategory.RATE_LIMITED, stage="inspection", retry_after=120)
+    transport = ShortLinkTransport(head_error=limited)
+    ytdlp = StubInspectAdapter("yt_dlp")
+    image = StubInspectAdapter("linkedin_image")
+    router = SourceRouter(ytdlp=ytdlp, instagram=StubInspectAdapter("instagram_image"), linkedin=image)
+
+    with pytest.raises(SourceAdapterError) as caught:
+        router.inspect(inspect_input(tmp_path, SHORT_LINK), transport=transport, rate_control=Rate())
+
+    assert caught.value is limited
+    assert ytdlp.requests == []
+    assert image.requests == []
+    assert transport.urls == [SHORT_LINK]

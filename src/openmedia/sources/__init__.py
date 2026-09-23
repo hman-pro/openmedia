@@ -22,7 +22,13 @@ _INSTAGRAM_ID = re.compile(r"^[A-Za-z0-9_-]{5,64}$")
 # LinkedIn activity, ugcPost, and share URNs are distinct objects even when their digits match,
 # so the type is part of a post's identity for every request made on its behalf.
 _LINKEDIN_URN = re.compile(r"^urn:li:(activity|ugcPost|share):(\d{8,32})$")
-_LINKEDIN_POST_SLUG = re.compile(r"^[A-Za-z0-9._~%-]+?-(?:(activity|ugcPost|share)-)?(\d{8,32})(?:-[A-Za-z0-9_]+)?$")
+_LINKEDIN_SHORT_CODE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+# Research R6: the greedy prefix makes the identity the rightmost type word, and the trailing
+# code may hold hyphens. Slugs without a type word predate typed slugs and name an activity.
+_LINKEDIN_POST_SLUG = re.compile(
+    r"^(?P<prefix>[^/?#\s]+)-(?P<type>activity|ugcPost|share)-(?P<id>\d{8,32})(?:-(?P<code>[A-Za-z0-9_-]{1,32}))?$"
+)
+_LINKEDIN_UNTYPED_POST_SLUG = re.compile(r"^[^/?#\s]+?-(?P<id>\d{8,32})(?:-[A-Za-z0-9_-]{1,32})?$")
 SUPPORTED_HOSTS = frozenset(
     {
         "youtube.com",
@@ -33,11 +39,12 @@ SUPPORTED_HOSTS = frozenset(
         "www.instagram.com",
         "linkedin.com",
         "www.linkedin.com",
+        "lnkd.in",
     }
 )
 _SCHEME = re.compile(r"https?://", re.IGNORECASE)
 _BARE_SUPPORTED_HOST = re.compile(
-    r"^(?:www\.|m\.)?(?:youtube\.com|youtu\.be|instagram\.com|linkedin\.com)(?:/|$)",
+    r"^(?:www\.|m\.)?(?:youtube\.com|youtu\.be|instagram\.com|linkedin\.com|lnkd\.in)(?:/|$)",
     re.IGNORECASE,
 )
 
@@ -54,7 +61,11 @@ class SourceRoute:
 
 
 def supported_host(url: str) -> bool:
-    """Return whether an HTTPS URL names one of the three supported platforms."""
+    """Return whether an HTTPS URL names one of the three supported platforms.
+
+    LinkedIn's app share host ``lnkd.in`` counts as LinkedIn: its ``/p/<code>`` short links
+    are resolved to a post address inside the inspect worker, never here.
+    """
     try:
         parts = urlsplit(url)
     except ValueError:
@@ -121,6 +132,14 @@ def recognize_source_url(url: str) -> SourceRoute:
     host = (parts.hostname or "").rstrip(".").lower()
     segments = [segment for segment in parts.path.split("/") if segment]
 
+    if host == "lnkd.in":
+        # A share short link names no post by itself; its code is a placeholder identity until
+        # the inspect worker resolves it. The query (tracking only) is dropped.
+        if len(segments) == 2 and segments[0] == "p" and _LINKEDIN_SHORT_CODE.fullmatch(segments[1]):
+            code = segments[1]
+            return SourceRoute("linkedin", code, f"https://lnkd.in/p/{code}", "short_link")
+        raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
+
     if host in {"youtu.be", "youtube.com", "www.youtube.com", "m.youtube.com"}:
         media_id: str | None = None
         if host == "youtu.be" and len(segments) == 1:
@@ -160,12 +179,11 @@ def recognize_source_url(url: str) -> SourceRoute:
 
     if host in {"linkedin.com", "www.linkedin.com"}:
         if len(segments) == 2 and segments[0] == "posts":
-            match = _LINKEDIN_POST_SLUG.fullmatch(segments[1])
+            match = _LINKEDIN_POST_SLUG.fullmatch(segments[1]) or _LINKEDIN_UNTYPED_POST_SLUG.fullmatch(segments[1])
             if match is None:
                 raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
-            # The share link itself is kept: yt-dlp's LinkedInIE matches this form for every
-            # URN type. A slug without a type word predates typed slugs and names an activity.
-            urn_kind, media_id = match.group(1) or "activity", match.group(2)
+            # The share link itself is kept: it is the only posts form LinkedIn serves (R5).
+            urn_kind, media_id = match.groupdict().get("type") or "activity", match.group("id")
             canonical = f"https://www.linkedin.com/posts/{segments[1]}"
             return SourceRoute("linkedin", media_id, canonical, "post", urn_kind)
         decoded = [segment.replace("%3A", ":").replace("%3a", ":") for segment in segments]
@@ -433,6 +451,18 @@ class SourceRouter:
 
     def _inspect(self, request: InspectInput, *, transport: GuardedTransport, rate_control: RateController) -> InspectResult:
         route = recognize_source_url(request.source_url)
+        if route.route_kind == "short_link":
+            from openmedia.sources.linkedin import resolve_short_link
+
+            resolved = resolve_short_link(
+                request.source_url,
+                transport=transport,
+                rate_control=rate_control,
+                deadline=request.deadline,
+            )
+            # A resolved route cannot be `short_link` again: resolve_short_link only returns an
+            # address on linkedin.com or www.linkedin.com, so this recursion is one level deep.
+            return self._inspect(replace(request, source_url=resolved), transport=transport, rate_control=rate_control)
         if route.platform == "youtube" or route.route_kind == "video":
             return self.adapters["yt_dlp"].inspect(request, transport=transport, rate_control=rate_control)
         if route.platform == "instagram":

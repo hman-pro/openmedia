@@ -701,3 +701,200 @@ async def test_runtime_unconfirmed_upload_ends_with_could_not_confirm_on_the_car
         (RUNTIME_PHOTO_CARD_ID, "Video — sending…"),
         (RUNTIME_PHOTO_CARD_ID, f"Video — {UNCONFIRMED_TEXT}"),
     ]
+
+
+# --- 004 User Story 1: LinkedIn short links (004 T011) ------------------------------------
+#
+# A `lnkd.in/p/<code>` link is admitted under its short code, resolved inside inspection, and
+# rebound to the resolved post's identity before choices are published (tasks T015; data
+# model "DownloadRequest"; contracts/telegram-bot.md "Accepting a short link" and "New
+# failure meanings"). A full-address request keeps the strict identity check.
+
+from openmedia.sources import recognize_source_url  # noqa: E402
+from openmedia.workers import WorkerRemoteError  # noqa: E402
+
+SHORT_LINK = "https://lnkd.in/p/dAjqaykT"
+SHORT_CODE = "dAjqaykT"
+RESOLVED_ACTIVITY = "7508424761698410497"
+RESOLVED_POST = (
+    "https://www.linkedin.com/posts/"
+    f"sample-author_sample-text-share-{RESOLVED_ACTIVITY}-2cX9/"
+)
+
+
+def short_link_result(*, canonical_url: str = RESOLVED_POST, media_id: str = RESOLVED_ACTIVITY) -> InspectResult:
+    """The normalized progressive LinkedIn fixture as the resolved post reports it."""
+    result = fixture_result("linkedin-video-progressive.json")
+    metadata = dataclass_replace(result.metadata, canonical_url=canonical_url, media_id=media_id)
+    return dataclass_replace(result, metadata=metadata)
+
+
+class ShortLinkHarness(Harness):
+    """Records the order of status and inspect, and the request identity each one saw."""
+
+    def __init__(self, tmp_path: Path, result: InspectResult) -> None:
+        super().__init__(tmp_path, result)
+        self.seen_at_inspect: list[tuple[str, str, str]] = []
+        self.media_id_at_download: list[str] = []
+
+    async def status(self, request, stage):
+        self.calls.append(("status", stage))
+        await super().status(request, stage)
+
+    async def inspect(self, request):
+        self.seen_at_inspect.append((request.platform, request.media_id, request.source_url))
+        return await super().inspect(request)
+
+    async def download(self, request, option):
+        self.media_id_at_download.append(request.media_id)
+        downloaded = await super().download(request, option)
+        # The worker reports the resolved post's ID; it must match the rebound request.
+        return dataclass_replace(downloaded, media_id=RESOLVED_ACTIVITY)
+
+
+async def submit_short_link(workflow: MediaWorkflow, *, user_id: int, chat_id: int):
+    return await workflow.submit(
+        user_id=user_id, chat_id=chat_id, text=SHORT_LINK, chat_type="private", links=(SHORT_LINK,)
+    )
+
+
+async def test_short_link_is_admitted_by_code_and_rebound_to_the_resolved_post(tmp_path: Path) -> None:
+    harness = ShortLinkHarness(tmp_path, short_link_result())
+    workflow = harness.workflow()
+
+    request = await submit_short_link(workflow, user_id=41, chat_id=401)
+
+    # Admitted under the short code with the short link as its source URL.
+    assert harness.seen_at_inspect == [("linkedin", SHORT_CODE, SHORT_LINK)]
+    # `Checking link…` is shown before resolution/inspection starts.
+    assert harness.calls.index(("status", "checking")) < harness.calls.index("inspect")
+
+    # From here on, exactly what the full post address produces (automatic single video).
+    assert len(harness.cards) == 1
+    assert harness.cards[0].automatic is True
+    assert harness.registry_calls == ["publish_and_claim"]
+    assert harness.statuses == ["checking", "downloading", "sending", "completed"]
+
+    # Identity was rebound to the resolved post after inspection: the request now carries
+    # the route of the inspected canonical URL (T015 sets `route.canonical_url`).
+    assert request.media_id == RESOLVED_ACTIVITY
+    assert request.source_url == recognize_source_url(RESOLVED_POST).canonical_url
+    # The download ran under, and was validated against, the rebound ID.
+    assert harness.media_id_at_download == [RESOLVED_ACTIVITY]
+    assert_video_path(harness, "1")
+    terminal = harness.registry.terminal(request.request_id)
+    assert terminal is not None
+    assert terminal.state is RequestState.COMPLETED
+    assert terminal.confirmed_message_id == 99
+
+
+@pytest.mark.parametrize(
+    ("canonical_url", "media_id"),
+    [
+        ("https://www.youtube.com/watch?v=abcdefghijk", RESOLVED_ACTIVITY),
+        (RESOLVED_POST, "7507745133358940161"),
+    ],
+    ids=["resolved-to-youtube", "linkedin-id-differs"],
+)
+async def test_short_link_with_a_mismatched_resolved_identity_fails_at_checking(
+    tmp_path: Path, canonical_url: str, media_id: str
+) -> None:
+    harness = ShortLinkHarness(tmp_path, short_link_result(canonical_url=canonical_url, media_id=media_id))
+    workflow = harness.workflow()
+
+    with pytest.raises(WorkflowError, match="inspection returned a different media identity"):
+        await submit_short_link(workflow, user_id=42, chat_id=402)
+
+    assert harness.calls.count("inspect") == 1
+    assert harness.cards == []
+    assert harness.registry_calls == []
+    assert not harness.downloaded_any()
+    assert len(harness.failures) == 1
+    assert harness.failures[0].failed_stage == "checking"
+
+
+class FailingInspectFlow(RuntimeFlow):
+    """Real runtime callbacks; the worker-backed inspect raises the given error."""
+
+    def __init__(self, *args: Any, inspect_error: BaseException, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.inspect_error = inspect_error
+
+    async def inspect(self, request):
+        await super().inspect(request)
+        raise self.inspect_error
+
+
+@pytest.mark.parametrize(
+    ("category", "detail", "text"),
+    [
+        (
+            "short_link_not_post",
+            "outside_linkedin",
+            "That LinkedIn link does not lead to a supported post. Send a public LinkedIn post link.",
+        ),
+        (
+            "short_link_unresolved",
+            "not_found",
+            "That LinkedIn link could not be opened. Send the post's full linkedin.com address.",
+        ),
+    ],
+    ids=["not-a-post", "unresolved"],
+)
+async def test_short_link_resolution_failure_ends_on_the_checking_message_without_a_keyboard(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any, category: str, detail: str, text: str
+) -> None:
+    error = WorkerRemoteError(category, "inspection", detail)
+    flow = FailingInspectFlow(
+        tmp_path, fake_bot, fake_transport, short_link_result(), chat_id=306, inspect_error=error
+    )
+
+    with pytest.raises(WorkerRemoteError):
+        await submit_short_link(flow.workflow, user_id=36, chat_id=306)
+
+    # Only `Checking link…` was sent; no card, no photo, nothing downloaded or delivered.
+    assert len(fake_transport.calls_to("sendMessage")) == 1
+    assert fake_transport.calls_to("sendPhoto") == []
+    assert fake_transport.calls_to("sendVideo") == []
+    assert flow.bot_messages() == 1
+    edits = [
+        call for call in fake_transport.calls
+        if call.method in EDIT_METHODS
+    ]
+    assert len(edits) == 1
+    params = edits[0].parameters
+    assert int(params["message_id"]) == RUNTIME_CHECKING_ID
+    assert params.get("reply_markup") is None
+    assert str(params["text"]).endswith(text)
+    # The destination address never appears in what the user sees.
+    assert "linkedin.com/posts" not in str(params["text"])
+
+
+async def test_full_address_request_keeps_the_strict_identity_check_and_is_never_rebound(
+    tmp_path: Path,
+) -> None:
+    full_address = f"https://www.linkedin.com/posts/sample-author_sample-text-share-{RESOLVED_ACTIVITY}-2cX9/"
+    other_post = "https://www.linkedin.com/posts/other-author_other-text-share-7507745133358940161-abcd/"
+    # Inspection reports a different, self-consistent post: no rebinding for a full address.
+    harness = Harness(tmp_path, short_link_result(canonical_url=other_post, media_id="7507745133358940161"))
+    seen: list[Any] = []
+    original_inspect = harness.inspect
+
+    async def inspect(request):
+        seen.append(request)
+        return await original_inspect(request)
+
+    harness.inspect = inspect  # type: ignore[method-assign]
+    workflow = harness.workflow()
+
+    with pytest.raises(WorkflowError, match="inspection returned a different media identity"):
+        await workflow.submit(user_id=43, chat_id=403, text=full_address, chat_type="private")
+
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.media_id == RESOLVED_ACTIVITY
+    assert request.source_url == recognize_source_url(full_address).canonical_url
+    assert harness.cards == []
+    assert harness.registry_calls == []
+    assert len(harness.failures) == 1
+    assert harness.failures[0].failed_stage == "checking"

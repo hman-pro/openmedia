@@ -94,12 +94,12 @@ outside `lnkd.in`/`linkedin.com`/`www.linkedin.com`/`media.example.invalid` is r
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Add failing tests to `tests/unit/test_links.py`:
+- [X] T008 [P] [US1] Add failing tests to `tests/unit/test_links.py`:
   - `recognize_source_url` returns `SourceRoute("linkedin", "dMhfr6kG", "https://lnkd.in/p/dMhfr6kG", "short_link", None)` for `https://lnkd.in/p/dMhfr6kG`, `http://lnkd.in/p/dMhfr6kG`, bare `lnkd.in/p/dMhfr6kG`, and `https://lnkd.in/p/dMhfr6kG?trk=x`. The query is dropped. A fragment is rejected (`UNSUPPORTED_URL`), as for every other route. For the bare and `http` forms, normalize via `normalize_supported_link` first.
   - Short codes allow `[A-Za-z0-9_-]{1,32}`. A 33-character code and `https://lnkd.in/p/` raise `UNSUPPORTED_URL`.
   - `https://lnkd.in/dMhfr6kG`, `https://lnkd.in/p/a/b`, and `https://www.lnkd.in/p/dMhfr6kG` raise `UNSUPPORTED_URL`.
   - `supported_urls_in_text("see https://lnkd.in/p/dMhfr6kG and https://youtu.be/abcdefghijk")` returns both links. `parse_link_message` on that text raises `InputError(ONE_LINK_GUIDANCE)`: the 001 FR-001 behavior change in contracts/telegram-bot.md.
-- [ ] T009 [P] [US1] Add failing tests to `tests/contract/test_linkedin.py` for `resolve_short_link(url, *, transport, rate_control, deadline) -> str` in `src/openmedia/sources/linkedin.py`. Use a recording fake whose `head` returns a scripted `TransportResponse` (with `set_cookies=("JSESSIONID=x",)` on every response). Cover each row of data-model "ResolutionOutcome":
+- [X] T009 [P] [US1] Add failing tests to `tests/contract/test_linkedin.py` for `resolve_short_link(url, *, transport, rate_control, deadline) -> str` in `src/openmedia/sources/linkedin.py`. Use a recording fake whose `head` returns a scripted `TransportResponse` (with `set_cookies=("JSESSIONID=x",)` on every response). Cover each row of data-model "ResolutionOutcome":
   - `301` to `https://www.linkedin.com/posts/sample-author_sample-text-ugcPost-7508434034927017984-lwx-/?utm_source=social_share_send&utm_medium=ios_app&rcm=ACoAAA&utm_campaign=copy_link` returns `https://www.linkedin.com/posts/sample-author_sample-text-ugcPost-7508434034927017984-lwx-/`. The returned value contains no `?`, `utm_`, or `rcm`.
   - `302`, `303`, `307`, and `308` behave the same. `https://linkedin.com/feed/update/urn:li:activity:7508434097229369345` resolves too.
   - `404` or `410` → `SHORT_LINK_UNRESOLVED`, `detail == "not_found"`.
@@ -112,27 +112,46 @@ outside `lnkd.in`/`linkedin.com`/`www.linkedin.com`/`media.example.invalid` is r
   - Every case makes exactly one transport call: a `head` to the short URL with `follow_redirects=False`, no `headers` containing `Cookie`, and no `fetch` or `download`.
   - `rate_control.acquire("linkedin", "metadata", deadline=deadline)` is called once before the `head`.
   - Every raised error has `stage == "inspection"`.
-- [ ] T010 [P] [US1] Add failing tests to `tests/contract/test_adapter_transports.py` for `SourceRouter.inspect`, reusing that file's `Transport`/`RecordingTransport` doubles and stub adapters:
+- [X] T010 [P] [US1] Add failing tests to `tests/contract/test_adapter_transports.py` for `SourceRouter.inspect`, reusing that file's `Transport`/`RecordingTransport` doubles and stub adapters:
   - An `InspectInput` whose `source_url` is `https://lnkd.in/p/dAjqaykT`, with `head` answering `301` to `https://www.linkedin.com/posts/sample-author_sample-text-share-7508424761698410497-2cX9/?utm_source=x&rcm=y`, calls the stub yt-dlp adapter with `source_url == "https://www.linkedin.com/posts/sample-author_sample-text-share-7508424761698410497-2cX9/"`.
   - When the yt-dlp stub raises `UNAVAILABLE`, the stub `linkedin_image` adapter gets the same resolved input.
   - A resolution failure propagates with its category and `detail`, and no adapter is called.
   - SC-004: every URL the recording transport saw has a host in `{"lnkd.in", "www.linkedin.com", "linkedin.com", "media.example.invalid"}`.
-- [ ] T011 [P] [US1] Add failing tests to `tests/integration/test_download_flow.py`, driving `MediaWorkflow` with injected callables:
+- [X] T011 [P] [US1] Add failing tests to `tests/integration/test_download_flow.py`, driving `MediaWorkflow` with injected callables:
   - (a) A request submitted with links `("https://lnkd.in/p/dAjqaykT",)` is admitted with `platform == "linkedin"`, `media_id == "dAjqaykT"`, and `source_url == "https://lnkd.in/p/dAjqaykT"`. The `checking` status runs before `inspect`. The inspect stub returns the normalized `tests/fixtures/ytdlp/linkedin-video-progressive.json` result, with `metadata.canonical_url` set to `https://www.linkedin.com/posts/sample-author_sample-text-share-7508424761698410497-2cX9/` and `media_id` set to `7508424761698410497`. The flow then publishes and claims exactly as for the full address. After inspection, `request.media_id == "7508424761698410497"` and `request.source_url` equals that canonical URL. The download result is validated against the rebound ID.
   - (b) The same request, with the inspect stub returning `canonical_url` `https://www.youtube.com/watch?v=abcdefghijk`, or a LinkedIn canonical URL whose ID differs from `metadata.media_id`, fails at stage `checking` with the existing media-identity `WorkflowError`.
   - (c) The inspect stub raising `WorkerRemoteError("short_link_not_post", "inspection", "outside_linkedin")` notifies the `short_link_not_post` text from contracts/telegram-bot.md on the status surface, with no keyboard.
   - (d) The same with `WorkerRemoteError("short_link_unresolved", "inspection", "not_found")` notifies the unresolved text.
   - (e) A full-address request keeps today's strict `media_id` equality check. Its identity is never rebound.
 
+- [X] T017 [US1] Add failing rows to `tests/unit/test_links.py` for the research R6 slug rule (`LI = "https://www.linkedin.com"`):
+  - `f"{LI}/posts/sample-author_sample-text-ugcPost-7508434034927017984-lwx-/"` gives `urn_kind == "ugcPost"`, `media_id == "7508434034927017984"`, `route_kind == "post"`, and a `canonical_url` that keeps `-lwx-` (with the trailing slash stripped, as today's canonical does).
+  - The same address with `?utm_source=x&rcm=y` gives an equal (`urn_kind`, `media_id`) and the same `canonical_url`.
+  - `…-ugcPost-7508434034927017984-abcd/` gives the same (`urn_kind`, `media_id`) but a different `canonical_url`.
+  - A prefix containing digits and a type word, `f"{LI}/posts/share-fan-8346721bb_x-ugcPost-7508434034927017984-lwx-"`, takes the **rightmost** type word (`ugcPost`).
+  - A raw Unicode slug `f"{LI}/posts/sample-author_سلام-دنیا-share-7508424761698410497-2cX9"` and its percent-encoded form are both recognized with `share`/`7508424761698410497`.
+  - A code longer than 32 characters, or one containing `.`, raises `UNSUPPORTED_URL`.
+  - Every existing row in `test_linkedin_routes_keep_the_urn_type_and_are_stable` and `test_linkedin_routes_without_a_single_post_identity_are_rejected` still passes unchanged, and `recognize_source_url(route.canonical_url) == route` holds for every new row.
+  Moved from phase 4: T009's redirect target `…-lwx-/` needs this slug rule before T013
+  can pass (decided 2026-09-23, run `wf_23cc566a-471`).
+
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] In `src/openmedia/sources/__init__.py`:
+- [X] T012 [US1] In `src/openmedia/sources/__init__.py`:
   - Add `"lnkd.in"` to `SUPPORTED_HOSTS` and `lnkd\.in` to `_BARE_SUPPORTED_HOST`.
   - In `recognize_source_url`, handle host `lnkd.in` before the other hosts. Exactly two path segments `["p", code]`, with `code` matching `^[A-Za-z0-9_-]{1,32}$`, give `SourceRoute("linkedin", code, f"https://lnkd.in/p/{code}", "short_link")`. Anything else raises `UNSUPPORTED_URL`.
   - Update the `supported_host` docstring to mention LinkedIn short links.
 
   Pass T008.
-- [ ] T013 [US1] Implement `resolve_short_link(url, *, transport, rate_control, deadline) -> str` in `src/openmedia/sources/linkedin.py`, applying the rules of research R4 in order:
+- [X] T020 [US1] In `src/openmedia/sources/__init__.py`, replace `_LINKEDIN_POST_SLUG` with the research R6 rule:
+  - Typed pattern: `^(?P<prefix>[^/?#\s]+)-(?P<type>activity|ugcPost|share)-(?P<id>\d{8,32})(?:-(?P<code>[A-Za-z0-9_-]{1,32}))?$`. The greedy prefix makes it the rightmost type word.
+  - Untyped fallback: the current pattern with its code class widened to `[A-Za-z0-9_-]{1,32}` and its prefix class widened to `[^/?#\s]`. The type defaults to `activity`.
+  - Keep `canonical_url = f"https://www.linkedin.com/posts/{segments[1]}"`.
+
+  Pass T017.
+  Moved from phase 4: T009's redirect target `…-lwx-/` needs this slug rule before T013
+  can pass (decided 2026-09-23, run `wf_23cc566a-471`).
+- [X] T013 [US1] Implement `resolve_short_link(url, *, transport, rate_control, deadline) -> str` in `src/openmedia/sources/linkedin.py`, applying the rules of research R4 in order:
   1. Call `rate_control.acquire("linkedin", "metadata", deadline=deadline)`.
   2. Call `transport.head(url, follow_redirects=False, deadline=deadline)` with no `headers` argument.
   3. On `404`/`410` raise `not_found`. On a non-redirect status or a missing `location`, raise `no_redirect`.
@@ -148,22 +167,22 @@ outside `lnkd.in`/`linkedin.com`/`www.linkedin.com`/`media.example.invalid` is r
   - Never read `set_cookies` and never log the destination.
 
   Pass T009.
-- [ ] T014 [US1] In `SourceRouter._inspect` in `src/openmedia/sources/__init__.py`, when `route.route_kind == "short_link"`:
+- [X] T014 [US1] In `SourceRouter._inspect` in `src/openmedia/sources/__init__.py`, when `route.route_kind == "short_link"`:
   - Call `resolve_short_link(request.source_url, transport=transport, rate_control=rate_control, deadline=request.deadline)` (import inside the function, as the adapters are imported).
   - Then `return self._inspect(dataclasses.replace(request, source_url=resolved), transport=transport, rate_control=rate_control)`.
   - Add a comment that a resolved route cannot be `short_link` again because its host is `linkedin.com`.
 
   Pass T010.
-- [ ] T015 [US1] In `MediaWorkflow.submit` in `src/openmedia/coordinator.py`, replace the media-identity check with a helper `_bind_identity(request, result)`:
+- [X] T015 [US1] In `MediaWorkflow.submit` in `src/openmedia/coordinator.py`, replace the media-identity check with a helper `_bind_identity(request, result)`:
   - When `recognize_source_url(request.source_url).route_kind == "short_link"`: call `recognize_source_url(result.metadata.canonical_url)`, catching `SourceAdapterError` as a mismatch. Require `platform == "linkedin"`, `route_kind in {"post", "embed"}`, and `route.media_id == result.metadata.media_id`. Then set `request.source_url = route.canonical_url` and `request.media_id = route.media_id`.
   - Otherwise keep `result.metadata.media_id == request.media_id`.
   - Any mismatch raises `WorkflowError("inspection returned a different media identity")`.
 
   Pass T011.
-- [ ] T016 [US1] Run `uv run pytest` until green. Walk the quickstart §2 rows "Short link → video post", "Short link → picture post", `404`, `200` interstitial, "301 to lnkd.in/p/other", "301 to https://example.com/…", "301 to …/in/someone/", `429`, and "Short link + YouTube link" through the controlled tests. Record them in `specs/004-linkedin-share-links/validation.md` under "US1".
+- [X] T016 [US1] Run `uv run pytest` until green. Walk the quickstart §2 rows "Short link → video post", "Short link → picture post", `404`, `200` interstitial, "301 to lnkd.in/p/other", "301 to https://example.com/…", "301 to …/in/someone/", `429`, and "Short link + YouTube link" through the controlled tests. Record them in `specs/004-linkedin-share-links/validation.md` under "US1".
 
-**Checkpoint**: US1 works on its own for short links that resolve to addresses the stock
-extractor already accepts, such as `dAjqaykT`. Commit
+**Checkpoint**: US1 resolves short links to any post address, including hyphenated codes
+(T020 moved here). Video download of a hyphen-code post still needs T021 in US2. Commit
 `feat(004): phase 3 us1 short links`.
 
 ---
@@ -181,14 +200,6 @@ through `OpenMediaLinkedInPostIE`, and the picture path still receives it on `un
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Add failing rows to `tests/unit/test_links.py` for the research R6 slug rule (`LI = "https://www.linkedin.com"`):
-  - `f"{LI}/posts/sample-author_sample-text-ugcPost-7508434034927017984-lwx-/"` gives `urn_kind == "ugcPost"`, `media_id == "7508434034927017984"`, `route_kind == "post"`, and a `canonical_url` that keeps `-lwx-` (with the trailing slash stripped, as today's canonical does).
-  - The same address with `?utm_source=x&rcm=y` gives an equal (`urn_kind`, `media_id`) and the same `canonical_url`.
-  - `…-ugcPost-7508434034927017984-abcd/` gives the same (`urn_kind`, `media_id`) but a different `canonical_url`.
-  - A prefix containing digits and a type word, `f"{LI}/posts/share-fan-8346721bb_x-ugcPost-7508434034927017984-lwx-"`, takes the **rightmost** type word (`ugcPost`).
-  - A raw Unicode slug `f"{LI}/posts/sample-author_سلام-دنیا-share-7508424761698410497-2cX9"` and its percent-encoded form are both recognized with `share`/`7508424761698410497`.
-  - A code longer than 32 characters, or one containing `.`, raises `UNSUPPORTED_URL`.
-  - Every existing row in `test_linkedin_routes_keep_the_urn_type_and_are_stable` and `test_linkedin_routes_without_a_single_post_identity_are_rejected` still passes unchanged, and `recognize_source_url(route.canonical_url) == route` holds for every new row.
 - [ ] T018 [P] [US2] Create `tests/fixtures/linkedin/linkedin-video-post-hyphen-code.html`: a minimal sanitized page with `<title>Sample post</title>`, `<meta property="og:title" content="Sample post">`, and one `<video data-sources='[{"src":"https://media.example.invalid/li-720.mp4","type":"video/mp4","data-bitrate":"284460"},{"src":"https://media.example.invalid/li-360.mp4","type":"video/mp4","data-bitrate":"212348"}]'>`. Add a section to `tests/fixtures/linkedin/PROVENANCE.md`: its shape follows the live `…-ugcPost-7508434034927017984-lwx-/` page of 2026-09-23 (research R7). The content is synthetic, and no author, text, or media URL was copied.
 - [ ] T019 [P] [US2] Add failing tests to `tests/contract/test_ytdlp.py`:
   - For the `-lwx-` address, `_linkedin_post_extractor().suitable(url)` is `True` and `_match_id(url) == "7508434034927017984"`. Stock `LinkedInIE.suitable` stays `False` for it. `suitable` is `False` for `https://www.linkedin.com/in/someone/` and for a YouTube URL.
@@ -198,12 +209,6 @@ through `OpenMediaLinkedInPostIE`, and the picture path still receives it on `un
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] In `src/openmedia/sources/__init__.py`, replace `_LINKEDIN_POST_SLUG` with the research R6 rule:
-  - Typed pattern: `^(?P<prefix>[^/?#\s]+)-(?P<type>activity|ugcPost|share)-(?P<id>\d{8,32})(?:-(?P<code>[A-Za-z0-9_-]{1,32}))?$`. The greedy prefix makes it the rightmost type word.
-  - Untyped fallback: the current pattern with its code class widened to `[A-Za-z0-9_-]{1,32}` and its prefix class widened to `[^/?#\s]`. The type defaults to `activity`.
-  - Keep `canonical_url = f"https://www.linkedin.com/posts/{segments[1]}"`.
-
-  Pass T017.
 - [ ] T021 [US2] In `src/openmedia/sources/ytdlp.py`:
   - Add `_linkedin_post_extractor()`, which imports `LinkedInIE` from `yt_dlp.extractor.linkedin` at call time, as `inspect` already imports `yt_dlp` lazily. It returns a cached subclass `OpenMediaLinkedInPostIE(LinkedInIE)` with:
     - `IE_NAME = "openmedia:linkedin:post"`
@@ -303,8 +308,8 @@ and `links`. With it off, no file exists (quickstart §2 last rows, US3 scenario
   sequential, with one commit per phase.
 - US1 depends on T003 (no-follow `HEAD`), T005 (categories and `RESOLUTION_FAILURES`), and
   T007 (worker `detail`).
-- US2 is functionally independent of US1. It touches the same `recognize_source_url` in
-  `src/openmedia/sources/__init__.py`, so it runs after US1 to avoid conflicting edits.
+- T017/T020 (the R6 slug rule) run in US1, before T013, because T009's redirect target
+  has a hyphenated code. The rest of US2 builds on that rule.
   SC-003's `dMhfr6kG` passes only once both are done.
 - US3 needs T005/T007 (`RESOLUTION_FAILURES`, `detail`) and T015 (`_bind_identity`, for the
   `resolved_url` field).
@@ -318,8 +323,8 @@ and `links`. With it off, no file exists (quickstart §2 last rows, US3 scenario
   `network.py`, `sources/__init__.py` + `bot.py`, and `workers.py`, so they can also run
   together. T003 and T005 both edit `sources/__init__.py` (protocol vs enum), so merge those
   two edits in sequence.
-- US1 tests: T008, T009, T010, and T011 are separate files.
-- US2 tests: T017, T018, and T019 are separate files.
+- US1 tests: T008, T009, T010, and T011 are separate files. T017 shares T008's file.
+- US2 tests: T018 and T019 are separate files.
 - US3 tests: T023 and T024.
 - Polish: T029, T030, T031, and T032.
 
