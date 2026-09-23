@@ -17,6 +17,8 @@ Spec-kit drives this repo. Read before writing code:
 | `specs/002-file-logging/contracts/diagnostic-log.md` | Touching logging, env variables, or what may be written to disk |
 | `specs/003-streamlined-bot-ux/tasks.md` | Working on the card, choices, or status |
 | `specs/003-streamlined-bot-ux/contracts/` | Touching what users see or which version is picked |
+| `specs/004-linkedin-share-links/tasks.md` | Working on LinkedIn short links or post recognition |
+| `specs/004-linkedin-share-links/contracts/` | Touching LinkedIn address recognition, short-link resolution, or refusal diagnostics |
 | `.specify/memory/constitution.md` | A change adds a service, dependency, or platform |
 
 `.specify/feature.json` holds one repo-global `feature_directory`. Switching features

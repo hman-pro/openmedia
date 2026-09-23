@@ -27,12 +27,24 @@ Error categories: `unsupported_url`, `unsupported_collection`, `unavailable`, `n
 `unsafe_destination`, `invalid_source_response`, `internal`. Include only sanitized metadata;
 parent maps the category to the Telegram contract.
 
+(amended by 004) Two more categories, `short_link_unresolved` and `short_link_not_post`, cover
+LinkedIn short links. The terminal `error` event may carry an optional `"detail"` naming the
+resolution outcome (`not_found`, `no_redirect`, `too_many_redirects`, `timed_out`,
+`unreachable`, `outside_linkedin`, `not_a_post`). The parent ignores any other value. See
+[linkedin-links.md](../../004-linkedin-share-links/contracts/linkedin-links.md#worker-protocol-change).
+
 ## Source routing and evidence
 
 - YouTube: recognized video/watch/short-link/shorts routes, with collection/live URLs rejected.
   Inspect through yt-dlp without download. Preserve stable video identity and exact format ID.
 - LinkedIn video: yt-dlp's explicit LinkedIn post extractor. Disable generic fallback to
   arbitrary web pages. Recognize the public post/activity routes supported by that extractor.
+  (amended by 004) `posts/<slug>` addresses are recognized by type and numeric ID whatever
+  their trailing code, and hyphen-code addresses reach yt-dlp through `OpenMediaLinkedInPostIE`.
+  See [linkedin-links.md](../../004-linkedin-share-links/contracts/linkedin-links.md#recognized-inputs).
+- LinkedIn short link (added by 004): `lnkd.in/p/<code>` is resolved in the inspect worker
+  with one no-follow `HEAD` before any adapter runs, then routed as the post it names. See
+  [linkedin-links.md](../../004-linkedin-share-links/contracts/linkedin-links.md#short-link-resolution).
 - LinkedIn image: normalize the post activity ID to its public embed URL. Accept only one
   explicit feed-image attachment in the matching post, not an avatar, article cover, or
   Open Graph preview. Reject absent/ambiguous attachment identity and multiple attachments.
@@ -97,6 +109,9 @@ validation covers later CDN requests. Disable alternate networking backends unle
 implement that same guard. Connections use validated IP endpoints with TLS hostname checks;
 reject unsupported schemes, URL userinfo, and proxy environment inheritance. Redirects are
 limited to five; strip sensitive upstream headers on host changes.
+(amended by 004) `head` takes `follow_redirects: bool = True`. With `False` it returns the
+first response, `3xx` included, with the raw `Location` header; only short-link resolution
+uses it. See [linkedin-links.md](../../004-linkedin-share-links/contracts/linkedin-links.md#transport-change).
 
 Metadata responses are capped at 8 MiB per response, thumbnails at 1 MiB and only from a
 separate thumbnail URL. Output bytes are capped at 50,000,000, workspace usage at 128 MiB. A merge holds both

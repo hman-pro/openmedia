@@ -71,7 +71,7 @@ minutes to finish.
 | Source | Accepted links | Media | Live verification |
 |---|---|---|---|
 | YouTube | `youtube.com/watch?v=…`, `youtu.be/…`, `youtube.com/shorts/…` | Single video | Feasibility pass; full live suite pending |
-| LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…` | Video or single image | Feasibility pass; full live suite pending |
+| LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Feasibility pass; full live suite pending |
 | Instagram | `instagram.com/p/…`, `instagram.com/reel/…` | Video or single image | Video passes live through the product transport; single image pending |
 
 **Out of scope:** playlists, live streams, carousels and multi-item posts, stories, private
@@ -225,7 +225,7 @@ flowchart LR
     subgraph child [Worker process · one per operation]
         ROUTER["sources/<br/>SourceRouter"] --> YT["ytdlp.py<br/>YouTube · LinkedIn/IG video"]
         ROUTER --> IG["instagram.py<br/>single image"]
-        ROUTER --> LI["linkedin.py<br/>single image"]
+        ROUTER --> LI["linkedin.py<br/>short links · single image"]
         YT & IG & LI --> NET["network.py<br/>public-only guarded transport"]
     end
 

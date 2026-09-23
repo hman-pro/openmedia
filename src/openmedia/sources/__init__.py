@@ -24,9 +24,10 @@ _INSTAGRAM_ID = re.compile(r"^[A-Za-z0-9_-]{5,64}$")
 _LINKEDIN_URN = re.compile(r"^urn:li:(activity|ugcPost|share):(\d{8,32})$")
 _LINKEDIN_SHORT_CODE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 # Research R6: the greedy prefix makes the identity the rightmost type word, and the trailing
-# code may hold hyphens. Slugs without a type word predate typed slugs and name an activity.
+# code may hold hyphens. A post with no text joins author and type with "_" (`<author>_share-`).
+# Slugs without a type word predate typed slugs and name an activity.
 _LINKEDIN_POST_SLUG = re.compile(
-    r"^(?P<prefix>[^/?#\s]+)-(?P<type>activity|ugcPost|share)-(?P<id>\d{8,32})(?:-(?P<code>[A-Za-z0-9_-]{1,32}))?$"
+    r"^(?P<prefix>[^/?#\s]+)[-_](?P<type>activity|ugcPost|share)-(?P<id>\d{8,32})(?:-(?P<code>[A-Za-z0-9_-]{1,32}))?$"
 )
 _LINKEDIN_UNTYPED_POST_SLUG = re.compile(r"^[^/?#\s]+?-(?P<id>\d{8,32})(?:-[A-Za-z0-9_-]{1,32})?$")
 SUPPORTED_HOSTS = frozenset(

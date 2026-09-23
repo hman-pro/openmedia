@@ -45,6 +45,22 @@
       "url": "https://www.instagram.com/p/REPLACE_ME/",
       "expected_identity": "REPLACE_ME",
       "expected_type": "image"
+    },
+    {
+      "case_id": "linkedin-short-video",
+      "platform": "linkedin",
+      "media_type": "video",
+      "url": "https://lnkd.in/p/REPLACE_ME",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "video"
+    },
+    {
+      "case_id": "linkedin-hyphen-code",
+      "platform": "linkedin",
+      "media_type": "video",
+      "url": "https://www.linkedin.com/posts/REPLACE_ME-lwx-/",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "video"
     }
   ]
 }

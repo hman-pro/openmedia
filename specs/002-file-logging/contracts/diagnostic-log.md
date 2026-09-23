@@ -33,6 +33,10 @@ bytes per entry.
   log directory. Links stay redacted there.
 - The file holds submitted links and Telegram chat and user identifiers on `received`
   entries. It holds no token, no signed media URL, no media bytes, no names or usernames.
+- (amended by 004) Links and Telegram identifiers also appear on `refused` entries, and a
+  query-free `resolved_url` may appear on `inspection_finished` for a LinkedIn short link.
+  The exclusions above still hold. See
+  [telegram-bot.md (004)](../../004-linkedin-share-links/contracts/telegram-bot.md#refused-messages-in-the-diagnostic-log).
 - A log write problem never changes a request's outcome. The console gets one line when
   writing stops and one when it resumes.
 - Only files matching `openmedia-\d{4}-\d{2}-\d{2}\.log` in the directory are ever deleted.

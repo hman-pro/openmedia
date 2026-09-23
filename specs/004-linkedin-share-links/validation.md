@@ -79,3 +79,62 @@ Notes:
 - A group message whose only links are unsupported (for example `bit.ly`) still gets no
   reply and writes no entry: the `not_private` rule needs a supported link, matching the
   existing group-reply branch.
+
+## Completion
+
+Run on 2026-09-23 against live LinkedIn and a test bot, with `OPENMEDIA_DIAGNOSTIC_LOG=1`
+and `OPENMEDIA_WORK_DIR=/private/tmp/openmedia-004`. Times are `inspection_finished.elapsed_seconds`.
+
+### Live inspection through `SourceRouter` (quickstart §3)
+
+Seven short links, resolved and inspected by the product code with the live transport:
+
+| Short link | Resolved post | Kind | Result |
+|---|---|---|---|
+| `lnkd.in/p/dMhfr6kG` | `ugcPost` 7508434034927017984, code `-lwx-` | video, 2 formats | ok, 1.1 s |
+| `lnkd.in/p/dAjqaykT` | `share` 7508424761698410497 | picture | ok, 1.8 s |
+| `lnkd.in/p/duBX_exZ` | `ugcPost` 7508541118742147072 | video, 3 formats | ok, 1.2 s |
+| `lnkd.in/p/d8N9_r3T` | `ugcPost` 7508569381765890050 | video, 2 formats | ok, 1.0 s |
+| `lnkd.in/p/dgVKMEhU` | `share` 7508513042767265792 | picture | ok, 1.8 s |
+| `lnkd.in/p/dcm9-96W` | `share` 7508524009370808323 | picture | ok, 1.3 s |
+| `lnkd.in/p/d42ur5NT` | `share` 7508570327892013056, text-less `<author>_share-…` | picture | ok, 1.8 s, after the fix below |
+
+**Defect found and fixed:** `d42ur5NT` first failed with `unavailable`. Its post has no text,
+so the slug is `farhad-zandshiraz_share-7508570327892013056-d5q8`, with `_` before the type
+word. The R6 typed pattern allowed only `-`, so the slug fell to the untyped rule, was typed
+`activity`, and the image embed for `urn:li:activity:…` answered `404`. The typed pattern now
+accepts `[-_]` (research R6, task T020 note), with a unit row in `tests/unit/test_links.py`.
+The bug predates 004.
+
+The `tests/live/test_sources.py` matrix was not run: the machine-local manifest lacks the
+five FR-002 YouTube/LinkedIn/Instagram cases. Its two 004 cases are covered by the rows above.
+
+### Telegram run (quickstart §4)
+
+- **SC-001 / SC-003**: `lnkd.in/p/dMhfr6kG` delivered a 4,843,445-byte video in 4.6 s, and
+  `lnkd.in/p/dAjqaykT` a 147,246-byte picture in 5.1 s. Neither received
+  `Send one supported public media link.` Pass.
+- **SC-002** (short link vs full address):
+
+  | Post | Short link | Full address | Difference | Bytes delivered |
+  |---|---|---|---|---|
+  | video `ugcPost` 7508541118742147072 | 1.55 s | 1.53 s | 0.02 s | 9,115,009 both |
+  | picture `share` 7508513042767265792 | 1.87 s | 1.57 s | 0.30 s | 150,982 both |
+
+  Both within 3 s. Pass.
+- **SC-005 / FR-010**: `hello` wrote one `refused` entry (`no_link`, `links: []`). A message
+  with `lnkd.in/p/d8N9_r3T` and a `youtu.be` link wrote one `refused` entry
+  (`too_many_links`, both links). The console (83 lines) showed no link and no refusal. Pass.
+- `grep -c 'rcm=' logs/*.log` = 0, and `utm_` = 0. Every `resolved_url` is query-free. Pass.
+- No token-shaped string appears in the log.
+
+### Remaining limitations
+
+- `lnkd.in` paths other than `/p/`, and other URL shorteners, stay unsupported.
+- Posts that need a login stay unavailable.
+- `OpenMediaLinkedInPostIE` relies on `LinkedInIE._real_extract` calling `self._match_id`
+  (research R7). Re-check on every yt-dlp upgrade; the controlled pin test fails first.
+- `--check-config` accepts the default `OPENMEDIA_WORK_DIR=/tmp/openmedia` on macOS, where
+  `/tmp` is a symlink, but startup then refuses it (`workspace root cannot be a symlink`).
+  Already recorded in 003 validation (use `OPENMEDIA_WORK_DIR=/private/tmp/…` locally);
+  not fixed in 004.

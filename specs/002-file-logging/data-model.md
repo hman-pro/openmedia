@@ -42,7 +42,7 @@ One JSON object per line. Keys appear in this order; absent keys are omitted, no
 |---|---|---|---|
 | `ts` | string | always | RFC 3339 UTC, millisecond precision, `Z` suffix |
 | `level` | string | always | `DEBUG` … `CRITICAL` |
-| `origin` | string | always | `request`, `lifecycle`, `sweep`, `library` |
+| `origin` | string | always | `request`, `lifecycle`, `sweep`, `library`; (amended by 004) `input` for `refused` |
 | `stage` | string | always | See stage table |
 | `request_id` | string | request entries | 32 hex characters, from `REQUEST_CONTEXT` or the request |
 | `msg` | string | optional | Free text; URL- and token-redacted |
@@ -66,7 +66,10 @@ One JSON object per line. Keys appear in this order; absent keys are omitted, no
 | `automatic` | boolean | `selection` | (amended by 003) True when no tap was needed (one choice or a picture) |
 | `progress` | object | `worker_progress` (DEBUG) | Scalar fields of one worker protocol message |
 | `settings` | object | `startup` | Effective `Settings` without `telegram_bot_token` |
-| `reason` | string | `shutdown` | `signal` or `error` |
+| `reason` | string | `shutdown`, `refused` | `signal` or `error`; (amended by 004) on `refused`: `not_private`, `no_link`, `unsupported_link`, `too_many_links`, `unsupported_url`, `unsupported_collection` |
+| `links` | array of string | `refused` | (amended by 004) Raw link candidates, at most 5, each at most 2,048 characters; not URL-redacted |
+| `resolution` | string | `inspection_finished`, short link | (amended by 004) Resolution outcome, e.g. `resolved`, `not_found` |
+| `resolved_url` | string | `inspection_finished` (ok), short link | (amended by 004) Query-free resolved post address; not URL-redacted |
 | `expired`, `cleanup_retried`, `cleanup_failed`, `swept` | integer | `sweep` | Counts from one maintenance pass |
 | `lost` | integer | `log_recovered` | Entries not written while the handler was degraded |
 
@@ -102,6 +105,10 @@ Existing names are unchanged so feature 001's timing audit keeps parsing the con
 | `startup`, `shutdown`, `crash` | lifecycle | yes | `openmedia.diagnostic` |
 | `sweep` | sweep | yes | `openmedia.diagnostic` |
 | `log_recovered` | lifecycle | yes | `openmedia.diagnostic` |
+| `refused` (amended by 004) | input | yes | `openmedia.diagnostic` |
+
+(amended by 004) The `refused`, `links`, `resolution`, and `resolved_url` additions are defined in
+[data-model.md (004)](../004-linkedin-share-links/data-model.md#refusal-record-new-diagnostic-entry).
 
 `startup` carries the effective settings without the token. `shutdown` carries the reason
 (`signal`, `error`). `crash` carries `error`.

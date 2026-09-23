@@ -118,7 +118,10 @@ and the pinned yt-dlp 2026.8.19; no cookies were sent.
   1. **Typed**: the rightmost `-(activity|ugcPost|share)-(\d{8,32})` followed by nothing or
      by `-<code>`, where `<code>` is 1–32 of `[A-Za-z0-9_-]` (hyphens allowed, trailing
      hyphen allowed). The descriptive prefix may hold any characters except `/ ? #` and
-     whitespace, including raw non-Latin text.
+     whitespace, including raw non-Latin text. The type word follows `-` or `_`: a post with
+     no text joins author and type with `_` (`<author>_share-<id>-<code>`). Found in the T033
+     live run of 2026-09-23, where `-` alone mis-typed such a post as `activity` and the image
+     embed answered `404`.
   2. **Untyped** (older addresses): unchanged from today, except the code may contain
      hyphens. The type defaults to `activity`.
   The route keeps `urn_kind` and `media_id` as identity, and `canonical_url` as

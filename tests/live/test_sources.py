@@ -51,9 +51,12 @@ def test_required_source_matrix(live_manifest: list[dict[str, object]], tmp_path
         "linkedin-image",
         "instagram-video",
         "instagram-image",
+        # 004 SC-003: an app share link, and a post whose code ends in a hyphen.
+        "linkedin-short-video",
+        "linkedin-hyphen-code",
     }
     by_case = {str(case["case_id"]): case for case in live_manifest}
-    assert expected_cases <= by_case.keys(), "live manifest must cover all five FR-002 categories"
+    assert expected_cases <= by_case.keys(), "live manifest must cover the five FR-002 categories and both 004 LinkedIn link forms"
     router = SourceRouter()
     transport = GuardedHTTPTransport()
     rate = LiveRateControl()

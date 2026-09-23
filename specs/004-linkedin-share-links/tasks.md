@@ -144,13 +144,14 @@ outside `lnkd.in`/`linkedin.com`/`www.linkedin.com`/`media.example.invalid` is r
 
   Pass T008.
 - [X] T020 [US1] In `src/openmedia/sources/__init__.py`, replace `_LINKEDIN_POST_SLUG` with the research R6 rule:
-  - Typed pattern: `^(?P<prefix>[^/?#\s]+)-(?P<type>activity|ugcPost|share)-(?P<id>\d{8,32})(?:-(?P<code>[A-Za-z0-9_-]{1,32}))?$`. The greedy prefix makes it the rightmost type word.
+  - Typed pattern: `^(?P<prefix>[^/?#\s]+)[-_](?P<type>activity|ugcPost|share)-(?P<id>\d{8,32})(?:-(?P<code>[A-Za-z0-9_-]{1,32}))?$`. The greedy prefix makes it the rightmost type word.
   - Untyped fallback: the current pattern with its code class widened to `[A-Za-z0-9_-]{1,32}` and its prefix class widened to `[^/?#\s]`. The type defaults to `activity`.
   - Keep `canonical_url = f"https://www.linkedin.com/posts/{segments[1]}"`.
 
   Pass T017.
   Moved from phase 4: T009's redirect target `…-lwx-/` needs this slug rule before T013
   can pass (decided 2026-09-23, run `wf_23cc566a-471`).
+  Amended in T033: `[-_]` before the type word, for text-less `<author>_share-…` posts (R6).
 - [X] T013 [US1] Implement `resolve_short_link(url, *, transport, rate_control, deadline) -> str` in `src/openmedia/sources/linkedin.py`, applying the rules of research R4 in order:
   1. Call `rate_control.acquire("linkedin", "metadata", deadline=deadline)`.
   2. Call `transport.head(url, follow_redirects=False, deadline=deadline)` with no `headers` argument.
@@ -287,18 +288,18 @@ and `links`. With it off, no file exists (quickstart §2 last rows, US3 scenario
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T029 [P] Amend `specs/001-media-download/contracts/source-adapters.md` (LinkedIn recognized inputs, short-link resolution step, `head(follow_redirects=…)`, worker `error.detail`) and `specs/001-media-download/contracts/telegram-bot.md` (two new failure rows; `lnkd.in/p/` counts as a supported link). Mark each change "(amended by 004)" and link it to `specs/004-linkedin-share-links/contracts/`.
-- [ ] T030 [P] Amend `specs/002-file-logging/contracts/diagnostic-log.md`: the "Flag on" guarantees now say links and identifiers appear on `received` and `refused` entries, and a query-free `resolved_url` may appear on `inspection_finished`. Amend `specs/002-file-logging/data-model.md`: the `origin` values gain `input`, and the entry fields gain `reason`, `links`, `resolution`, and `resolved_url`, with types and entries as in `specs/004-linkedin-share-links/data-model.md`. Mark each change "(amended by 004)".
-- [ ] T031 [P] Update `README.md`'s supported-links description to say LinkedIn app share links (`lnkd.in/p/…`) are accepted. Add 004 rows to the "Where truth lives" table in `CLAUDE.md`: `specs/004-linkedin-share-links/tasks.md` (working on LinkedIn short links or post recognition) and `specs/004-linkedin-share-links/contracts/` (touching LinkedIn address recognition, short-link resolution, or refusal diagnostics).
-- [ ] T032 [P] Add the two example cases from quickstart §3 (`linkedin-short-video`, `linkedin-hyphen-code`) to `tests/fixtures/live-sources.example.json` with `REPLACE_ME` placeholders. Confirm that `tests/live/test_sources.py` compares `expected_identity` with the inspected `metadata.media_id`, the resolved post ID, and not with the route's short code. Adjust that comparison if it does not.
-- [ ] T033 Run the live checks in quickstart §3 and the manual Telegram run in §4, with `OPENMEDIA_DIAGNOSTIC_LOG=1`. Record in `specs/004-linkedin-share-links/validation.md` "Completion":
+- [X] T029 [P] Amend `specs/001-media-download/contracts/source-adapters.md` (LinkedIn recognized inputs, short-link resolution step, `head(follow_redirects=…)`, worker `error.detail`) and `specs/001-media-download/contracts/telegram-bot.md` (two new failure rows; `lnkd.in/p/` counts as a supported link). Mark each change "(amended by 004)" and link it to `specs/004-linkedin-share-links/contracts/`.
+- [X] T030 [P] Amend `specs/002-file-logging/contracts/diagnostic-log.md`: the "Flag on" guarantees now say links and identifiers appear on `received` and `refused` entries, and a query-free `resolved_url` may appear on `inspection_finished`. Amend `specs/002-file-logging/data-model.md`: the `origin` values gain `input`, and the entry fields gain `reason`, `links`, `resolution`, and `resolved_url`, with types and entries as in `specs/004-linkedin-share-links/data-model.md`. Mark each change "(amended by 004)".
+- [X] T031 [P] Update `README.md`'s supported-links description to say LinkedIn app share links (`lnkd.in/p/…`) are accepted. Add 004 rows to the "Where truth lives" table in `CLAUDE.md`: `specs/004-linkedin-share-links/tasks.md` (working on LinkedIn short links or post recognition) and `specs/004-linkedin-share-links/contracts/` (touching LinkedIn address recognition, short-link resolution, or refusal diagnostics).
+- [X] T032 [P] Add the two example cases from quickstart §3 (`linkedin-short-video`, `linkedin-hyphen-code`) to `tests/fixtures/live-sources.example.json` with `REPLACE_ME` placeholders. Confirm that `tests/live/test_sources.py` compares `expected_identity` with the inspected `metadata.media_id`, the resolved post ID, and not with the route's short code. Adjust that comparison if it does not.
+- [X] T033 Run the live checks in quickstart §3 and the manual Telegram run in §4, with `OPENMEDIA_DIAGNOSTIC_LOG=1`. Record in `specs/004-linkedin-share-links/validation.md` "Completion":
   - the SC-001 video and picture results
   - SC-002 timing differences from `inspection_finished.elapsed_seconds`
   - SC-003 results for `lnkd.in/p/dMhfr6kG` and `lnkd.in/p/dAjqaykT`
   - SC-005 refusal entries
   - `grep -c 'rcm=' logs/*.log == 0`
   - remaining limitations: non-`/p/` `lnkd.in` paths and other shorteners stay unsupported, login-only posts stay unavailable, and the R7 yt-dlp coupling needs re-checking on upgrade
-- [ ] T034 Update `specs/003-streamlined-bot-ux/validation.md` "Remaining limitations": mark the LinkedIn short-link item resolved by 004, with a link to `specs/004-linkedin-share-links/validation.md`. Run `uv run pytest` and `uv run python -m openmedia --check-config` a final time.
+- [X] T034 Update `specs/003-streamlined-bot-ux/validation.md` "Remaining limitations": mark the LinkedIn short-link item resolved by 004, with a link to `specs/004-linkedin-share-links/validation.md`. Run `uv run pytest` and `uv run python -m openmedia --check-config` a final time.
 
 ---
 

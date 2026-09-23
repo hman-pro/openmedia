@@ -113,11 +113,11 @@ Both lie in 001's yt-dlp adapter; 003 exposed them.
 
 ### Remaining limitations
 
-- **LinkedIn app share links (`lnkd.in`) are unsupported.** They 301 to
+- ~~**LinkedIn app share links (`lnkd.in`) are unsupported.**~~ Resolved by 004: `lnkd.in/p/…` links are resolved in the inspect worker; see [004 validation](../004-linkedin-share-links/validation.md). They 301 to
   `linkedin.com/posts/…`, but recognition never contacts the source, so the short host is
   refused. Supporting it adds a pre-recognition network hop and is a scope decision for a
   follow-up feature. Resolved by hand, one of the two sampled links downloads (a picture).
-- **Some LinkedIn post slugs end in a hyphenated code** (`…-7508434034927017984-lwx-`). Both
+- ~~**Some LinkedIn post slugs end in a hyphenated code**~~ Resolved by 004 (research R6/R7); see [004 validation](../004-linkedin-share-links/validation.md). (`…-7508434034927017984-lwx-`). Both
   our slug pattern and yt-dlp's `LinkedInIE` (`-\w{4}`) reject it; not yet investigated.
 - **Merged `Video` may pair low-bitrate audio.** Pairs with equal video bitrate fall through
   to the lowest `option_id`, which picked HE-AAC 139 (49 kbps) over AAC 140 (130 kbps).
@@ -125,6 +125,6 @@ Both lie in 001's yt-dlp adapter; 003 exposed them.
 - **Opus audio on iOS**: `Audio only` is usually Opus 251 (`.webm`), which iOS may need
   another app to play (accepted in the spec edge cases).
 - **LinkedIn usually offers one choice**, so it is delivered without a tap.
-- **Rejected links leave no diagnostic event**, which slowed diagnosis of the LinkedIn case.
+- ~~**Rejected links leave no diagnostic event**~~ Resolved by 004: refused messages write a `refused` entry; see [004 validation](../004-linkedin-share-links/validation.md)., which slowed diagnosis of the LinkedIn case.
 - **Local runs on macOS** need `OPENMEDIA_WORK_DIR=/private/tmp/openmedia`: `/tmp` is a
   symlink and the workspace sweep refuses a symlinked root. The container is unaffected.

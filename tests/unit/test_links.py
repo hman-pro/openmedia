@@ -100,6 +100,9 @@ HYPHEN_CODE = f"{LI}/posts/sample-author_sample-text-ugcPost-7508434034927017984
         # A digit-heavy prefix that contains a type word still takes the rightmost one.
         (f"{LI}/posts/share-fan-8346721bb_x-ugcPost-7508434034927017984-lwx-",
             f"{LI}/posts/share-fan-8346721bb_x-ugcPost-7508434034927017984-lwx-", "ugcPost", "7508434034927017984"),
+        # A post with no text: the author slug meets the type word with "_", not "-".
+        (f"{LI}/posts/sample-author_share-7508570327892013056-d5q8/",
+            f"{LI}/posts/sample-author_share-7508570327892013056-d5q8", "share", "7508570327892013056"),
         # Telegram may pass a pasted non-Latin slug raw or percent-encoded.
         (f"{LI}/posts/sample-author_سلام-دنیا-share-7508424761698410497-2cX9",
             f"{LI}/posts/sample-author_سلام-دنیا-share-7508424761698410497-2cX9", "share", "7508424761698410497"),

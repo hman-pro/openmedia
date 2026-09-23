@@ -6,7 +6,8 @@ Any Telegram user may submit one recognized public media URL in a private chat w
 registration. Parse Telegram URL/text-link entities, with surrounding text permitted. Count
 only entities whose host belongs to YouTube, LinkedIn, or Instagram; ignore other URLs. Reject
 zero or multiple supported-platform URLs, then unsupported routes and collection/live URLs,
-with a short explanation. Ignore edits to previous messages as new requests. Optional `/start` and
+with a short explanation. (amended by 004) An `lnkd.in/p/<code>` link counts as a supported
+LinkedIn link; see [telegram-bot.md (004)](../../004-linkedin-share-links/contracts/telegram-bot.md#accepting-a-short-link). Ignore edits to previous messages as new requests. Optional `/start` and
 `/help` explain supported sources and usage; neither is a prerequisite. Groups receive only
 a private-chat instruction; no extraction or source preview is performed there.
 
@@ -77,6 +78,11 @@ failed notification does not stop cleanup.
 | Expired/replaced/restarted request | Submit the link again to obtain current choices |
 | Source format changed | Selected option unavailable; submit the link again |
 | Deadline/resource failure | Identify checking/downloading/sending failure and a retry step |
+| LinkedIn short link cannot be opened (amended by 004) | The link could not be opened; send the post's full linkedin.com address |
+| LinkedIn short link leads outside a supported post (amended by 004) | The link does not lead to a supported post; send a public LinkedIn post link |
+
+The two 004 rows are the `short_link_unresolved` and `short_link_not_post` categories; their
+exact text is in [telegram-bot.md (004)](../../004-linkedin-share-links/contracts/telegram-bot.md#new-failure-meanings).
 
 English is the initial message language. Error messages expose no internal exceptions or
 credentials. Busy responses preserve any pending selection and its original expiry.
