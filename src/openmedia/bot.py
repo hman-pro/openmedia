@@ -70,6 +70,10 @@ def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
         return "That source destination cannot be accessed safely. Send another public link."
     if error is ErrorCategory.INVALID_SOURCE_RESPONSE:
         return "The source returned an unsupported response. Submit the link again later."
+    if error is ErrorCategory.SHORT_LINK_UNRESOLVED:
+        return "That LinkedIn link could not be opened. Send the post's full linkedin.com address."
+    if error is ErrorCategory.SHORT_LINK_NOT_POST:
+        return "That LinkedIn link does not lead to a supported post. Send a public LinkedIn post link."
     return f"The {stage} stage failed. Retry the link later."
 
 

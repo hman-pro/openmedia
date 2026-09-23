@@ -110,3 +110,60 @@ async def test_kill_active_ends_every_running_worker_group() -> None:
     with pytest.raises(WorkerProtocolError):
         await asyncio.wait_for(job, 2)
     assert worker.active_count == 0
+
+
+def _error_event_worker(event: dict[str, object]) -> WorkerSupervisor:
+    """Worker that reads one message and prints exactly the given error event."""
+    import json
+
+    script = (
+        "import sys; sys.stdin.readline(); "
+        f"print({json.dumps(json.dumps(event))}, flush=True)"
+    )
+    return WorkerSupervisor([sys.executable, "-c", script])
+
+
+async def test_remote_error_carries_allowlisted_resolution_detail() -> None:
+    from openmedia.workers import WorkerRemoteError
+
+    worker = _error_event_worker(
+        {
+            "event": "error",
+            "category": "short_link_unresolved",
+            "stage": "inspection",
+            "detail": "not_found",
+        }
+    )
+    with pytest.raises(WorkerRemoteError) as caught:
+        await worker.run("inspect", {"mode": "error_detail"}, timeout=5)
+    assert caught.value.category == "short_link_unresolved"
+    assert caught.value.stage == "inspection"
+    assert caught.value.detail == "not_found"
+    assert "not_found" not in str(caught.value)
+
+
+async def test_remote_error_drops_detail_outside_allowlist() -> None:
+    from openmedia.workers import WorkerRemoteError
+
+    worker = _error_event_worker(
+        {
+            "event": "error",
+            "category": "short_link_unresolved",
+            "stage": "inspection",
+            "detail": "https://evil.example/",
+        }
+    )
+    with pytest.raises(WorkerRemoteError) as caught:
+        await worker.run("inspect", {"mode": "error_bad_detail"}, timeout=5)
+    assert caught.value.category == "short_link_unresolved"
+    assert caught.value.detail is None
+    assert "evil.example" not in str(caught.value)
+
+
+async def test_remote_error_without_detail_has_none() -> None:
+    from openmedia.workers import WorkerRemoteError
+
+    with pytest.raises(WorkerRemoteError) as caught:
+        await supervisor().run("inspect", {"mode": "unknown"}, timeout=5)
+    assert caught.value.category == "internal"
+    assert caught.value.detail is None

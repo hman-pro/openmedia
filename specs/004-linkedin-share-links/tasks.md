@@ -49,27 +49,27 @@ these.
 
 **⚠️ CRITICAL**: No user story work begins until this phase is complete.
 
-- [ ] T002 [P] Add failing tests to `tests/contract/test_network.py`, patching `openmedia.network._PinnedHTTPSConnection` as `test_real_transport_limits_metadata_client_redirects` does, with a connection whose `getresponse()` returns `status=301` and `Location: https://www.linkedin.com/posts/x-share-7508424761698410497-2cX9/`:
+- [X] T002 [P] Add failing tests to `tests/contract/test_network.py`, patching `openmedia.network._PinnedHTTPSConnection` as `test_real_transport_limits_metadata_client_redirects` does, with a connection whose `getresponse()` returns `status=301` and `Location: https://www.linkedin.com/posts/x-share-7508424761698410497-2cX9/`:
   - `GuardedHTTPTransport(...).head(url, follow_redirects=False)` returns a `TransportResponse` with `status == 301` and `headers["location"]` equal to that value.
   - Exactly one connection is opened, and `on_request` is called exactly once.
   - The default `head(url)` still follows the redirect (two connections).
   - `follow_redirects=False` still rejects a non-HTTPS or private-address short-link URL through `policy.resolve` (`UnsafeDestination`).
-- [ ] T003 In `src/openmedia/network.py`, add the keyword `follow_redirects: bool = True` to `GuardedHTTPTransport.head` and `_open`. When it is `False`, `_open` returns `(connection, response, current_url)` after the first response, whatever its status, still running `policy.resolve` and both hooks. In `src/openmedia/sources/__init__.py`, add the same keyword to the `GuardedTransport.head` protocol. Pass T002.
-- [ ] T004 [P] Add failing tests to `tests/contract/test_bot_errors.py`:
+- [X] T003 In `src/openmedia/network.py`, add the keyword `follow_redirects: bool = True` to `GuardedHTTPTransport.head` and `_open`. When it is `False`, `_open` returns `(connection, response, current_url)` after the first response, whatever its status, still running `policy.resolve` and both hooks. In `src/openmedia/sources/__init__.py`, add the same keyword to the `GuardedTransport.head` protocol. Pass T002.
+- [X] T004 [P] Add failing tests to `tests/contract/test_bot_errors.py`:
   - `failure_message(ErrorCategory.SHORT_LINK_UNRESOLVED, stage="checking") == "That LinkedIn link could not be opened. Send the post's full linkedin.com address."`
   - `failure_message(ErrorCategory.SHORT_LINK_NOT_POST, stage="checking") == "That LinkedIn link does not lead to a supported post. Send a public LinkedIn post link."`
   - Neither text contains `http`, `lnkd.in`, or `www.`.
   - The existing `test_every_adapter_error_has_sanitized_guidance` parametrization over `list(ErrorCategory)` covers both new values.
-- [ ] T005 In `src/openmedia/sources/__init__.py`:
+- [X] T005 In `src/openmedia/sources/__init__.py`:
   - Add `ErrorCategory.SHORT_LINK_UNRESOLVED = "short_link_unresolved"` and `SHORT_LINK_NOT_POST = "short_link_not_post"`.
   - Add `RESOLUTION_FAILURES = frozenset({"not_found", "no_redirect", "too_many_redirects", "timed_out", "unreachable", "outside_linkedin", "not_a_post"})`, export it in `__all__`, and add a comment pointing to data-model "ResolutionOutcome".
 
   In `src/openmedia/bot.py` `failure_message`, return the two texts from T004. Pass T004.
-- [ ] T006 [P] Add failing tests to `tests/integration/test_workers.py`, adding modes to `tests/fixtures/worker_stub.py`:
+- [X] T006 [P] Add failing tests to `tests/integration/test_workers.py`, adding modes to `tests/fixtures/worker_stub.py`:
   - Mode `error_detail` prints `{"event":"error","category":"short_link_unresolved","stage":"inspection","detail":"not_found"}`. The supervisor raises `WorkerRemoteError` with `category == "short_link_unresolved"` and `detail == "not_found"`.
   - Mode `error_bad_detail` prints the same event with `"detail":"https://evil.example/"`. It raises `WorkerRemoteError` with `detail is None`.
   - An existing error event without `detail` still yields `detail is None`.
-- [ ] T007 In `src/openmedia/workers.py`:
+- [X] T007 In `src/openmedia/workers.py`:
   - `WorkerRemoteError.__init__(self, category, stage=None, detail=None)` stores `detail`. The message text is unchanged, and `detail` does not appear in it.
   - `WorkerSupervisor` passes `event.get("detail")` only when it is a `str` in `RESOLUTION_FAILURES`, else `None`.
   - In `_child_main`'s `except` block, add `"detail": exc.detail` to the printed error event only when `getattr(exc, "detail", None) in RESOLUTION_FAILURES`.

@@ -218,9 +218,14 @@ class GuardedHTTPTransport:
         *,
         headers: Mapping[str, str] | None = None,
         deadline: float | None = None,
+        follow_redirects: bool = True,
     ) -> TransportResponse:
         connection, response, final_url = self._open(
-            url, headers=headers, deadline=deadline, method="HEAD"
+            url,
+            headers=headers,
+            deadline=deadline,
+            method="HEAD",
+            follow_redirects=follow_redirects,
         )
         try:
             response_headers = _single_headers(response)
@@ -387,6 +392,7 @@ class GuardedHTTPTransport:
         deadline: float | None,
         method: str = "GET",
         data: bytes | None = None,
+        follow_redirects: bool = True,
     ) -> tuple[_PinnedHTTPSConnection, http.client.HTTPResponse, str]:
         current_url = url
         current_headers = dict(headers or {})
@@ -407,7 +413,8 @@ class GuardedHTTPTransport:
             except BaseException:
                 connection.close()
                 raise
-            if response.status not in REDIRECT_STATUSES:
+            # Without following, the caller inspects the first response itself, redirect or not.
+            if not follow_redirects or response.status not in REDIRECT_STATUSES:
                 return connection, response, current_url
             location = response.getheader("Location")
             connection.close()

@@ -20,7 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from openmedia.models import FormatOption, MediaMetadata
-from openmedia.sources import DownloadInput, DownloadResult, InspectInput, InspectResult
+from openmedia.sources import (
+    RESOLUTION_FAILURES,
+    DownloadInput,
+    DownloadResult,
+    InspectInput,
+    InspectResult,
+)
 
 
 MAX_RESULT_BYTES = 2 * 1024 * 1024
@@ -51,9 +57,13 @@ class WorkerTimeout(WorkerError):
 
 
 class WorkerRemoteError(WorkerError):
-    def __init__(self, category: str, stage: str | None = None) -> None:
+    def __init__(
+        self, category: str, stage: str | None = None, detail: str | None = None
+    ) -> None:
         self.category = category
         self.stage = stage
+        # An allowlisted resolution outcome, kept out of the message text on purpose.
+        self.detail = detail
         suffix = f" during {stage}" if stage else ""
         super().__init__(f"worker failed: {category}{suffix}")
 
@@ -378,7 +388,12 @@ class WorkerSupervisor:
             if not isinstance(category, str):
                 raise WorkerProtocolError("worker error omitted its category")
             stage = event.get("stage")
-            raise WorkerRemoteError(category, stage if isinstance(stage, str) else None)
+            detail = event.get("detail")
+            raise WorkerRemoteError(
+                category,
+                stage if isinstance(stage, str) else None,
+                detail if isinstance(detail, str) and detail in RESOLUTION_FAILURES else None,
+            )
         if return_code != 0:
             raise WorkerProtocolError(
                 f"worker returned a result but exited with status {return_code}"
@@ -564,7 +579,11 @@ def _child_main() -> int:
         if isinstance(exc, (ConnectionError, TimeoutError)):
             print(json.dumps({"event": "progress", "upstream_status_class": "connection_failure"}), flush=True)
         stage = getattr(exc, "stage", None)
-        print(json.dumps({"event": "error", "category": category, "stage": stage}), flush=True)
+        error_event = {"event": "error", "category": category, "stage": stage}
+        detail = getattr(exc, "detail", None)
+        if isinstance(detail, str) and detail in RESOLUTION_FAILURES:
+            error_event["detail"] = detail
+        print(json.dumps(error_event), flush=True)
         return 1
 
 

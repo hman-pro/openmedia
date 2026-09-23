@@ -171,3 +171,24 @@ async def test_group_messages_get_guidance_only_when_they_contain_a_supported_li
 def test_native_audio_and_no_format_messages_are_explicit() -> None:
     assert "audio-only" in failure_message(ErrorCategory.FORMAT_UNAVAILABLE, stage="audio")
     assert "no downloadable" in failure_message(ErrorCategory.NO_FORMATS, stage="checking")
+
+
+SHORT_LINK_TEXTS = {
+    "SHORT_LINK_UNRESOLVED":
+        "That LinkedIn link could not be opened. Send the post's full linkedin.com address.",
+    "SHORT_LINK_NOT_POST":
+        "That LinkedIn link does not lead to a supported post. Send a public LinkedIn post link.",
+}
+
+
+@pytest.mark.parametrize(("name", "expected"), sorted(SHORT_LINK_TEXTS.items()))
+def test_short_link_failures_have_exact_guidance(name: str, expected: str) -> None:
+    message = failure_message(getattr(ErrorCategory, name), stage="checking")
+    assert message == expected
+    for fragment in ("http", "lnkd.in", "www."):
+        assert fragment not in message
+
+
+def test_sanitized_guidance_parametrization_covers_short_link_categories() -> None:
+    values = {category.value for category in ErrorCategory}
+    assert {"short_link_unresolved", "short_link_not_post"} <= values

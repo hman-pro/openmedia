@@ -227,3 +227,68 @@ def test_ranged_download_enforces_the_limit_across_pieces(tmp_path, monkeypatch)
         transport.download("https://media.example/a?id=1", tmp_path / "component-audio", output_limit=6,
             workspace_limit=200, range_bytes=4)
     assert not list(tmp_path.iterdir())
+
+
+SHARE_POST_LOCATION = "https://www.linkedin.com/posts/x-share-7508424761698410497-2cX9/"
+
+
+def _scripted_connections(monkeypatch, statuses):
+    # Each opened connection answers with the next scripted status; a 301 points at the LinkedIn post.
+    from types import SimpleNamespace
+    opened: list[object] = []
+    remaining = iter(statuses)
+
+    class Connection:
+        def __init__(self, *args, **kwargs):
+            opened.append(self)
+            self.status = next(remaining)
+
+        def request(self, *args, **kwargs):
+            pass
+
+        def getresponse(self):
+            location = SHARE_POST_LOCATION if self.status == 301 else None
+            pairs = [("Location", location)] if location else []
+            return SimpleNamespace(
+                status=self.status,
+                getheaders=lambda: pairs,
+                getheader=lambda name: location if name.lower() == "location" else None,
+            )
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("openmedia.network._PinnedHTTPSConnection", Connection)
+    return opened
+
+
+def test_head_without_following_returns_the_first_redirect(monkeypatch):
+    from unittest.mock import Mock
+    opened = _scripted_connections(monkeypatch, [301, 200])
+    transport = GuardedHTTPTransport(policy=PublicEndpointPolicy(resolver=answer("93.184.216.34")))
+    transport.on_request = Mock()
+    result = transport.head("https://lnkd.in/eAbCdEf", follow_redirects=False)
+    assert result.status == 301
+    assert result.headers["location"] == SHARE_POST_LOCATION
+    assert len(opened) == 1
+    assert transport.on_request.call_count == 1
+
+
+def test_head_follows_redirects_by_default(monkeypatch):
+    opened = _scripted_connections(monkeypatch, [301, 200])
+    transport = GuardedHTTPTransport(policy=PublicEndpointPolicy(resolver=answer("93.184.216.34")))
+    result = transport.head("https://lnkd.in/eAbCdEf")
+    assert result.status == 200
+    assert len(opened) == 2
+
+
+@pytest.mark.parametrize(
+    ("url", "address"),
+    [("http://lnkd.in/eAbCdEf", "93.184.216.34"), ("https://lnkd.in/eAbCdEf", "127.0.0.1")],
+)
+def test_head_without_following_still_enforces_the_endpoint_policy(monkeypatch, url, address):
+    opened = _scripted_connections(monkeypatch, [301])
+    transport = GuardedHTTPTransport(policy=PublicEndpointPolicy(resolver=answer(address)))
+    with pytest.raises(UnsafeDestination):
+        transport.head(url, follow_redirects=False)
+    assert opened == []

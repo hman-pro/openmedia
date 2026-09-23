@@ -198,12 +198,29 @@ class ErrorCategory(StrEnum):
     STORAGE_EXHAUSTED = "storage_exhausted"
     UNSAFE_DESTINATION = "unsafe_destination"
     INVALID_SOURCE_RESPONSE = "invalid_source_response"
+    SHORT_LINK_UNRESOLVED = "short_link_unresolved"
+    SHORT_LINK_NOT_POST = "short_link_not_post"
     INTERNAL = "internal"
 
 
 # Detail marker for a signed media URL the CDN no longer honors (HTTP 403/410). It is the
 # only download failure a metadata refresh can repair, so it is the only one that triggers it.
 EXPIRED_URL = "expired_url"
+
+# The failed outcomes of resolving a LinkedIn short link (specs/004-linkedin-share-links/
+# data-model.md "ResolutionOutcome"). Only these may travel as an error detail between the
+# worker and the supervisor; anything else is dropped so no URL or free text crosses over.
+RESOLUTION_FAILURES = frozenset(
+    {
+        "not_found",
+        "no_redirect",
+        "too_many_redirects",
+        "timed_out",
+        "unreachable",
+        "outside_linkedin",
+        "not_a_post",
+    }
+)
 
 
 class SourceAdapterError(RuntimeError):
@@ -335,6 +352,7 @@ class GuardedTransport(Protocol):
         *,
         headers: Mapping[str, str] | None = None,
         deadline: float | None = None,
+        follow_redirects: bool = True,
     ) -> TransportResponse: ...
 
     def download(
@@ -575,6 +593,7 @@ __all__ = [
     "InspectInput",
     "InspectResult",
     "Operation",
+    "RESOLUTION_FAILURES",
     "RateController",
     "SourceAdapter",
     "SourceAdapterError",
