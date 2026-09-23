@@ -11,7 +11,7 @@ persistent state (constitution, "State lives in memory").
 |---|---|---|
 | `platform` | `linkedin` | `linkedin` |
 | `media_id` | the short code, `[A-Za-z0-9_-]{1,32}` | numeric post ID, 8–32 digits |
-| `canonical_url` | `https://lnkd.in/p/<code>` (query and fragment dropped) | `https://www.linkedin.com/posts/<slug as given>` (query dropped, trailing code kept, research R5) |
+| `canonical_url` | `https://lnkd.in/p/<code>` (query dropped; a fragment is rejected as for every route) | `https://www.linkedin.com/posts/<slug as given>` (query dropped, trailing code kept, research R5) |
 | `route_kind` | **`short_link`** (new) | `post` (unchanged) |
 | `urn_kind` | `None` | `activity`, `ugcPost`, or `share` |
 

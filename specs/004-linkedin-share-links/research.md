@@ -133,8 +133,8 @@ and the pinned yt-dlp 2026.8.19; no cookies were sent.
 
 - **Decision**: Register a subclass of yt-dlp's own `LinkedInIE` with a wider URL pattern
   (`OpenMediaLinkedInPostIE`, in `sources/ytdlp.py`) on each `YoutubeDL` instance with
-  `add_info_extractor`. Its `_VALID_URL` is built from the same pattern as R6, so the
-  recognizer and the extractor cannot drift apart. Extraction is inherited unchanged. Add
+  `add_info_extractor`. Its `suitable` and `_match_id` delegate to `recognize_source_url`
+  (R6), so the recognizer and the extractor cannot drift apart. Extraction is inherited unchanged. Add
   `"openmedialinkedinpost": "linkedin"` to `_EXTRACTOR_PLATFORM`.
 - **Evidence**: The stock pattern `posts/[^/?#]+-(?P<id>\d+)-\w{4}/?(?:[?#]|$)` rejects
   `…-lwx-/`. With the subclass registered under `allowed_extractors`, the live `-lwx-`

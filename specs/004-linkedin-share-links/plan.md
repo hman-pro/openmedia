@@ -141,9 +141,9 @@ that decides adapter order.
 - **Group chats**: a group message holding only an `lnkd.in` link now gets the private-chat
   pointer. Before, it was ignored as a link to another site. This follows from FR-001 and is
   intended.
-- **Fake transports**: every test double implementing `head` (`test_adapter_transports.py`,
-  `test_instagram.py`, `test_metadata_clients.py`, `test_linkedin.py`) must accept the new
-  keyword, even where it is unused.
+- **Fake transports**: every existing test double implementing `head` already takes
+  `**kwargs`, so the new keyword breaks none of them. New doubles must record it, so tests
+  can assert that resolution never follows a redirect.
 - **Rate budget**: a short link spends one extra LinkedIn `metadata` token. Under heavy
   LinkedIn use, short links hit the parent's cooldown slightly sooner than full addresses.
 - **Canonical URLs are not normalized**: two shares of one post keep different

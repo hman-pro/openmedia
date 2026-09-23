@@ -9,7 +9,7 @@ result. Field details are in [data-model.md](../data-model.md), and reasons in
 
 | Input | Route | Notes |
 |---|---|---|
-| `https://lnkd.in/p/<code>` | `short_link` | Also `http://` and bare `lnkd.in/p/…`, upgraded to HTTPS like other hosts. Query and fragment dropped |
+| `https://lnkd.in/p/<code>` | `short_link` | Also `http://` and bare `lnkd.in/p/…`, upgraded to HTTPS like other hosts. Query dropped; a fragment is rejected as for every route |
 | `https://lnkd.in/<anything else>` | none, `unsupported_url` | Out of scope |
 | `https://www.linkedin.com/posts/<slug>` | `post` | Slug rule of research R6. Trailing code may contain hyphens. Raw non-Latin text allowed |
 | `https://www.linkedin.com/feed/update/urn:li:<type>:<id>` | `post` (activity) / `embed` (ugcPost, share) | Unchanged |
@@ -57,7 +57,7 @@ All existing callers keep the default.
 
 - Subclass of yt-dlp `LinkedInIE`, registered with `add_info_extractor` on every
   `YoutubeDL` the adapter creates. `allowed_extractors` is unchanged.
-- `_VALID_URL` is built from the recognizer's slug pattern (one source of truth).
+- `suitable` and `_match_id` delegate to `recognize_source_url` (one source of truth); `_VALID_URL` is only a coarse `linkedin.com/posts/` match.
 - `extractor_key` `OpenMediaLinkedInPost` maps to platform `linkedin`.
 - The identity check still applies: yt-dlp's `id` must equal the route's `media_id`.
 
