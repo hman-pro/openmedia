@@ -87,16 +87,16 @@ nothing is written.
    of them.
 2. **Given** the diagnostic log is off, **When** a link is refused, **Then** nothing about it
    is written anywhere.
-3. **Given** a short link that fails to resolve, **When** it is refused, **Then** the entry
-   also records why resolution failed (for example not found, a destination outside LinkedIn,
-   too many redirects, or timed out).
+3. **Given** a short link that fails to resolve, **When** the bot explains the failure,
+   **Then** that request's diagnostic trace records why resolution failed (for example not
+   found, a destination outside LinkedIn, too many redirects, or timed out).
 
 ---
 
 ### Edge Cases
 
-- A short link redirects more than once: refuse it with the "could not be opened" explanation;
-  never follow a second hop.
+- A short link redirects to another short link: refuse it with the "could not be opened"
+  explanation; never follow a second hop.
 - A short link redirects to a non-LinkedIn site, to `http://`, or to a LinkedIn host other than
   `linkedin.com` or `www.linkedin.com`: refuse it as not leading to a supported post; the
   destination is never contacted.
@@ -124,8 +124,9 @@ nothing is written.
   LinkedIn link, counted like any other supported link for the "exactly one link" rule of
   feature 001 FR-001.
 - **FR-002**: The bot MUST resolve such a link by making one anonymous request to it and
-  reading its redirect destination. It MUST follow at most one redirect, MUST NOT send or keep
-  cookies, and MUST NOT download the destination page as part of resolving.
+  reading its redirect destination. Resolving MUST read at most one redirect and follow none
+  (the post itself is then fetched under the same rules as a pasted address), MUST NOT send or
+  keep cookies, and MUST NOT download the destination page as part of resolving.
 - **FR-003**: Resolution MUST accept a destination only if it is `https://` on `linkedin.com`
   or `www.linkedin.com`; any other destination MUST be refused without being contacted.
 - **FR-004**: A resolved destination MUST then be recognized exactly as if the user had pasted
@@ -142,26 +143,29 @@ nothing is written.
   video downloader does not accept MUST still be offered through an address form it does
   accept for that post type.
 - **FR-008**: Each refusal of a short link MUST give the user one of two plain explanations:
-  the link could not be opened (not found, no redirect, too many redirects, timed out), or the
-  link does not lead to a supported post (destination outside LinkedIn or not a post). Neither
-  explanation may reveal the destination address.
+  the link could not be opened (not found, no redirect, too many redirects, the short-link
+  service unreachable or not answering in time), or the link does not lead to a supported post
+  (destination outside LinkedIn or not a post). Neither explanation may reveal the destination
+  address. Two existing meanings still take precedence: a rate-limited short-link service
+  gives the usual rate-limited message, and running out of the 60-second inspection deadline
+  gives the usual timeout message.
 - **FR-009**: When the diagnostic log is on, every message refused before a request starts
   MUST produce one diagnostic entry with the refused link or links, the refusal reason, and
-  the chat and user identifiers; for a short link it MUST also record the resolution outcome.
-  The message's other text MUST NOT be recorded.
+  the chat and user identifiers. The message's other text MUST NOT be recorded. A short link
+  that was accepted but fails to resolve is not a refusal: its request's diagnostic trace MUST
+  record the resolution outcome instead.
 - **FR-010**: Refusal entries MUST be written only to the diagnostic log, never to the
   console, and nothing MUST be written when the diagnostic log is off.
 
 ### Key Entities
 
 - **Short link**: A LinkedIn share link on `lnkd.in/p/…`. Has one resolution outcome: resolved
-  (to a LinkedIn post address), not found, no redirect, too many redirects, outside LinkedIn,
-  or timed out.
+  (to a LinkedIn post address), not found, no redirect, too many redirects, timed out,
+  unreachable, outside LinkedIn, or not a post.
 - **LinkedIn post reference**: What the bot extracts from a post address: the post type and
   numeric identifier. Two addresses with the same reference are the same post.
 - **Refusal record**: A diagnostic entry for a message refused before a request starts: the
-  refused link or links, the reason, the chat and user identifiers, and, for a short link,
-  the resolution outcome.
+  refused link or links, the reason, and the chat and user identifiers.
 
 ## Success Criteria *(mandatory)*
 
@@ -191,9 +195,10 @@ nothing is written.
   access model.
 - Posts behind a login stay out of scope, as in feature 001; a short link does not change what
   content is reachable.
-- Other LinkedIn short-link paths (anything on `lnkd.in` not under `/p/`) and other URL
-  shorteners stay unsupported and keep today's "Send one supported public media link."
-  guidance.
+- Other LinkedIn short-link paths (anything on `lnkd.in` not under `/p/`) stay unsupported
+  and get "Send one supported public media link."; other URL shorteners are not recognized
+  as links at all and keep today's "Send exactly one supported public YouTube, LinkedIn, or
+  Instagram link." guidance.
 - The diagnostic log's existing rules (feature 002) apply unchanged: it is off by default,
   and it is the only place links and Telegram identifiers may be written.
 - Whether hyphenated trailing codes (Story 2) occur only on `ugcPost` addresses is not known;

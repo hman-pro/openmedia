@@ -43,6 +43,7 @@ diagnostics as `resolution`.
 | `no_redirect` | not a redirect status, or no `Location` | `short_link_unresolved` | could not be opened |
 | `too_many_redirects` | `Location` is on `lnkd.in` again | `short_link_unresolved` | could not be opened |
 | `timed_out` | the `HEAD` connection or read timed out | `short_link_unresolved` | could not be opened |
+| `unreachable` | the `HEAD` connection was refused or reset | `short_link_unresolved` | could not be opened |
 | `outside_linkedin` | not `https`, not `linkedin.com`/`www.linkedin.com`, userinfo, or non-443 port | `short_link_not_post` | not a supported post |
 | `not_a_post` | LinkedIn host, but not a recognizable post or feed update | `short_link_not_post` | not a supported post |
 
@@ -58,7 +59,7 @@ existing `timeout`. None of these three carries an outcome.
 ## WorkerRemoteError (changed)
 
 `src/openmedia/workers.py`. Gains `detail: str | None`. It is set only when the worker's
-`error` event carries a `detail` that is one of the six failure outcome names above.
+`error` event carries a `detail` that is one of the seven failure outcome names above.
 Otherwise it is `None`.
 
 ## DownloadRequest (behavior change, no new field)

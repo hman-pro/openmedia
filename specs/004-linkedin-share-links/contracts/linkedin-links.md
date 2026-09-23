@@ -64,7 +64,7 @@ All existing callers keep the default.
 ## Worker protocol change
 
 The terminal `error` event may carry `"detail": "<outcome>"`. The parent accepts only
-`not_found`, `no_redirect`, `too_many_redirects`, `timed_out`, `outside_linkedin`, and
+`not_found`, `no_redirect`, `too_many_redirects`, `timed_out`, `unreachable`, `outside_linkedin`, and
 `not_a_post`. Any other value is ignored. No other field is added.
 
 ## Identity handoff to the parent

@@ -72,16 +72,17 @@ and the pinned yt-dlp 2026.8.19; no cookies were sent.
      LinkedIn post or feed update → `not_a_post`.
   7. Otherwise `resolved`, with the query-free address.
 
-  A connection or read timeout on the `HEAD` itself → `timed_out`. The overall 60 s
+  A connection or read timeout on the `HEAD` itself → `timed_out`. A refused or reset
+  connection (`ConnectionError`) → `unreachable`. The overall 60 s
   deadline expiring is handled by the parent as any other inspection timeout (spec edge
   case) and does not carry an outcome.
-- **User meaning** (FR-008): `not_found`, `no_redirect`, `too_many_redirects`, `timed_out`
-  → new category `short_link_unresolved`. `outside_linkedin`, `not_a_post` → new category
+- **User meaning** (FR-008): `not_found`, `no_redirect`, `too_many_redirects`, `timed_out`,
+  `unreachable` → new category `short_link_unresolved`. `outside_linkedin`, `not_a_post` → new category
   `short_link_not_post`. Two categories keep the texts distinct from 001's generic
   `unavailable` and `unsupported_url`, which suggest other actions.
 - **Carrying the outcome to the parent**: `SourceAdapterError(category, stage="inspection",
   detail=<outcome>)`. The worker's `error` event gains an optional `detail`, forwarded only
-  if it is one of the six failure outcome names. `WorkerRemoteError` gains `detail`. Any
+  if it is one of the seven failure outcome names. `WorkerRemoteError` gains `detail`. Any
   other value is dropped, so no free text crosses the protocol.
 
 ## R5. Request identity before and after resolution

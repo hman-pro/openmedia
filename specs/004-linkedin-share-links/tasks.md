@@ -62,7 +62,7 @@ these.
   - The existing `test_every_adapter_error_has_sanitized_guidance` parametrization over `list(ErrorCategory)` covers both new values.
 - [ ] T005 In `src/openmedia/sources/__init__.py`:
   - Add `ErrorCategory.SHORT_LINK_UNRESOLVED = "short_link_unresolved"` and `SHORT_LINK_NOT_POST = "short_link_not_post"`.
-  - Add `RESOLUTION_FAILURES = frozenset({"not_found", "no_redirect", "too_many_redirects", "timed_out", "outside_linkedin", "not_a_post"})`, export it in `__all__`, and add a comment pointing to data-model "ResolutionOutcome".
+  - Add `RESOLUTION_FAILURES = frozenset({"not_found", "no_redirect", "too_many_redirects", "timed_out", "unreachable", "outside_linkedin", "not_a_post"})`, export it in `__all__`, and add a comment pointing to data-model "ResolutionOutcome".
 
   In `src/openmedia/bot.py` `failure_message`, return the two texts from T004. Pass T004.
 - [ ] T006 [P] Add failing tests to `tests/integration/test_workers.py`, adding modes to `tests/fixtures/worker_stub.py`:
@@ -108,6 +108,7 @@ outside `lnkd.in`/`linkedin.com`/`www.linkedin.com`/`media.example.invalid` is r
   - Location `https://example.com/`, `http://www.linkedin.com/posts/…`, `https://de.linkedin.com/posts/…`, `https://user@www.linkedin.com/posts/…`, or `https://www.linkedin.com:8443/posts/…` → `SHORT_LINK_NOT_POST`, `"outside_linkedin"`.
   - Location `https://www.linkedin.com/in/someone/` or `https://www.linkedin.com/jobs/view/123/` → `SHORT_LINK_NOT_POST`, `"not_a_post"`.
   - `head` raising `TimeoutError` while `deadline` is still in the future → `SHORT_LINK_UNRESOLVED`, `"timed_out"`. When `deadline` has already passed, the `TimeoutError` propagates unchanged.
+  - `head` raising `ConnectionResetError` or `ConnectionRefusedError` → `SHORT_LINK_UNRESOLVED`, `"unreachable"`.
   - Every case makes exactly one transport call: a `head` to the short URL with `follow_redirects=False`, no `headers` containing `Cookie`, and no `fetch` or `download`.
   - `rate_control.acquire("linkedin", "metadata", deadline=deadline)` is called once before the `head`.
   - Every raised error has `stage == "inspection"`.
@@ -141,8 +142,9 @@ outside `lnkd.in`/`linkedin.com`/`www.linkedin.com`/`media.example.invalid` is r
   7. Return the rebuilt URL.
 
   Error handling:
-  - Wrap only the `head` call: `except TimeoutError`. If `time.monotonic() < deadline`, raise `timed_out`. Otherwise re-raise, so the parent reports the ordinary inspection timeout (spec edge case).
-  - Every failure is `SourceAdapterError(<SHORT_LINK_UNRESOLVED for not_found/no_redirect/too_many_redirects/timed_out, SHORT_LINK_NOT_POST for outside_linkedin/not_a_post>, stage="inspection", detail=<outcome>)`.
+  - Wrap only the `head` call. First `except TimeoutError`: If `time.monotonic() < deadline`, raise `timed_out`. Otherwise re-raise, so the parent reports the ordinary inspection timeout (spec edge case).
+  - Then `except ConnectionError`: raise `unreachable`. Keep the `TimeoutError` handler first so the deadline rule reads first.
+  - Every failure is `SourceAdapterError(<SHORT_LINK_UNRESOLVED for not_found/no_redirect/too_many_redirects/timed_out/unreachable, SHORT_LINK_NOT_POST for outside_linkedin/not_a_post>, stage="inspection", detail=<outcome>)`.
   - Never read `set_cookies` and never log the destination.
 
   Pass T009.

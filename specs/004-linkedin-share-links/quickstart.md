@@ -30,6 +30,7 @@ outside `lnkd.in`, `linkedin.com`, `www.linkedin.com`, and the fixture's media h
 | 301 to `lnkd.in/p/other` | short link | `short_link_unresolved`, `too_many_redirects`. The second URL is never requested |
 | 301 to `https://example.com/`, `http://www.linkedin.com/…`, `https://de.linkedin.com/…` | short link | `short_link_not_post`, `outside_linkedin`. Destination never requested |
 | 301 to `https://www.linkedin.com/in/someone/` | short link | `short_link_not_post`, `not_a_post` |
+| Connection reset on the `HEAD` | short link | `short_link_unresolved`, `unreachable` |
 | `429` | short link | Existing rate-limited text |
 | Short link + YouTube link | one message | `Send exactly one supported …` and a `refused` entry, `too_many_links`, both links |
 | `lnkd.in/abc` (no `/p/`) | one message | `Send one supported public media link.` and a `refused` entry, `unsupported_url` |
