@@ -170,6 +170,13 @@ also excludes the combined choice, as required by the specification. A sum withi
 is labeled estimated because muxing changes container overhead. Label
 merged choices as combined, since the container was produced by the service.
 
+(amended by 003) When yt-dlp ranks audio-only streams by `language_preference`, as it does for
+auto-dubbed YouTube videos that repeat every audio stream once per language, only the
+highest-ranked (original) track is kept, both as an audio-only option and as a merge component.
+Dubbed tracks are dropped before pairing. This keeps the original language and bounds the
+pair count: a live video with 100 dubbed audio streams produced 840 pairs and a 3 MB worker
+result, over the 2 MiB protocol line limit. Streams without `language_preference` are unaffected.
+
 Why merge rather than rely on source-muxed files: on current YouTube the only source-muxed
 rendition is format `18`, at most 360p. Without merging, every higher quality is silent. In
 the spike, merging raised the best deliverable-with-sound quality for a 213-second video

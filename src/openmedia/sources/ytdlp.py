@@ -169,6 +169,23 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
         and _text(item.get("format_id"))
         and _text(item.get("url"))
     ]
+    # Auto-dubbed videos repeat every audio stream per language; yt-dlp ranks the original track
+    # highest by language_preference. Keeping only that track picks the original language and
+    # stops video x audio pairing from multiplying past the worker protocol's result limit.
+    preferences = [
+        item["language_preference"]
+        for item in candidates
+        if item.get("vcodec") == "none" and isinstance(item.get("language_preference"), (int, float))
+    ]
+    if preferences:
+        original = max(preferences)
+        candidates = [
+            item
+            for item in candidates
+            if item.get("vcodec") != "none"
+            or not isinstance(item.get("language_preference"), (int, float))
+            or item["language_preference"] == original
+        ]
     options: list[FormatOption] = []
     video_only: list[Mapping[str, Any]] = []
     audio_only: list[Mapping[str, Any]] = []

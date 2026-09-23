@@ -52,6 +52,9 @@ to the tree at `cb50757`.
 - **Rationale**: Clarification Q "Audio only" → B (highest quality, any format). On YouTube
   this is usually Opus 251 (`.webm`); iOS users may need another app to play it. Accepted in
   the spec edge cases.
+- **Language**: Candidates are already limited to the original-language track by the adapter
+  (001 research, merge pairs, "amended by 003"), so the highest bitrate is never a dub. Found
+  in T038 on an auto-dubbed video with 100 audio streams.
 
 ## R4. Where the three-choice policy runs
 

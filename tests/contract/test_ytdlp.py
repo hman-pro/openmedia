@@ -110,3 +110,40 @@ def test_unknown_codecs_never_pair_for_merging() -> None:
                     {"format_id": "a", "protocol": "https", "url": "https://cdn.invalid/a", "ext": "m4a", "vcodec": "none", "acodec": None, "filesize": 1_000}]}
     result = normalize_info(info, max_file_bytes=50_000_000)
     assert {option.source_format_id for option in result.options} == {"v", "a"}
+
+
+def _dubbed_info(languages: int) -> dict[str, object]:
+    # Mirrors a live auto-dubbed YouTube response: every audio stream exists once per language,
+    # and yt-dlp marks the original track with the highest language_preference (10 vs -1).
+    videos = [{"format_id": f"v{i}", "protocol": "https", "url": f"https://cdn.invalid/v{i}", "ext": "mp4",
+               "vcodec": "avc1.4d401f", "acodec": "none", "width": 640, "height": 360, "tbr": 500 + i, "filesize": 1_000}
+              for i in range(3)]
+    audios = [{"format_id": f"140-{n}", "protocol": "https", "url": f"https://cdn.invalid/a{n}", "ext": "m4a",
+               "vcodec": "none", "acodec": "mp4a.40.2", "abr": 129 + n, "filesize": 1_000,
+               "language": "en-US" if n == 0 else f"x{n}", "language_preference": 10 if n == 0 else -1}
+              for n in range(languages)]
+    return {"extractor_key": "Youtube", "id": "abcDEF12345", "webpage_url": "https://youtu.be/abcDEF12345",
+            "formats": videos + audios}
+
+
+def test_dubbed_audio_tracks_are_dropped_in_favor_of_the_original() -> None:
+    result = normalize_info(_dubbed_info(languages=40), max_file_bytes=50_000_000)
+    ids = {option.source_format_id for option in result.options}
+    # The dubs carry a higher bitrate here, so a bitrate-only pick would choose one of them.
+    assert {i for i in ids if "140-" in i} == {"140-0", "v0+140-0", "v1+140-0", "v2+140-0"}
+
+
+def test_many_audio_languages_do_not_multiply_merge_pairs() -> None:
+    # A live response with 100 dubbed audio streams produced 840 pairs, a 3 MB worker result
+    # that overran the 2 MiB protocol line limit and failed inspection.
+    few = normalize_info(_dubbed_info(languages=2), max_file_bytes=50_000_000)
+    many = normalize_info(_dubbed_info(languages=100), max_file_bytes=50_000_000)
+    assert len(many.options) == len(few.options)
+
+
+def test_audio_without_language_preference_is_kept_unfiltered() -> None:
+    info = _dubbed_info(languages=3)
+    for item in info["formats"]:
+        item.pop("language_preference", None)
+    result = normalize_info(info, max_file_bytes=50_000_000)
+    assert sum(1 for option in result.options if option.media_type is MediaType.AUDIO) == 3
