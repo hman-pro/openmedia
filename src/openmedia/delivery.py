@@ -52,6 +52,7 @@ async def _send(
         if duration_seconds is not None and duration_seconds >= 0:
             hints["duration"] = int(round(duration_seconds))
         return await bot.send_video(video=file, supports_streaming=True, **hints, **common)
+    # Pictures too: never `sendPhoto`, that recompresses (contracts/telegram-bot.md).
     return await bot.send_document(document=file, **common)
 
 

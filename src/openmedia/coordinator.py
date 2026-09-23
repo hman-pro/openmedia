@@ -19,6 +19,7 @@ from openmedia.models import (
     DeliveryResult,
     DownloadRequest,
     FormatOption,
+    MediaKind,
     MediaMetadata,
     RequestState,
 )
@@ -651,14 +652,22 @@ class MediaWorkflow:
                     category = (
                         ErrorCategory.TOO_LARGE
                         if "too_large" in choice_set.missing.values()
+                        or _image_too_large(result, self.max_file_bytes)
                         else ErrorCategory.NO_FORMATS
                     )
                     raise SourceAdapterError(category, stage="checking")
                 event("inspection_finished", request=request, outcome="ok",
                     options=len(result.options),
                     choices=_kinds(choice_set))
-                preview_message_id = await self._publish_preview(request, result, choice_set)
                 claimed: FormatOption | None = None
+                if result.metadata.media_kind == MediaKind.IMAGE:
+                    # A picture has no card: the `Checking link…` message carries the status
+                    # (contracts/telegram-bot.md "Automatic delivery", FR-008).
+                    if request.status_message_id is None:
+                        raise WorkflowError("picture request has no status message to claim on")
+                    preview_message_id = request.status_message_id
+                else:
+                    preview_message_id = await self._publish_preview(request, result, choice_set)
                 if choice_set.automatic:
                     # One possible choice: publish and claim atomically, no tap (research R8).
                     selection = await self.registry.publish_and_claim(
@@ -839,6 +848,23 @@ class MediaWorkflow:
             raise WorkflowError("downloaded output is unavailable") from exc
         if actual != result.actual_bytes:
             raise WorkflowError("downloaded output byte count changed")
+
+
+def _image_too_large(result: InspectResult, max_file_bytes: int) -> bool:
+    """A picture post whose only reason for an empty ChoiceSet is the delivery limit.
+
+    ``ChoiceSet.missing`` never names ``image`` (data-model.md), so the 001 ``too_large``
+    meaning for pictures is read from the inspected options themselves.
+    """
+    if result.metadata.media_kind != MediaKind.IMAGE:
+        return False
+    return any(
+        option.media_type == "image"
+        and option.availability == "selectable"
+        and option.size_bytes is not None
+        and option.size_bytes > max_file_bytes
+        for option in result.options
+    )
 
 
 def _kinds(choice_set: ChoiceSet) -> list[str]:

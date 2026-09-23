@@ -33,3 +33,14 @@
 | LinkedIn muxed video | `test_download_flow.py::test_linkedin_progressive_single_video_is_claimed_and_sent_without_a_tap`, `test_bot_preview.py::test_automatic_choice_set_renders_card_without_keyboard` | Pass for US1 scope: card without keyboard, `publish_and_claim`, download starts without a callback, delivered on the `video` path (`sendVideo`). The kept rendition is yt-dlp format `1` (higher bitrate of two unknown-codec MP4s, R2 tie-break), not `0` as the T018 task line says; the test pins `1`. The `Video — only version available, downloading…` line on the card belongs to US3 (T032); until then progress is still sent as separate messages |
 | Every video choice too large | `test_download_flow.py::test_every_video_candidate_over_the_limit_fails_as_too_large`, `test_bot_errors.py::test_all_excluded_preview_sends_exactly_one_notice_saying_nothing_fits` | Pass: no card, no keyboard, one failure notice with the 001 `too_large` meaning at stage `checking` |
 | Old `p:` callback | `test_bot_callbacks.py::test_page_callback_gets_the_invalid_choice_alert_without_touching_the_registry`, `test_malformed_callbacks_are_rejected` | Pass: answered with the invalid-choice alert; registry untouched; no edit |
+
+## US2
+
+- Date: 2026-09-23
+- Branch: `003-streamlined-bot-ux` on top of `12791dc` (phase 3), phase 4 uncommitted
+- Command: `uv run pytest` — green, 494 passed, 3 deselected (`live`), 0 failed
+- Row walked with the fake transport and controlled fixtures (quickstart §2):
+
+| Scenario | Evidence (test) | Result |
+|---|---|---|
+| Instagram picture | `test_download_flow.py::test_single_picture_is_claimed_on_the_checking_message_and_sent_as_a_document[instagram]` (and `[linkedin]`), `test_picture_over_the_delivery_limit_fails_as_too_large` | Pass for US2 scope: preview callable never called (no card, no buttons, no `sendPhoto`); `publish_and_claim` on the `Checking link…` message ID; download starts without a callback; one `sendDocument` with `filename` `media.jpg` whose uploaded bytes equal the downloaded bytes. An image over the limit fails at `checking` with the 001 `too_large` meaning. The `Picture — downloading…` → `sent.` edits on the same message belong to US3 (T032); until then progress is still sent as separate messages |

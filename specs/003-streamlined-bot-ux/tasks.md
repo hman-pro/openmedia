@@ -102,12 +102,12 @@ Commit `feat(003): phase 3 US1 three-choice card`.
 
 ### Tests for User Story 2
 
-- [ ] T026 [P] [US2] Add failing tests to `tests/integration/test_download_flow.py`: an Instagram single-image inspection (from `tests/fixtures/instagram/instagram-image-single-post.json` via the adapter's normalization) and a LinkedIn single image (`tests/fixtures/linkedin/linkedin-image-single.html`) each go through `publish_and_claim` with `preview_message_id == request.status_message_id`, never call the preview callable, deliver via `sendDocument` with `filename` ending in the native extension, and the uploaded bytes equal the downloaded bytes; an image over the delivery limit fails with the 001 `too_large` meaning.
+- [X] T026 [P] [US2] Add failing tests to `tests/integration/test_download_flow.py`: an Instagram single-image inspection (from `tests/fixtures/instagram/instagram-image-single-post.json` via the adapter's normalization) and a LinkedIn single image (`tests/fixtures/linkedin/linkedin-image-single.html`) each go through `publish_and_claim` with `preview_message_id == request.status_message_id`, never call the preview callable, deliver via `sendDocument` with `filename` ending in the native extension, and the uploaded bytes equal the downloaded bytes; an image over the delivery limit fails with the 001 `too_large` meaning.
 
 ### Implementation for User Story 2
 
-- [ ] T027 [US2] In `src/openmedia/coordinator.py` `MediaWorkflow.submit`, when `result.metadata.media_kind == MediaKind.IMAGE`, skip the preview callable and call `registry.publish_and_claim(..., preview_message_id=request.status_message_id)`, then continue as the automatic path of T022. Raise `WorkflowError` if `status_message_id` is missing. Pass T026.
-- [ ] T028 [US2] Confirm in `src/openmedia/delivery.py` that the `image` kind always uses `send_document` (never `send_photo`) and add a one-line comment citing "`sendPhoto` recompresses" from `contracts/telegram-bot.md`. Run `uv run pytest`; record the "Instagram picture" quickstart row in `validation.md` under "US2".
+- [X] T027 [US2] In `src/openmedia/coordinator.py` `MediaWorkflow.submit`, when `result.metadata.media_kind == MediaKind.IMAGE`, skip the preview callable and call `registry.publish_and_claim(..., preview_message_id=request.status_message_id)`, then continue as the automatic path of T022. Raise `WorkflowError` if `status_message_id` is missing. Pass T026.
+- [X] T028 [US2] Confirm in `src/openmedia/delivery.py` that the `image` kind always uses `send_document` (never `send_photo`) and add a one-line comment citing "`sendPhoto` recompresses" from `contracts/telegram-bot.md`. Run `uv run pytest`; record the "Instagram picture" quickstart row in `validation.md` under "US2".
 
 **Checkpoint**: US1 and US2 both pass. Commit `feat(003): phase 4 US2 automatic pictures`.
 

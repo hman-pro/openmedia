@@ -4,6 +4,10 @@ Each test drives ``MediaWorkflow`` end to end with injected callables: real yt-d
 normalization and the real choice policy, fake inspect/download/deliver around them. They
 pin the coordinator contract from ``specs/003-streamlined-bot-ux`` (research R2, R8; data
 model "State transitions"; contracts/telegram-bot.md "Automatic delivery").
+
+The picture flows (003 T026) run the real Instagram and LinkedIn normalization and the real
+``deliver_media`` against a recording bot, so the Telegram method, file name, and uploaded
+bytes are what the runtime would send.
 """
 
 from __future__ import annotations
@@ -17,8 +21,11 @@ import pytest
 from openmedia.bot import failure_message
 from openmedia.choices import ChoiceKind, kind_of
 from openmedia.coordinator import MediaWorkflow, RequestRegistry, WorkflowError
+from openmedia.delivery import deliver_media
 from openmedia.models import DeliveryResult, FormatOption, MediaMetadata, MediaType, RequestState
 from openmedia.sources import DownloadResult, ErrorCategory, InspectResult, SourceAdapterError
+from openmedia.sources.instagram import normalize_post
+from openmedia.sources.linkedin import parse_embed
 from openmedia.sources.ytdlp import normalize_info
 
 
@@ -45,6 +52,7 @@ class Harness:
         self.delivered: list[tuple[FormatOption, DownloadResult]] = []
         self.failures: list[DeliveryResult] = []
         self.registry_calls: list[str] = []
+        self.registry_kwargs: list[tuple[str, dict[str, Any]]] = []
         self.on_card = None
         self._spy_registry()
 
@@ -55,6 +63,7 @@ class Harness:
 
             def spy(*args: Any, _name: str = name, _original: Any = original, **kwargs: Any) -> Any:
                 self.registry_calls.append(_name)
+                self.registry_kwargs.append((_name, dict(kwargs)))
                 return _original(*args, **kwargs)
 
             setattr(registry, name, spy)
@@ -284,3 +293,160 @@ async def test_automatic_claim_on_a_replaced_request_fails_at_checking(tmp_path:
     assert "downloading" not in harness.statuses
     assert len(harness.failures) == 1
     assert harness.failures[0].failed_stage == "checking"
+
+
+# --- User Story 2: pictures are sent without a card or a tap (003 T026) -----------------
+
+CHECKING_MESSAGE_ID = 41
+IMAGE_BYTES = b"\xff\xd8\xff\xe0" + b"exact-native-picture-bytes" + b"\xff\xd9"
+INSTAGRAM_FIXTURES = Path(__file__).parents[1] / "fixtures" / "instagram"
+LINKEDIN_FIXTURES = Path(__file__).parents[1] / "fixtures" / "linkedin"
+LINKEDIN_ACTIVITY = "7505650038253965312"
+
+
+def instagram_image_result(*, content_length: int | None = len(IMAGE_BYTES)) -> InspectResult:
+    post = json.loads((INSTAGRAM_FIXTURES / "instagram-image-single-post.json").read_text())
+    return normalize_post(post, content_type="image/jpeg", content_length=content_length)
+
+
+def linkedin_image_result() -> InspectResult:
+    return parse_embed(
+        (LINKEDIN_FIXTURES / "linkedin-image-single.html").read_text(),
+        requested_activity_id=LINKEDIN_ACTIVITY,
+        fetched_url=f"https://www.linkedin.com/embed/feed/update/urn:li:share:{LINKEDIN_ACTIVITY}",
+    )
+
+
+class RecordingBot:
+    """Stands in for ``telegram.Bot`` behind ``deliver_media``: records method, name, bytes."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.uploaded: list[bytes] = []
+
+    async def _send(self, method: str, file_arg: str, kwargs: dict[str, Any]):
+        recorded = dict(kwargs)
+        self.uploaded.append(recorded.pop(file_arg).read())
+        self.calls.append((method, recorded))
+        return type("Message", (), {"message_id": 99, "document": object(), "video": None, "animation": None})()
+
+    async def send_document(self, **kwargs: Any):
+        return await self._send("send_document", "document", kwargs)
+
+    async def send_video(self, **kwargs: Any):
+        return await self._send("send_video", "video", kwargs)
+
+    async def send_photo(self, **kwargs: Any):
+        return await self._send("send_photo", "photo", kwargs)
+
+
+class PictureHarness(Harness):
+    """The runtime's `Checking link…` message ID and real delivery for picture flows."""
+
+    def __init__(self, tmp_path: Path, result: InspectResult) -> None:
+        super().__init__(tmp_path, result)
+        self.bot = RecordingBot()
+        self.downloaded_bytes: list[bytes] = []
+
+    async def status(self, request, stage):
+        await super().status(request, stage)
+        if stage == "checking":
+            # __main__ stores the `Checking link…` message ID here (T023).
+            request.status_message_id = CHECKING_MESSAGE_ID
+
+    async def download(self, request, option):
+        self.calls.append(("download", option.source_format_id))
+        self.downloads.append(option)
+        path = self.tmp_path / f"picture.{option.extension}"
+        path.write_bytes(IMAGE_BYTES)
+        self.downloaded_bytes.append(path.read_bytes())
+        return DownloadResult(
+            path=path,
+            actual_bytes=path.stat().st_size,
+            media_id=request.media_id,
+            source_format_id=option.source_format_id,
+            media_type=option.media_type,
+            extension=option.extension,
+            mime_type=option.mime_type,
+        )
+
+    async def deliver(self, request, downloaded):
+        assert request.state is RequestState.SENDING
+        selected = request.options[request.selected_option_id]
+        self.calls.append(("deliver", downloaded.source_format_id))
+        self.delivered.append((selected, downloaded))
+        return await deliver_media(
+            self.bot,
+            request=request,
+            downloaded=downloaded,
+            owned_directory=self.tmp_path,
+            max_file_bytes=LIMIT,
+            deadline=100,
+            monotonic=lambda: 0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("result_factory", "extension"),
+    [(instagram_image_result, "jpg"), (linkedin_image_result, "jpg")],
+    ids=["instagram", "linkedin"],
+)
+async def test_single_picture_is_claimed_on_the_checking_message_and_sent_as_a_document(
+    tmp_path: Path, result_factory, extension: str
+) -> None:
+    result = result_factory()
+    assert result.metadata.media_kind == "image"
+    harness = PictureHarness(tmp_path, result)
+    workflow = harness.workflow()
+
+    request = await workflow.submit(
+        user_id=11, chat_id=111, text=result.metadata.canonical_url, chat_type="private"
+    )
+
+    # No card: the preview callable is never called for a picture (FR-008, contract
+    # "Automatic delivery": the `Checking link…` message carries the status).
+    assert harness.cards == []
+    assert "card" not in harness.calls
+    assert harness.registry_calls == ["publish_and_claim"]
+    _, claim_kwargs = harness.registry_kwargs[0]
+    assert request.status_message_id == CHECKING_MESSAGE_ID
+    assert claim_kwargs["preview_message_id"] == request.status_message_id
+    assert [option.media_type for option in claim_kwargs["options"]] == ["image"]
+
+    # Downloaded without a tap and delivered as a document with the native extension.
+    assert len(harness.downloads) == 1
+    assert kind_of(harness.downloads[0]) is ChoiceKind.IMAGE
+    assert harness.statuses == ["checking", "downloading", "sending"]
+    assert [method for method, _ in harness.bot.calls] == ["send_document"]
+    _, sent = harness.bot.calls[0]
+    assert sent["chat_id"] == 111
+    assert sent["filename"].endswith(f".{extension}")
+    assert harness.bot.uploaded == harness.downloaded_bytes == [IMAGE_BYTES]
+
+    terminal = harness.registry.terminal(request.request_id)
+    assert terminal is not None
+    assert terminal.state is RequestState.COMPLETED
+    assert terminal.confirmed_message_id == 99
+
+
+async def test_picture_over_the_delivery_limit_fails_as_too_large(tmp_path: Path) -> None:
+    result = instagram_image_result(content_length=LIMIT + 1)
+    harness = PictureHarness(tmp_path, result)
+    workflow = harness.workflow()
+
+    with pytest.raises(SourceAdapterError) as caught:
+        await workflow.submit(
+            user_id=12, chat_id=122, text=result.metadata.canonical_url, chat_type="private"
+        )
+
+    assert caught.value.category is ErrorCategory.TOO_LARGE
+    assert caught.value.stage == "checking"
+    assert harness.cards == []
+    assert harness.registry_calls == []
+    assert not harness.downloaded_any()
+    assert harness.bot.calls == []
+    assert len(harness.failures) == 1
+    failure = harness.failures[0]
+    assert failure.error_category == ErrorCategory.TOO_LARGE.value
+    assert failure.failed_stage == "checking"
+    assert failure.next_step == failure_message(ErrorCategory.TOO_LARGE, stage="checking")
