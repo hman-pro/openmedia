@@ -200,8 +200,8 @@ through `OpenMediaLinkedInPostIE`, and the picture path still receives it on `un
 
 ### Tests for User Story 2
 
-- [ ] T018 [P] [US2] Create `tests/fixtures/linkedin/linkedin-video-post-hyphen-code.html`: a minimal sanitized page with `<title>Sample post</title>`, `<meta property="og:title" content="Sample post">`, and one `<video data-sources='[{"src":"https://media.example.invalid/li-720.mp4","type":"video/mp4","data-bitrate":"284460"},{"src":"https://media.example.invalid/li-360.mp4","type":"video/mp4","data-bitrate":"212348"}]'>`. Add a section to `tests/fixtures/linkedin/PROVENANCE.md`: its shape follows the live `…-ugcPost-7508434034927017984-lwx-/` page of 2026-09-23 (research R7). The content is synthetic, and no author, text, or media URL was copied.
-- [ ] T019 [P] [US2] Add failing tests to `tests/contract/test_ytdlp.py`:
+- [X] T018 [P] [US2] Create `tests/fixtures/linkedin/linkedin-video-post-hyphen-code.html`: a minimal sanitized page with `<title>Sample post</title>`, `<meta property="og:title" content="Sample post">`, and one `<video data-sources='[{"src":"https://media.example.invalid/li-720.mp4","type":"video/mp4","data-bitrate":"284460"},{"src":"https://media.example.invalid/li-360.mp4","type":"video/mp4","data-bitrate":"212348"}]'>`. Add a section to `tests/fixtures/linkedin/PROVENANCE.md`: its shape follows the live `…-ugcPost-7508434034927017984-lwx-/` page of 2026-09-23 (research R7). The content is synthetic, and no author, text, or media URL was copied.
+- [X] T019 [P] [US2] Add failing tests to `tests/contract/test_ytdlp.py`:
   - For the `-lwx-` address, `_linkedin_post_extractor().suitable(url)` is `True` and `_match_id(url) == "7508434034927017984"`. Stock `LinkedInIE.suitable` stays `False` for it. `suitable` is `False` for `https://www.linkedin.com/in/someone/` and for a YouTube URL.
   - `YtDlpAdapter().inspect` on that address runs against a fake transport that serves `linkedin-video-post-hyphen-code.html` for the page URL. Reuse the `MetadataHTTP` fake-transport pattern already used in `tests/contract/test_adapter_transports.py` for yt-dlp. It returns `metadata.platform == "linkedin"`, `metadata.media_id == "7508434034927017984"`, and two video options from `media.example.invalid`.
   - An upgrade pin: `inspect.getsource(LinkedInIE._real_extract)` contains `self._match_id(url)`. A failure message says to re-check research R7 before upgrading yt-dlp.
@@ -209,7 +209,7 @@ through `OpenMediaLinkedInPostIE`, and the picture path still receives it on `un
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] In `src/openmedia/sources/ytdlp.py`:
+- [X] T021 [US2] In `src/openmedia/sources/ytdlp.py`:
   - Add `_linkedin_post_extractor()`, which imports `LinkedInIE` from `yt_dlp.extractor.linkedin` at call time, as `inspect` already imports `yt_dlp` lazily. It returns a cached subclass `OpenMediaLinkedInPostIE(LinkedInIE)` with:
     - `IE_NAME = "openmedia:linkedin:post"`
     - a coarse `_VALID_URL = r"https?://(?:www\.)?linkedin\.com/posts/[^/?#]+"`
@@ -221,7 +221,7 @@ through `OpenMediaLinkedInPostIE`, and the picture path still receives it on `un
   - Add `"openmedialinkedinpost": "linkedin"` to `_EXTRACTOR_PLATFORM`, placed **before** `"linkedin"`: the lookup uses `startswith`, and the key must not be shadowed.
 
   Pass T018 and T019.
-- [ ] T022 [US2] Run `uv run pytest` until green. Record the quickstart §2 US2 rows in `specs/004-linkedin-share-links/validation.md` under "US2".
+- [X] T022 [US2] Run `uv run pytest` until green. Record the quickstart §2 US2 rows in `specs/004-linkedin-share-links/validation.md` under "US2".
 
 **Checkpoint**: US1 + US2 together cover both links from the 2026-09-23 run in controlled
 tests. Commit `feat(004): phase 4 us2 hyphenated post codes`.

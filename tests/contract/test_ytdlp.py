@@ -165,3 +165,146 @@ def test_formats_without_chunk_size_download_whole() -> None:
     by_id = {option.source_format_id: option for option in result.options}
     assert by_id["140-0"].transport_ref.get("range_bytes") is None
     assert by_id["v0+140-0"].transport_ref.get("video_range_bytes") is None
+
+
+# --------------------------------------------------------------------------------------
+# US2 (004): post addresses whose trailing code is not four word characters (research R7).
+# The real yt-dlp extraction runs against a fake guarded transport; nothing reaches the network.
+# --------------------------------------------------------------------------------------
+
+import inspect as _inspect
+import time
+from types import SimpleNamespace
+from unittest.mock import Mock
+from urllib.parse import urlsplit
+
+from openmedia.models import MediaMetadata
+from openmedia.sources import InspectInput, SourceRouter, TransportResponse
+
+
+LINKEDIN_FIXTURES = Path(__file__).parents[1] / "fixtures" / "linkedin"
+HYPHEN_CODE_POST = "https://www.linkedin.com/posts/sample-author_sample-text-ugcPost-7508434034927017984-lwx-/"
+HYPHEN_CODE_ID = "7508434034927017984"
+PICTURE_POST_PAGE = (
+    "<!doctype html><html><head><title>Sample post</title>"
+    '<meta property="og:title" content="Sample post"></head>'
+    "<body><main><img src=\"https://media.example.invalid/picture.jpg\"></main></body></html>"
+)
+
+
+class PageTransport:
+    """Serves one HTML page for the post address and 404 for anything else, like MetadataHTTP expects."""
+
+    def __init__(self, page: str) -> None:
+        self.page = page.encode()
+        self.on_request = self.on_response = None
+        self.fetches: list[str] = []
+
+    def fetch(self, url, **kwargs):
+        self.fetches.append(url)
+        if self.on_request:
+            self.on_request()
+        served = urlsplit(url)._replace(query="", fragment="").geturl() == HYPHEN_CODE_POST
+        status = 200 if served else 404
+        if self.on_response:
+            self.on_response(status, {})
+        return TransportResponse(url, status, {"content-type": "text/html; charset=utf-8"}, self.page if served else b"")
+
+    def head(self, url, **kwargs):  # pragma: no cover - inspection never issues HEAD here
+        raise AssertionError("inspection must not HEAD media")
+
+    def download(self, url, destination, **kwargs):  # pragma: no cover
+        raise AssertionError("inspection must not download media")
+
+
+def _library_rate():
+    return SimpleNamespace(acquire=Mock(), limited=Mock(), observe=Mock())
+
+
+def _inspect_input(tmp_path: Path, url: str) -> InspectInput:
+    return InspectInput(source_url=url, request_id="a" * 32, work_directory=tmp_path,
+        deadline=time.monotonic() + 30, metadata_limit=65_536)
+
+
+def test_linkedin_post_extractor_matches_hyphen_code_by_recognizer() -> None:
+    from yt_dlp.extractor.linkedin import LinkedInIE
+
+    from openmedia.sources.ytdlp import _linkedin_post_extractor
+
+    extractor = _linkedin_post_extractor()
+    assert issubclass(extractor, LinkedInIE)
+    assert extractor.suitable(HYPHEN_CODE_POST) is True
+    assert extractor._match_id(HYPHEN_CODE_POST) == HYPHEN_CODE_ID
+    # The stock pattern still rejects the address; only our subclass widens the match.
+    assert LinkedInIE.suitable(HYPHEN_CODE_POST) is False
+    assert extractor.suitable("https://www.linkedin.com/in/someone/") is False
+    assert extractor.suitable("https://www.youtube.com/watch?v=abcDEF12345") is False
+
+
+def test_ytdlp_adapter_inspects_hyphen_code_video_post(tmp_path: Path) -> None:
+    from openmedia.sources.ytdlp import YtDlpAdapter
+
+    page = (LINKEDIN_FIXTURES / "linkedin-video-post-hyphen-code.html").read_text()
+    transport = PageTransport(page)
+
+    result = YtDlpAdapter().inspect(_inspect_input(tmp_path, HYPHEN_CODE_POST),
+        transport=transport, rate_control=_library_rate())
+
+    assert result.metadata.platform == "linkedin"
+    assert result.metadata.media_id == HYPHEN_CODE_ID
+    videos = [option for option in result.options if option.media_type is MediaType.VIDEO]
+    assert len(videos) == 2
+    assert {urlsplit(option.transport_ref["url"]).hostname for option in videos} == {"media.example.invalid"}
+    assert all(urlsplit(url).hostname == "www.linkedin.com" for url in transport.fetches)
+
+
+def test_linkedin_ie_still_reads_its_id_through_match_id() -> None:
+    from yt_dlp.extractor.linkedin import LinkedInIE
+
+    source = _inspect.getsource(LinkedInIE._real_extract)
+    assert "self._match_id(url)" in source, (
+        "LinkedInIE._real_extract no longer calls self._match_id(url); OpenMediaLinkedInPostIE "
+        "relies on it. Re-check research R7 (specs/004-linkedin-share-links/research.md) before "
+        "upgrading yt-dlp."
+    )
+
+
+class _StubImageAdapter:
+    name = "linkedin_image"
+
+    def __init__(self) -> None:
+        self.requests: list[InspectInput] = []
+
+    def inspect(self, request, *, transport, rate_control):
+        from openmedia.models import FormatOption
+        from openmedia.sources import InspectResult
+
+        self.requests.append(request)
+        metadata = MediaMetadata(platform="linkedin", canonical_url=request.source_url,
+            media_id=HYPHEN_CODE_ID, media_kind="image")
+        option = FormatOption(option_id=0, adapter="linkedin_image", source_format_id="image-0",
+            media_type="image", extension="jpg", mime_type="image/jpeg",
+            transport_ref={"url": "https://media.example.invalid/picture.jpg"})
+        return InspectResult(metadata, (option,))
+
+    def download(self, request, **kwargs):  # pragma: no cover
+        raise AssertionError("download is not expected during inspect")
+
+
+def test_hyphen_code_picture_post_is_unavailable_and_falls_back_to_image(tmp_path: Path) -> None:
+    from openmedia.sources.ytdlp import YtDlpAdapter
+
+    transport = PageTransport(PICTURE_POST_PAGE)
+    with pytest.raises(SourceAdapterError) as caught:
+        YtDlpAdapter().inspect(_inspect_input(tmp_path, HYPHEN_CODE_POST),
+            transport=transport, rate_control=_library_rate())
+    assert caught.value.category is ErrorCategory.UNAVAILABLE
+    # yt-dlp really fetched the post page: the failure is "no video", not "unsupported URL".
+    assert [urlsplit(url)._replace(query="").geturl() for url in transport.fetches] == [HYPHEN_CODE_POST]
+
+    image = _StubImageAdapter()
+    router = SourceRouter(ytdlp=YtDlpAdapter(), instagram=_StubImageAdapter(), linkedin=image)
+    result = router.inspect(_inspect_input(tmp_path, HYPHEN_CODE_POST),
+        transport=PageTransport(PICTURE_POST_PAGE), rate_control=_library_rate())
+    assert [request.source_url for request in image.requests] == [HYPHEN_CODE_POST]
+    assert result.options[0].adapter == "linkedin_image"

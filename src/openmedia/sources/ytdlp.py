@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import resource
 from dataclasses import replace
+from functools import cache
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -53,10 +54,57 @@ YTDLP_OPTIONS: Mapping[str, Any] = {
 
 _EXTRACTOR_PLATFORM = {
     "youtube": "youtube",
+    # Before "linkedin": the lookup uses startswith, so this key must not be shadowed.
+    "openmedialinkedinpost": "linkedin",
     "linkedinpost": "linkedin",
     "linkedin": "linkedin",
     "instagram": "instagram",
 }
+
+
+@cache
+def _linkedin_post_extractor() -> type:
+    """Return yt-dlp's ``LinkedInIE`` with a post-address match widened to the recognizer.
+
+    Research R7: stock ``LinkedInIE`` accepts only a four-character trailing code, so a share
+    link such as ``…-ugcPost-<id>-lwx-/`` never reaches it. This subclass inherits extraction
+    unchanged and widens only the address match: ``suitable`` and ``_match_id`` delegate to
+    ``recognize_source_url`` (research R6), so the recognizer stays the single source of truth
+    for which post addresses exist and what their ID is. It relies on
+    ``LinkedInIE._real_extract`` reading its ID through ``self._match_id(url)``; a contract
+    test pins that before any yt-dlp upgrade.
+    """
+    from yt_dlp.extractor.linkedin import LinkedInIE
+
+    def _post_route(url: str):
+        try:
+            route = recognize_source_url(url)
+        except SourceAdapterError:
+            return None
+        if (
+            route.platform != "linkedin"
+            or route.route_kind != "post"
+            or not route.canonical_url.startswith("https://www.linkedin.com/posts/")
+        ):
+            return None
+        return route
+
+    class OpenMediaLinkedInPostIE(LinkedInIE):
+        IE_NAME = "openmedia:linkedin:post"
+        _VALID_URL = r"https?://(?:www\.)?linkedin\.com/posts/[^/?#]+"
+
+        @classmethod
+        def suitable(cls, url: str) -> bool:
+            return _post_route(url) is not None
+
+        @classmethod
+        def _match_id(cls, url: str) -> str:
+            route = _post_route(url)
+            if route is None:
+                raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="inspection")
+            return route.media_id
+
+    return OpenMediaLinkedInPostIE
 
 
 def _text(value: object) -> str | None:
@@ -481,6 +529,7 @@ class YtDlpAdapter:
             options["paths"] = {"home": str(request.work_directory)}
             options["outtmpl"] = {"default": "inspection-unused.%(ext)s"}
             with client.bound(), yt_dlp.YoutubeDL(options) as extractor:
+                extractor.add_info_extractor(_linkedin_post_extractor()())
                 extractor.urlopen = client.ytdlp
                 info = extractor.extract_info(request.source_url, download=False)
         except SourceAdapterError:

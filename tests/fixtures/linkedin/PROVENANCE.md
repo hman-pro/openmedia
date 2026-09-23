@@ -14,3 +14,13 @@ text of `p[data-test-id="main-feed-activity-embed-card__commentary"]`, which may
 attributes; the author name, profile URL, aria-label name, and caption were replaced with
 `Sanitized …` placeholders. The live page parsed to one attachment plus both fields.
 
+
+## `linkedin-video-post-hyphen-code.html`
+
+The shape follows the live public post
+`https://www.linkedin.com/posts/…-ugcPost-7508434034927017984-lwx-/`, fetched anonymously on
+2026-09-23 (research R7). That page carried an `og:title`, a `<title>`, and one `<video>`
+whose `data-sources` attribute holds a JSON list of MP4 sources with `src`, `type`, and
+`data-bitrate`; yt-dlp's `LinkedInIE._real_extract` reads exactly those. The content is
+synthetic: the title is `Sample post`, the two sources point at `media.example.invalid`,
+and no author, post text, or media URL was copied from the live page.

@@ -31,3 +31,27 @@ Quickstart §2 rows, walked through controlled tests (recording fake transport, 
 Notes:
 - The `429` row had no controlled test before T016. Two tests were added rather than recording it unverified.
 - The log fields in the quickstart (`resolution=…`, `refused` entries) are US3 scope and are not checked here.
+
+## US2
+
+- Date: 2026-09-23
+- Branch: `004-linkedin-share-links` on top of `081dcfb`, phase 4 changes uncommitted
+- Command: `uv run pytest`
+- Result: green — 601 passed, 3 deselected (`live`), 0 failed
+
+Quickstart §2 rows, walked through controlled tests (real yt-dlp extraction against a fake
+page transport, no network):
+
+| Row | Covered by | Observed |
+|---|---|---|
+| Hyphen-code video post | `tests/unit/test_links.py::test_linkedin_post_slug_accepts_any_trailing_code`, `tests/contract/test_ytdlp.py::test_linkedin_post_extractor_matches_hyphen_code_by_recognizer`, `test_ytdlp.py::test_ytdlp_adapter_inspects_hyphen_code_video_post` | Recognized as `ugcPost` `7508434034927017984`. Stock `LinkedInIE.suitable` stays `False`; `OpenMediaLinkedInPostIE.suitable` is `True` and `_match_id` returns the recognizer's ID. `YtDlpAdapter.inspect` on the `linkedin-video-post-hyphen-code.html` fixture returns `platform == "linkedin"`, that `media_id`, and two video options from `media.example.invalid`. Only `www.linkedin.com` was fetched |
+| Hyphen-code picture post | `test_ytdlp.py::test_hyphen_code_picture_post_is_unavailable_and_falls_back_to_image` | yt-dlp fetches the post page once and raises `UNAVAILABLE` (no video), not `UNSUPPORTED_URL`. `SourceRouter` then hands the same input to `linkedin_image` |
+| Same post, two codes/queries | `test_links.py::test_linkedin_post_slug_accepts_any_trailing_code` (`…-lwx-/` and `…-lwx-/?utm_source=x&rcm=y`), `test_links.py::test_linkedin_post_identity_ignores_the_trailing_code` (`-lwx-` vs `-abcd`) | Same (`urn_kind`, `media_id`). Query is dropped from the canonical URL; a different trailing code keeps its own canonical URL |
+| Raw Persian slug | `test_links.py::test_linkedin_post_slug_accepts_any_trailing_code` (raw and percent-encoded Persian slug) | Recognized as `share` `7508424761698410497`, canonical URL round-trips through the recognizer |
+
+Upgrade pin: `test_ytdlp.py::test_linkedin_ie_still_reads_its_id_through_match_id` asserts
+`LinkedInIE._real_extract` still calls `self._match_id(url)` (research R7).
+
+Notes:
+- `OpenMediaLinkedInPostIE` is added per `YoutubeDL` instance with `add_info_extractor`, after
+  the default extractors, so addresses the stock `LinkedInIE` accepts are still handled by it.
