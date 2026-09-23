@@ -2,10 +2,10 @@
 
 # OpenMedia
 
-**Send a link. Pick a native format. Get the original file, byte for byte.**
+**Send a link. Tap one plain choice. Get the original file, byte for byte.**
 
-A self-hosted Telegram bot for public YouTube, LinkedIn, and Instagram media. It shows the
-formats the source actually offers and delivers the one you choose without re-encoding it.
+A self-hosted Telegram bot for public YouTube, LinkedIn, and Instagram media. It picks the
+best native version the source offers for each choice and delivers it without re-encoding.
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -27,8 +27,9 @@ formats the source actually offers and delivers the one you choose without re-en
 Most "download this video" bots pick a format for you, transcode it, and hand back whatever
 fits. OpenMedia does the opposite:
 
-- **Native formats only.** You see the formats the source publishes, including resolution,
-  codec, container, audio presence, and size. Nothing is transcoded, scaled, or converted.
+- **Plain choices, native files.** A video gets at most three buttons: `Video`,
+  `Video (no sound)`, and `Audio only`. Each one maps to a format the source publishes;
+  nothing is transcoded, scaled, or converted. A picture needs no choice at all.
 - **Byte-for-byte delivery.** Your choice is either one upstream file delivered unchanged,
   or exactly one video stream plus one audio stream joined with FFmpeg stream copy
   (`-c copy`) and labeled *combined*.
@@ -53,46 +54,46 @@ sequenceDiagram
     W->>S: anonymous metadata request
     S-->>W: available native formats
     W-->>B: normalized options
-    B-->>U: preview + inline keyboard of native choices
-    U->>B: taps one option
-    B->>W: download exactly that format
+    B-->>U: card with thumbnail, title, and up to three choices
+    U->>B: taps Video, Video (no sound), or Audio only
+    B->>W: download exactly that native format
     W->>S: fetch source bytes
     Note over W: optional: 1 video + 1 audio<br/>merged with ffmpeg -c copy
     W-->>B: file in the request's own workspace
-    B-->>U: delivered as a document, bytes preserved
+    B-->>U: delivered unchanged, bytes preserved
 ```
 
-Files go out as Telegram *documents*, not videos or photos, so Telegram does not recompress
-them. Selections expire after 15 minutes, and the whole download-and-send stage has 10
-minutes to finish.
+When only one choice exists, or the post is a picture, the bot sends it without waiting for a
+tap. Videos are uploaded with `sendVideo`, so they play in the chat. Pictures and audio go out
+as Telegram *documents*, never as photos, because Telegram recompresses photos. In every case
+the uploaded bytes are the downloaded file. Choices expire after 15 minutes, and the whole
+download-and-send stage has 10 minutes to finish.
 
 ## Supported sources
 
 | Source | Accepted links | Media | Live verification |
 |---|---|---|---|
 | YouTube | `youtube.com/watch?v=…`, `youtu.be/…`, `youtube.com/shorts/…` | Single video | Feasibility pass; full live suite pending |
-| LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Feasibility pass; full live suite pending |
+| LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Video and image pass live through Telegram, including `lnkd.in` short links; full live suite pending |
 | Instagram | `instagram.com/p/…`, `instagram.com/reel/…` | Video or single image | Video passes live through the product transport; single image pending |
 
 **Out of scope:** playlists, live streams, carousels and multi-item posts, stories, private
 or login-gated content, and any source not listed above. The bot explains each rejection, for
 example *"Only one finished media item is supported. Send a single-item link."*
 
-The "Live verification" column reflects the evidence recorded in
-[`specs/001-media-download/validation.md`](specs/001-media-download/validation.md), not what
-is expected to work. Sources change without notice, so a category counts as supported only
-after it passes live.
+The "Live verification" column reflects recorded live runs, not what is expected to work.
+Sources change without notice, so a category counts as supported only after it passes live.
 
 ## Project status
 
-OpenMedia is **pre-release**. The code is feature-complete for its first two specifications,
-and 357 controlled tests cover it with the network disabled. The release gates that need the
-real world are still open and tracked in the validation record:
+OpenMedia is **pre-release**. The planned features are implemented, and 623 controlled tests
+cover them with the network disabled. The release gates that need the real world are still
+open:
 
-- [ ] Five-category live source suite, run through the product's own transport (T026/T074)
-- [ ] Constrained read-only container run with a real bot token (T053/T075, currently on hold)
-- [ ] Deployment-network source checks and two-account Telegram acceptance (T054/T076)
-- [ ] Acceptance timing runs, 20 inspections plus 20 deliveries (T055/T080)
+- [ ] Full live source suite, run through the product's own transport
+- [ ] Constrained read-only container run with a real bot token (currently on hold)
+- [ ] Deployment-network source checks and two-account Telegram acceptance
+- [ ] Acceptance timing runs, 20 inspections plus 20 deliveries
 
 No controlled test counts toward any of these gates. If you run the bot before they close,
 treat it as a preview.
@@ -122,6 +123,10 @@ cp .env.example .env             # then set TELEGRAM_BOT_TOKEN in .env
 uv run --locked --env-file .env python -m openmedia --check-config
 uv run --locked --env-file .env python -m openmedia
 ```
+
+On macOS, also set `OPENMEDIA_WORK_DIR=/private/tmp/openmedia` in `.env`. The default
+`/tmp/openmedia` sits behind the `/tmp` symlink, and the bot refuses a symlinked workspace at
+startup, even though `--check-config` passes.
 
 `--check-config` validates the settings and the bundled runtime without connecting to
 Telegram. Once the bot is running, open a private chat with it and send `/start` or a link.
@@ -172,8 +177,7 @@ Drop `--check-config` to start the bot. The image:
 The last two flags in the example turn the diagnostic log on and mount a named volume for it,
 because the image filesystem is read-only. Drop both to run with the log off. Deployment,
 live-source, real-Telegram, and timing checks remain separate release gates (see
-[Project status](#project-status)). Current evidence is recorded in
-[`specs/001-media-download/validation.md`](specs/001-media-download/validation.md).
+[Project status](#project-status)).
 
 > **Redistributing the image?** It contains a GPL-2.0-or-later FFmpeg build and other
 > copyleft components. [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) lists your
@@ -200,13 +204,12 @@ jq -c 'select(.level=="ERROR")' "$f"
 ```
 
 > [!WARNING]
-> The files contain submitted links and Telegram chat and user identifiers. They are kept
+> The files contain submitted links, including those in refused messages, and Telegram chat
+> and user identifiers. They are kept
 > for at most 14 day files and 50 MB in total. The console never shows these values. The bot
 > token, signed media URLs, and media bytes are never written.
 
-`OPENMEDIA_DIAGNOSTIC_LOG_LEVEL` (default `DEBUG`) sets how much detail is logged. The full
-contract is in
-[`specs/002-file-logging/contracts/diagnostic-log.md`](specs/002-file-logging/contracts/diagnostic-log.md).
+`OPENMEDIA_DIAGNOSTIC_LOG_LEVEL` (default `DEBUG`) sets how much detail is logged.
 
 ## Architecture
 
@@ -236,7 +239,7 @@ flowchart LR
 | Layer | Modules | Responsibility |
 |---|---|---|
 | Runtime & configuration | `__main__`, `config`, `diagnostics` | Composition root, validated `Settings`, CLI modes (`--check-config`, `--healthcheck`), opt-in diagnostic log |
-| Telegram interface | `bot`, `presentation`, `delivery` | Parse links from private chats, render paginated native choices, deliver documents, map errors to user guidance |
+| Telegram interface | `bot`, `presentation`, `delivery` | Parse links from private chats, render the choice card, deliver files unchanged, map errors to user guidance |
 | Request orchestration | `coordinator`, `workers`, `models` | Atomic capacity reservation with no waiting, request lifecycle and deadlines, child-process supervision, immutable domain models |
 | Source adapters & network | `sources/*`, `network` | Link recognition, per-source adapters, FFmpeg stream-copy merge, DNS-pinned public-only HTTP with bounded redirects and sizes |
 
@@ -254,8 +257,8 @@ A few design choices are worth knowing before you change code:
 - **FFmpeg reads only local files.** Merging uses `-c copy` with `-protocol_whitelist file`,
   so a crafted input cannot make it fetch anything.
 - **YouTube uses `player_client=default,android`.** `default` supplies fetchable adaptive
-  streams, and `android` provides the source-muxed format 18. The reasoning is recorded in
-  [`research.md` §6](specs/001-media-download/research.md).
+  streams, and `android` provides the source-muxed format 18. `ios` serves only SABR streams
+  and cannot be fetched. Change the list only with fresh live evidence.
 
 ## Development
 
@@ -271,9 +274,9 @@ uv run pytest -m live                                                # opt-in, r
   in `tests/conftest.py`. They use a fake Telegram transport, a manually advanced clock, and
   sanitized fixtures whose provenance is documented next to them.
 - **Live tests** (`tests/live/`) reach real sources, sit behind the `live` marker, and are
-  excluded by default. They need a private, gitignored manifest. Run them deliberately and
-  space out Instagram cases. See
-  [`specs/001-media-download/quickstart.md`](specs/001-media-download/quickstart.md).
+  excluded by default. They need a private manifest outside the repository, named by
+  `OPENMEDIA_LIVE_MANIFEST`; `tests/fixtures/live-sources.example.json` shows its shape. Run
+  them deliberately and space out Instagram cases.
 
 
 ### Repository layout
