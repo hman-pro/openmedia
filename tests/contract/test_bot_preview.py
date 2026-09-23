@@ -305,3 +305,129 @@ async def test_send_card_falls_back_to_edit_when_photo_fails(
     assert result == (CHECKING_ID, False)
     assert len(fake_transport.calls_to("sendPhoto")) == 1
     assert_edited_checking_message(fake_transport, rendered)
+
+
+# --- update_status: edit the one status surface in place (research R6, T029) --------------
+
+STATUS_ID = 42
+PREFIX = "Fixture title\n3:32"
+
+
+def status_request(*, is_caption: bool, prefix: str | None = None):
+    from openmedia.models import DownloadRequest
+
+    return DownloadRequest(
+        request_id=REQUEST_ID,
+        user_id=1,
+        chat_id=1,
+        source_url="https://www.youtube.com/watch?v=abcDEF12345",
+        platform="youtube",
+        media_id="abcDEF12345",
+        status_message_id=STATUS_ID,
+        status_is_caption=is_caption,
+        status_prefix=prefix,
+    )
+
+
+def edit_calls(fake_transport) -> list:
+    return [
+        call for call in fake_transport.calls
+        if call.method in {"editMessageText", "editMessageCaption", "sendMessage"}
+    ]
+
+
+async def test_update_status_edits_text_message_in_place(fake_bot, fake_transport) -> None:
+    from openmedia.bot import update_status
+
+    request = status_request(is_caption=False)
+    text = "Picture — downloading…"
+    fake_transport.queue_result("editMessageText", message_result(STATUS_ID, text=text))
+    assert await update_status(fake_bot, request, text) is None
+    edits = fake_transport.calls_to("editMessageText")
+    assert len(edits) == 1
+    assert edits[0].parameters["message_id"] == STATUS_ID
+    assert edits[0].parameters["chat_id"] == request.chat_id
+    assert edits[0].parameters["text"] == text
+    assert "parse_mode" not in edits[0].parameters
+    assert not fake_transport.calls_to("editMessageCaption")
+    assert not fake_transport.calls_to("sendMessage")
+    assert (request.status_message_id, request.status_is_caption) == (STATUS_ID, False)
+
+
+async def test_update_status_edits_photo_caption_with_prefix(fake_bot, fake_transport) -> None:
+    from openmedia.bot import update_status
+
+    request = status_request(is_caption=True, prefix=PREFIX)
+    text = "Video — sending…"
+    fake_transport.queue_result("editMessageCaption", photo_result(STATUS_ID))
+    await update_status(fake_bot, request, text)
+    edits = fake_transport.calls_to("editMessageCaption")
+    assert len(edits) == 1
+    assert edits[0].parameters["message_id"] == STATUS_ID
+    assert edits[0].parameters["chat_id"] == request.chat_id
+    assert edits[0].parameters["caption"] == PREFIX + "\n" + text
+    assert "parse_mode" not in edits[0].parameters
+    assert not fake_transport.calls_to("editMessageText")
+    assert not fake_transport.calls_to("sendMessage")
+    assert (request.status_message_id, request.status_is_caption) == (STATUS_ID, True)
+
+
+@pytest.mark.parametrize(("is_caption", "method"), [
+    (False, "editMessageText"),
+    (True, "editMessageCaption"),
+])
+async def test_update_status_ignores_message_not_modified(
+    fake_bot, fake_transport, is_caption, method
+) -> None:
+    from openmedia.bot import update_status
+
+    request = status_request(is_caption=is_caption, prefix=PREFIX if is_caption else None)
+    fake_transport.queue_error(
+        method,
+        "Bad Request: message is not modified: specified new message content and reply "
+        "markup are exactly the same as a current content and reply markup of the message",
+    )
+    await update_status(fake_bot, request, "Video — downloading…")
+    assert [call.method for call in edit_calls(fake_transport)] == [method]
+    assert not fake_transport.calls_to("sendMessage")
+    assert (request.status_message_id, request.status_is_caption) == (STATUS_ID, is_caption)
+
+
+@pytest.mark.parametrize(("is_caption", "method"), [
+    (False, "editMessageText"),
+    (True, "editMessageCaption"),
+])
+async def test_update_status_falls_back_to_one_new_message_when_edit_fails(
+    fake_bot, fake_transport, is_caption, method
+) -> None:
+    from openmedia.bot import update_status
+
+    request = status_request(is_caption=is_caption, prefix=PREFIX if is_caption else None)
+    text = "Video — sending…"
+    fake_transport.queue_error(method, "Bad Request: message to edit not found")
+    fake_transport.queue_result("sendMessage", message_result(99, text=text))
+    await update_status(fake_bot, request, text)
+    assert [call.method for call in edit_calls(fake_transport)] == [method, "sendMessage"]
+    sends = fake_transport.calls_to("sendMessage")
+    assert len(sends) == 1
+    assert sends[0].parameters["chat_id"] == request.chat_id
+    assert sends[0].parameters["text"] == text
+    assert "parse_mode" not in sends[0].parameters
+    assert request.status_message_id == 99
+    assert request.status_is_caption is False
+
+
+async def test_update_status_after_fallback_edits_the_new_text_message(fake_bot, fake_transport) -> None:
+    from openmedia.bot import update_status
+
+    request = status_request(is_caption=True, prefix=PREFIX)
+    fake_transport.queue_error("editMessageCaption", "Bad Request: message to edit not found")
+    fake_transport.queue_result("sendMessage", message_result(99, text="Video — downloading…"))
+    await update_status(fake_bot, request, "Video — downloading…")
+    fake_transport.queue_result("editMessageText", message_result(99, text="Video — sending…"))
+    await update_status(fake_bot, request, "Video — sending…")
+    edits = fake_transport.calls_to("editMessageText")
+    assert len(edits) == 1
+    assert edits[0].parameters["message_id"] == 99
+    assert edits[0].parameters["text"] == "Video — sending…"
+    assert len(fake_transport.calls_to("sendMessage")) == 1

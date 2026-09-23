@@ -90,14 +90,16 @@ def status_text(
     """One status line: ``<Label> — downloading…``, ``— sending…``, ``— sent.``, or a failure."""
     if unknown:
         return f"{label} — {_UNCONFIRMED}"
+    if next_step:
+        # A next step only exists for a failure, whose stage may be `downloading` or `sending`.
+        return f"{label} — {stage} failed. {next_step}"
     if stage == "downloading":
         return f"{label} — only version available, downloading…" if automatic else f"{label} — downloading…"
     if stage == "sending":
         return f"{label} — sending…"
     if stage == "completed":
         return f"{label} — sent."
-    failed = f"{label} — {stage} failed."
-    return f"{failed} {next_step}" if next_step else failed
+    return f"{label} — {stage} failed."
 
 
 def sort_options(options: tuple[FormatOption, ...] | list[FormatOption]) -> tuple[FormatOption, ...]:

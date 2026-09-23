@@ -44,3 +44,29 @@
 | Scenario | Evidence (test) | Result |
 |---|---|---|
 | Instagram picture | `test_download_flow.py::test_single_picture_is_claimed_on_the_checking_message_and_sent_as_a_document[instagram]` (and `[linkedin]`), `test_picture_over_the_delivery_limit_fails_as_too_large` | Pass for US2 scope: preview callable never called (no card, no buttons, no `sendPhoto`); `publish_and_claim` on the `Checking link…` message ID; download starts without a callback; one `sendDocument` with `filename` `media.jpg` whose uploaded bytes equal the downloaded bytes. An image over the limit fails at `checking` with the 001 `too_large` meaning. The `Picture — downloading…` → `sent.` edits on the same message belong to US3 (T032); until then progress is still sent as separate messages |
+
+## US3
+
+- Date: 2026-09-23
+- Branch: `003-streamlined-bot-ux` on top of `55fe424` (phase 4), phase 5 uncommitted
+- Command: `uv run pytest` — green, 506 passed, 3 deselected (`live`), 0 failed
+- Runs drive the real `RuntimeCallbacks` from `openmedia.__main__` over `fake_bot` (real
+  `telegram.Bot`, fake transport); only the worker-backed inspect and download are stubbed.
+  Bot messages = `sendMessage` + `sendPhoto` + `sendVideo` + `sendDocument` − `deleteMessage`.
+
+| Scenario | Evidence (test in `test_download_flow.py`) | Sent | Deleted | Bot messages (SC-004) | Status edits on the one surface |
+|---|---|---|---|---|---|
+| Tapped video, thumbnail | `test_runtime_tapped_video_edits_the_card_caption_and_leaves_two_messages` | 3 (`Checking link…`, photo card, `sendVideo`) | 1 | **2** | caption: `Video — downloading…` → `sending…` → `sent.`, card text kept above |
+| Automatic video, no thumbnail (LinkedIn) | `test_runtime_automatic_video_edits_the_card_text_and_leaves_two_messages` | 2 (`Checking link…`, `sendVideo`) | 0 | **2** | text: card published with `Video — only version available, downloading…` → `sending…` → `sent.` |
+| Picture (Instagram) | `test_runtime_picture_edits_the_checking_message_and_leaves_two_messages` | 2 (`Checking link…`, `sendDocument`) | 0 | **2** | text: `Picture — downloading…` → `sending…` → `sent.` |
+| Download fails | `test_runtime_worker_failure_ends_on_the_same_status_surface` | 2 | 1 | 1 (the card) | caption: `Video — downloading…` → `Video — downloading failed. <next step>` |
+| Upload unconfirmed (502) | `test_runtime_unconfirmed_upload_ends_with_could_not_confirm_on_the_card` | — | — | — | caption ends in `Video — could not confirm sending. Check this chat before sending the link again.` |
+
+- In every row `sendMessage` is called exactly once (`Checking link…`); no stage, success,
+  or failure sends a new message. `update_status` contract rows (edit text vs caption with
+  prefix, "message is not modified" ignored, one fallback `sendMessage` on any other edit
+  error) pass in `test_bot_preview.py::test_update_status_*`.
+- Callback path: the keyboard is still removed at once (`editMessageReplyMarkup`) and the
+  callback is answered with the label as a toast; no confirmation message is sent.
+- `Tap Audio only` (quickstart §2) is covered by the same runtime path as the tapped video
+  row (label from the selected option); it has no dedicated runtime test.

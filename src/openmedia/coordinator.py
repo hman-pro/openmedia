@@ -759,8 +759,7 @@ class MediaWorkflow:
                     delivery_result=delivered,
                 )
                 if delivered.status != "confirmed":
-                    delivered = await self._notify(request, delivered)
-                return delivered
+                    return await self._notify(request, delivered)
         except BaseException as exc:
             stage = "sending" if request.state is RequestState.SENDING else "downloading"
             await self._run_cleanup(request)
@@ -768,6 +767,14 @@ class MediaWorkflow:
             if self.notify_failure is not None and not isinstance(exc, asyncio.CancelledError):
                 return failed
             raise
+        # Outside the guarded block: the request is already COMPLETED, so a failed or slow
+        # `sent.` edit is best effort and never changes the terminal state (003 "Stage text").
+        try:
+            async with asyncio.timeout(5):
+                await self._status(request, "completed")
+        except Exception:
+            pass
+        return delivered
 
     async def _fail(self, request: DownloadRequest, exc: BaseException, stage: str) -> DeliveryResult:
         from openmedia.bot import failure_message

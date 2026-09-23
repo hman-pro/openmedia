@@ -9,11 +9,12 @@ import re
 from typing import Any
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity
+from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from openmedia.choices import ChoiceSet, kind_of
-from openmedia.models import MediaMetadata
-from openmedia.presentation import card_text, choice_label
+from openmedia.models import DownloadRequest, MediaMetadata
+from openmedia.presentation import MAX_CAPTION_CHARACTERS, card_text, choice_label
 from openmedia.sources import (
     ErrorCategory,
     SourceAdapterError,
@@ -191,6 +192,56 @@ async def send_card(
     return checking_message_id, False
 
 
+def _not_modified(exc: BaseException) -> bool:
+    return isinstance(exc, BadRequest) and "message is not modified" in str(exc).lower()
+
+
+def _status_caption(prefix: str | None, text: str) -> str:
+    if not prefix:
+        return text[:MAX_CAPTION_CHARACTERS]
+    # The status line is never cut; only the card text above it gives way to the caption cap.
+    room = MAX_CAPTION_CHARACTERS - len(text) - 1
+    if len(prefix) > room:
+        prefix = prefix[: max(0, room - 1)].rstrip() + "…"
+    return f"{prefix}\n{text}"
+
+
+async def update_status(bot: Any, request: DownloadRequest, text: str) -> None:
+    """Edit the request's one status surface in place (contracts/telegram-bot.md, research R6).
+
+    A photo card keeps its card text above the status line. "Message is not modified" is
+    ignored; any other edit failure, or a request with no status message yet, sends one new
+    plain message, which becomes the surface.
+    """
+    if request.status_message_id is None:
+        await _replace_status_message(bot, request, text)
+        return
+    try:
+        if request.status_is_caption:
+            await bot.edit_message_caption(
+                chat_id=request.chat_id,
+                message_id=request.status_message_id,
+                caption=_status_caption(request.status_prefix, text),
+            )
+        else:
+            await bot.edit_message_text(
+                chat_id=request.chat_id,
+                message_id=request.status_message_id,
+                text=text,
+            )
+        return
+    except Exception as exc:
+        if _not_modified(exc):
+            return
+    await _replace_status_message(bot, request, text)
+
+
+async def _replace_status_message(bot: Any, request: DownloadRequest, text: str) -> None:
+    message = await bot.send_message(chat_id=request.chat_id, text=text)
+    request.status_message_id = int(message.message_id)
+    request.status_is_caption = False
+
+
 class BotHandlers:
     """Short Telegram handlers; long work is scheduled through the application."""
 
@@ -296,9 +347,12 @@ class BotHandlers:
             job.close()
             await self.workflow.registry.finalize(selection.request.request_id, state="failed")
             raise
-        confirmation = choice_label(kind_of(selection.option))
+        # No confirmation message: the callback answer is a toast, the keyboard goes at once so
+        # a second tap cannot land before the workflow's first edit, and `<Label> — downloading…`
+        # comes from the workflow's `downloading` stage on the card itself (003 "Callbacks").
+        label = choice_label(kind_of(selection.option))
         for action in (
-            lambda: query.answer(confirmation),
+            lambda: query.answer(label),
             lambda: query.edit_message_reply_markup(reply_markup=None),
         ):
             try:

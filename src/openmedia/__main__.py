@@ -21,8 +21,8 @@ from dataclasses import fields
 from telegram.ext import Application, ApplicationBuilder, ExtBot
 from telegram.request import HTTPXRequest
 
-from openmedia.bot import build_card, register_handlers, send_card
-from openmedia.choices import ChoiceSet, kind_of
+from openmedia.bot import build_card, register_handlers, send_card, update_status
+from openmedia.choices import ChoiceKind, ChoiceSet, kind_of
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
 from openmedia.delivery import deliver_media
@@ -373,7 +373,11 @@ class RuntimeCallbacks:
     async def preview(self, request: DownloadRequest, result: InspectResult, choice_set: ChoiceSet) -> int:
         if request.status_message_id is None:
             raise RuntimeError("the card needs the request's Checking link… message")
-        rendered = build_card(request.request_id, result.metadata, choice_set)
+        # A single video choice starts downloading without a tap, so its card is published
+        # already carrying that first status line (contracts/telegram-bot.md "Automatic delivery").
+        first_status = (status_text(choice_label(kind_of(choice_set.options[0])), "downloading", automatic=True)
+            if choice_set.automatic else None)
+        rendered = build_card(request.request_id, result.metadata, choice_set, first_status)
         message_id, is_caption = await send_card(self.application.bot, chat_id=request.chat_id,
             rendered=rendered, thumbnail_path=result.thumbnail_path,
             checking_message_id=request.status_message_id)
@@ -442,10 +446,23 @@ class RuntimeCallbacks:
             request.status_message_id = int(message.message_id)
             self.observe(request, "acknowledgment")
             return
-        if request.selected_option_id is None:
+        label = self._selected_label(request)
+        if label is None:
             raise RuntimeError(f"stage {stage} has no selected choice")
-        label = choice_label(kind_of(request.option(request.selected_option_id)))
-        await self.application.bot.send_message(chat_id=request.chat_id, text=status_text(label, stage))
+        # Only `publish_and_claim` leaves no selection window (`preview_expires_at is None`),
+        # so that marks a claim made without a tap. A picture has no card, so it never reads
+        # "only version available" (contracts/telegram-bot.md "Automatic delivery").
+        automatic = (request.preview_expires_at is None
+            and kind_of(request.option(request.selected_option_id)) != ChoiceKind.IMAGE)
+        if automatic and stage == "downloading":
+            return  # the card was published with this line; editing again changes nothing
+        await update_status(self.application.bot, request, status_text(label, stage, automatic=automatic))
+
+    @staticmethod
+    def _selected_label(request: DownloadRequest) -> str | None:
+        if request.selected_option_id is None:
+            return None
+        return choice_label(kind_of(request.option(request.selected_option_id)))
 
     async def cleanup(self, request: DownloadRequest) -> None:
         directory = request.work_directory
@@ -463,9 +480,17 @@ class RuntimeCallbacks:
     async def notify_failure(self, request: DownloadRequest, result: DeliveryResult) -> None:
         self.terminal(request, outcome=result.status.value, error_category=result.error_category,
             failed_stage=result.failed_stage)
-        outcome = "could not be confirmed" if result.status == "unknown" else "failed"
-        await self.application.bot.send_message(
-            chat_id=request.chat_id, text=f"The {result.failed_stage} stage {outcome}. {result.next_step}")
+        # The failure ends on the request's one status surface; `update_status` sends a new
+        # message only when there is none yet or the edit fails (contracts/telegram-bot.md).
+        label = self._selected_label(request)
+        if label is None:
+            # Nothing chosen yet (a checking-stage failure): the plain 001 failure text.
+            outcome = "could not be confirmed" if result.status == "unknown" else "failed"
+            text = f"The {result.failed_stage} stage {outcome}. {result.next_step}"
+        else:
+            text = status_text(label, str(result.failed_stage), next_step=result.next_step,
+                unknown=result.status == "unknown")
+        await update_status(self.application.bot, request, text)
 
     async def maintain(self, registry: RequestRegistry) -> None:
         while True:

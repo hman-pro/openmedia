@@ -168,7 +168,7 @@ async def test_youtube_card_offers_three_choices_and_video_downloads_format_18(t
     assert delivered.status == "confirmed"
     assert [option.source_format_id for option in harness.downloads] == ["18"]
     assert_video_path(harness, "18")
-    assert harness.statuses == ["checking", "downloading", "sending"]
+    assert harness.statuses == ["checking", "downloading", "sending", "completed"]
     terminal = harness.registry.terminal(request.request_id)
     assert terminal is not None
     assert terminal.state is RequestState.COMPLETED
@@ -200,7 +200,7 @@ async def test_linkedin_progressive_single_video_is_claimed_and_sent_without_a_t
     # No callback: the download started from submit itself and the file was delivered.
     assert [option.source_format_id for option in harness.downloads] == ["1"]
     assert_video_path(harness, "1")
-    assert harness.statuses == ["checking", "downloading", "sending"]
+    assert harness.statuses == ["checking", "downloading", "sending", "completed"]
     terminal = harness.registry.terminal(request.request_id)
     assert terminal is not None
     assert terminal.state is RequestState.COMPLETED
@@ -416,7 +416,7 @@ async def test_single_picture_is_claimed_on_the_checking_message_and_sent_as_a_d
     # Downloaded without a tap and delivered as a document with the native extension.
     assert len(harness.downloads) == 1
     assert kind_of(harness.downloads[0]) is ChoiceKind.IMAGE
-    assert harness.statuses == ["checking", "downloading", "sending"]
+    assert harness.statuses == ["checking", "downloading", "sending", "completed"]
     assert [method for method, _ in harness.bot.calls] == ["send_document"]
     _, sent = harness.bot.calls[0]
     assert sent["chat_id"] == 111
@@ -450,3 +450,254 @@ async def test_picture_over_the_delivery_limit_fails_as_too_large(tmp_path: Path
     assert failure.error_category == ErrorCategory.TOO_LARGE.value
     assert failure.failed_stage == "checking"
     assert failure.next_step == failure_message(ErrorCategory.TOO_LARGE, stage="checking")
+
+
+# --- User Story 3: one live status surface, two bot messages per success (003 T030) ------
+#
+# These drive the real ``RuntimeCallbacks`` from ``openmedia.__main__`` (status, preview,
+# deliver, notify_failure) over ``fake_bot``, a real ``telegram.Bot`` whose only fake part is
+# the transport. Only the worker-backed inspect and download are replaced, so every Bot API
+# call below is what the runtime would put on the wire (contracts/telegram-bot.md
+# "Progress surface" and "Stage text"; spec SC-004).
+
+from dataclasses import replace as dataclass_replace  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from openmedia import __main__ as runtime  # noqa: E402
+from openmedia.config import Settings  # noqa: E402
+from tests.conftest import FAKE_BOT_TOKEN  # noqa: E402
+
+RUNTIME_CHECKING_ID = 41
+RUNTIME_PHOTO_CARD_ID = 60
+RUNTIME_DELIVERED_ID = 99
+SENT_METHODS = ("sendMessage", "sendPhoto", "sendVideo", "sendDocument")
+EDIT_METHODS = ("editMessageText", "editMessageCaption")
+UNCONFIRMED_TEXT = "could not confirm sending. Check this chat before sending the link again."
+
+
+def runtime_message(message_id: int, chat_id: int, **extra: Any) -> dict[str, Any]:
+    return {"message_id": message_id, "date": 0, "chat": {"id": chat_id, "type": "private"}, **extra}
+
+
+class RuntimeFlow:
+    """Real runtime callbacks over ``fake_bot``; fake worker-backed inspect and download."""
+
+    def __init__(
+        self,
+        tmp_path: Path,
+        fake_bot: Any,
+        fake_transport: Any,
+        result: InspectResult,
+        *,
+        chat_id: int,
+        payload: bytes = b"exact-selected-bytes",
+        download_error: BaseException | None = None,
+    ) -> None:
+        self.tmp_path = tmp_path
+        self.transport = fake_transport
+        self.result = result
+        self.chat_id = chat_id
+        self.payload = payload
+        self.download_error = download_error
+        self.registry = RequestRegistry()
+        settings = Settings(telegram_bot_token=FAKE_BOT_TOKEN, work_dir=tmp_path / "work")
+        self.callbacks = runtime.RuntimeCallbacks(settings, SimpleNamespace(bot=fake_bot))
+        self.workflow = MediaWorkflow(
+            self.registry,
+            inspect=self.inspect,
+            publish_preview=self.callbacks.preview,
+            download=self.download,
+            deliver=self.callbacks.deliver,
+            status=self.callbacks.status,
+            notify_failure=self.callbacks.notify_failure,
+            max_file_bytes=LIMIT,
+        )
+        # `Checking link…` is the first sendMessage. Extra IDs keep a runtime that still sends
+        # a new message per stage parseable, so the test fails on the count, not on a parse.
+        fake_transport.queue_result("sendMessage", runtime_message(RUNTIME_CHECKING_ID, chat_id, text="Checking link…"))
+        for extra in range(8):
+            fake_transport.queue_result("sendMessage", runtime_message(200 + extra, chat_id, text="x"))
+        fake_transport.queue_result("sendPhoto", runtime_message(RUNTIME_PHOTO_CARD_ID, chat_id))
+
+    async def inspect(self, request):
+        directory = self.tmp_path / "work" / request.request_id
+        directory.mkdir(parents=True, exist_ok=True)
+        request.work_directory = directory
+        return self.result
+
+    async def download(self, request, option):
+        if self.download_error is not None:
+            raise self.download_error
+        path = request.work_directory / f"selected.{option.extension}"
+        path.write_bytes(self.payload)
+        return DownloadResult(
+            path=path,
+            actual_bytes=path.stat().st_size,
+            media_id=request.media_id,
+            source_format_id=option.source_format_id,
+            media_type=option.media_type,
+            extension=option.extension,
+            mime_type=option.mime_type,
+        )
+
+    # -- what the chat now holds ------------------------------------------------------------
+
+    def bot_messages(self) -> int:
+        sent = sum(len(self.transport.calls_to(method)) for method in SENT_METHODS)
+        return sent - len(self.transport.calls_to("deleteMessage"))
+
+    def status_edits(self) -> list[tuple[int, str]]:
+        """``(message_id, status line)`` for every status edit, card publication excluded."""
+        edits = []
+        for call in self.transport.calls:
+            if call.method not in EDIT_METHODS:
+                continue
+            params = call.parameters
+            if params.get("reply_markup") is not None:
+                continue  # the card itself, edited from `Checking link…` with its keyboard
+            body = params.get("caption") if call.method == "editMessageCaption" else params.get("text")
+            edits.append((int(params["message_id"]), str(body).rsplit("\n", 1)[-1]))
+        return edits
+
+
+def youtube_with_thumbnail(tmp_path: Path) -> InspectResult:
+    thumbnail = tmp_path / "thumbnail.jpg"
+    thumbnail.write_bytes(b"\xff\xd8\xff\xe0thumb\xff\xd9")
+    return dataclass_replace(fixture_result("youtube-video.json"), thumbnail_path=thumbnail)
+
+
+def queue_video_sent(transport: Any, chat_id: int) -> None:
+    transport.queue_result("sendVideo", runtime_message(RUNTIME_DELIVERED_ID, chat_id, video={
+        "file_id": "v", "file_unique_id": "u", "width": 640, "height": 360, "duration": 1}))
+
+
+async def tap_video(flow: RuntimeFlow, *, user_id: int) -> tuple[Any, DeliveryResult]:
+    request = await flow.workflow.submit(
+        user_id=user_id, chat_id=flow.chat_id, text=flow.result.metadata.canonical_url, chat_type="private"
+    )
+    assert request.state is RequestState.AWAITING_SELECTION
+    delivered = await flow.workflow.select(
+        request_id=request.request_id,
+        user_id=user_id,
+        chat_id=flow.chat_id,
+        preview_message_id=request.preview_message_id,
+        option_id=0,
+    )
+    return request, delivered
+
+
+async def test_runtime_tapped_video_edits_the_card_caption_and_leaves_two_messages(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any
+) -> None:
+    flow = RuntimeFlow(tmp_path, fake_bot, fake_transport, youtube_with_thumbnail(tmp_path), chat_id=301)
+    queue_video_sent(fake_transport, 301)
+
+    request, delivered = await tap_video(flow, user_id=31)
+
+    assert delivered.status == "confirmed"
+    # Photo card replaced `Checking link…`; the card and the video are all that remain (SC-004).
+    assert len(fake_transport.calls_to("sendMessage")) == 1
+    assert flow.bot_messages() == 2
+    assert request.status_message_id == RUNTIME_PHOTO_CARD_ID
+    assert request.status_is_caption is True
+    assert flow.status_edits() == [
+        (RUNTIME_PHOTO_CARD_ID, "Video — downloading…"),
+        (RUNTIME_PHOTO_CARD_ID, "Video — sending…"),
+        (RUNTIME_PHOTO_CARD_ID, "Video — sent."),
+    ]
+    # Caption edits re-render the card text above the status line.
+    for call in fake_transport.calls_to("editMessageCaption"):
+        assert call.parameters["caption"].startswith(request.status_prefix + "\n")
+
+
+async def test_runtime_automatic_video_edits_the_card_text_and_leaves_two_messages(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any
+) -> None:
+    result = fixture_result("linkedin-video-progressive.json")
+    assert result.thumbnail_path is None
+    flow = RuntimeFlow(tmp_path, fake_bot, fake_transport, result, chat_id=302)
+    queue_video_sent(fake_transport, 302)
+
+    request = await flow.workflow.submit(
+        user_id=32, chat_id=302, text=result.metadata.canonical_url, chat_type="private"
+    )
+
+    terminal = flow.registry.terminal(request.request_id)
+    assert terminal is not None and terminal.state is RequestState.COMPLETED
+    # No thumbnail: `Checking link…` became the card, so it is the one status surface.
+    assert len(fake_transport.calls_to("sendMessage")) == 1
+    assert fake_transport.calls_to("sendPhoto") == []
+    assert flow.bot_messages() == 2
+    assert request.status_message_id == RUNTIME_CHECKING_ID
+    assert flow.status_edits() == [
+        (RUNTIME_CHECKING_ID, "Video — only version available, downloading…"),
+        (RUNTIME_CHECKING_ID, "Video — sending…"),
+        (RUNTIME_CHECKING_ID, "Video — sent."),
+    ]
+
+
+async def test_runtime_picture_edits_the_checking_message_and_leaves_two_messages(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any
+) -> None:
+    result = instagram_image_result()
+    flow = RuntimeFlow(tmp_path, fake_bot, fake_transport, result, chat_id=303, payload=IMAGE_BYTES)
+    fake_transport.queue_result("sendDocument", runtime_message(RUNTIME_DELIVERED_ID, 303, document={
+        "file_id": "d", "file_unique_id": "u"}))
+
+    request = await flow.workflow.submit(
+        user_id=33, chat_id=303, text=result.metadata.canonical_url, chat_type="private"
+    )
+
+    terminal = flow.registry.terminal(request.request_id)
+    assert terminal is not None and terminal.state is RequestState.COMPLETED
+    # The `Checking link…` message and the picture document (SC-004).
+    assert len(fake_transport.calls_to("sendMessage")) == 1
+    assert len(fake_transport.calls_to("sendDocument")) == 1
+    assert flow.bot_messages() == 2
+    assert flow.status_edits() == [
+        (RUNTIME_CHECKING_ID, "Picture — downloading…"),
+        (RUNTIME_CHECKING_ID, "Picture — sending…"),
+        (RUNTIME_CHECKING_ID, "Picture — sent."),
+    ]
+
+
+async def test_runtime_worker_failure_ends_on_the_same_status_surface(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any
+) -> None:
+    error = SourceAdapterError(ErrorCategory.UNAVAILABLE, stage="downloading")
+    flow = RuntimeFlow(
+        tmp_path, fake_bot, fake_transport, youtube_with_thumbnail(tmp_path), chat_id=304, download_error=error
+    )
+
+    request, delivered = await tap_video(flow, user_id=34)
+
+    assert delivered.status == "failed"
+    assert delivered.failed_stage == "downloading"
+    next_step = failure_message(ErrorCategory.UNAVAILABLE, stage="downloading")
+    assert delivered.next_step == next_step
+    # The failure edits the card; no new message is sent for it.
+    assert len(fake_transport.calls_to("sendMessage")) == 1
+    assert fake_transport.calls_to("sendVideo") == []
+    assert flow.bot_messages() == 1
+    assert flow.status_edits() == [
+        (RUNTIME_PHOTO_CARD_ID, "Video — downloading…"),
+        (RUNTIME_PHOTO_CARD_ID, f"Video — downloading failed. {next_step}"),
+    ]
+
+
+async def test_runtime_unconfirmed_upload_ends_with_could_not_confirm_on_the_card(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any
+) -> None:
+    flow = RuntimeFlow(tmp_path, fake_bot, fake_transport, youtube_with_thumbnail(tmp_path), chat_id=305)
+    # A 502 surfaces as NetworkError: Telegram may have accepted the body (ambiguous upload).
+    fake_transport.queue_error("sendVideo", "Bad Gateway", status_code=502)
+
+    request, delivered = await tap_video(flow, user_id=35)
+
+    assert delivered.status == "unknown"
+    assert len(fake_transport.calls_to("sendMessage")) == 1
+    assert flow.status_edits() == [
+        (RUNTIME_PHOTO_CARD_ID, "Video — downloading…"),
+        (RUNTIME_PHOTO_CARD_ID, "Video — sending…"),
+        (RUNTIME_PHOTO_CARD_ID, f"Video — {UNCONFIRMED_TEXT}"),
+    ]
