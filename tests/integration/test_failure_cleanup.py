@@ -23,7 +23,7 @@ async def test_runtime_failure_is_notified_after_capacity_release(notification_f
         if notification_fails:
             raise RuntimeError("offline")
     workflow = MediaWorkflow(registry, inspect=AsyncMock(side_effect=WorkerRemoteError("too_large", "inspection")),
-        publish_preview=AsyncMock(), download=AsyncMock(), deliver=AsyncMock(), status=AsyncMock(), notify_failure=notify)
+        publish_preview=AsyncMock(), download=AsyncMock(), deliver=AsyncMock(), status=AsyncMock(), notify_failure=notify, max_file_bytes=50_000_000)
     with pytest.raises(WorkerRemoteError):
         await workflow.submit(user_id=1, chat_id=1, text="https://youtu.be/abcDEF12345", chat_type="private")
     assert len(notices) == 1
@@ -38,7 +38,7 @@ async def test_total_inspection_deadline_includes_status_send():
     async def slow(*args):
         await asyncio.sleep(1)
     workflow = MediaWorkflow(registry, inspect=AsyncMock(), publish_preview=AsyncMock(),
-        download=AsyncMock(), deliver=AsyncMock(), status=slow, inspection_seconds=0.03, reap_reserve=0)
+        download=AsyncMock(), deliver=AsyncMock(), status=slow, inspection_seconds=0.03, reap_reserve=0, max_file_bytes=50_000_000)
     with pytest.raises(TimeoutError):
         await asyncio.wait_for(workflow.submit(user_id=1, chat_id=1, text="https://youtu.be/abcDEF12345", chat_type="private"), 0.2)
     assert registry.active_work_count == 0
@@ -61,7 +61,7 @@ async def test_total_processing_deadline_marks_interrupted_upload_unknown(tmp_pa
     notify = AsyncMock()
     workflow = MediaWorkflow(registry, inspect=AsyncMock(), publish_preview=AsyncMock(), status=AsyncMock(),
         download=AsyncMock(return_value=DownloadResult(path, 7, request.media_id, "18", "video", "mp4", "video/mp4")),
-        deliver=upload, notify_failure=notify, reap_reserve=0)
+        deliver=upload, notify_failure=notify, reap_reserve=0, max_file_bytes=50_000_000)
     result = await asyncio.wait_for(workflow.process_claimed(request, option), 0.2)
     assert result.status == "unknown"
     assert result.notification_sent
@@ -124,6 +124,7 @@ async def test_inspection_failure_and_notification_failure_release_everything(tm
         deliver=never,
         status=status,
         cleanup=cleanup,
+        max_file_bytes=50_000_000,
     )
     with pytest.raises(RuntimeError, match="Telegram unavailable"):
         await workflow.submit(

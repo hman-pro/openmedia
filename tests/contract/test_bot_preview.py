@@ -4,21 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from openmedia.bot import InputError, build_preview, parse_link_message, send_preview
-from openmedia.models import FormatOption, MediaMetadata
-
-
-def option(index: int, *, audio: bool = True) -> FormatOption:
-    return FormatOption(
-        option_id=index,
-        adapter="yt_dlp",
-        source_format_id=str(index),
-        media_type="video",
-        extension="mp4",
-        mime_type="video/mp4",
-        height=1080 - index,
-        includes_audio=audio,
-    )
+from openmedia.bot import InputError, parse_link_message
+from openmedia.choices import ChoiceSet, choose
+from openmedia.models import MediaMetadata
+from openmedia.presentation import card_text
 
 
 def metadata(**changes: object) -> MediaMetadata:
@@ -116,80 +105,203 @@ async def test_handler_passes_extracted_links_to_the_workflow() -> None:
     assert workflow.submit.await_args.kwargs["links"] == ("https://youtu.be/abcDEF12345",)
 
 
-def test_preview_omits_absent_metadata_and_keeps_explicit_single_choice() -> None:
-    rendered = build_preview(
-        request_id="0123456789abcdef0123456789abcdef",
-        metadata=metadata(),
-        options=(option(0, audio=False),),
-    )
-    assert "Title:" not in rendered.text
-    assert "Creator:" not in rendered.text
-    assert "silent" in rendered.text
-    assert rendered.keyboard.inline_keyboard[0][0].callback_data == (
-        "s:0123456789abcdef0123456789abcdef:0"
-    )
+# --- 003 video card (contracts/telegram-bot.md "Video card", SC-001) ---------------------
+
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ytdlp"
+REQUEST_ID = "0123456789abcdef0123456789abcdef"
+LIMIT = 50_000_000
 
 
-def test_every_excluded_choice_is_explained_or_summarized() -> None:
-    excluded = [
-        FormatOption(option_id=index, adapter="yt_dlp", source_format_id=f"{index}+140",
-            media_type="video", extension="mp4", mime_type="video/mp4", includes_audio=True,
-            availability="excluded", unavailable_reason="Combined size is unknown or exceeds the delivery limit")
-        for index in range(1, 11)
+def inspected(name: str):
+    import json
+
+    from openmedia.sources.ytdlp import normalize_info
+
+    result = normalize_info(json.loads((FIXTURES / name).read_text()), max_file_bytes=LIMIT)
+    choice_set = choose(result.options, media_kind=result.metadata.media_kind, max_file_bytes=LIMIT)
+    return result.metadata, choice_set
+
+
+@pytest.fixture
+def youtube() -> tuple[MediaMetadata, ChoiceSet]:
+    return inspected("youtube-video.json")
+
+
+def all_buttons(rendered) -> list:
+    return [button for row in rendered.keyboard.inline_keyboard for button in row]
+
+
+def test_youtube_card_has_three_plain_buttons_in_kind_order(youtube) -> None:
+    from openmedia.bot import build_card
+
+    meta, choice_set = youtube
+    rendered = build_card(REQUEST_ID, meta, choice_set)
+    rows = rendered.keyboard.inline_keyboard
+    assert [[button.text for button in row] for row in rows] == [
+        ["Video"], ["Video (no sound)"], ["Audio only"],
     ]
-    rendered = build_preview(request_id="a" * 32, metadata=metadata(), options=(option(0), *excluded))
-    assert rendered.text.count("Unavailable:") == 4
-    assert "6 more choices are unavailable: Combined size is unknown or exceeds the delivery limit" in rendered.text
+    assert [button.callback_data for button in all_buttons(rendered)] == [
+        f"s:{REQUEST_ID}:0", f"s:{REQUEST_ID}:1", f"s:{REQUEST_ID}:2",
+    ]
 
 
-def test_preview_paginates_eight_options_with_compact_callbacks() -> None:
-    rendered = build_preview(
-        request_id="0123456789abcdef0123456789abcdef",
-        metadata=metadata(title_or_caption="Fixture", creator="Creator"),
-        options=tuple(option(index) for index in range(10)),
-        page=0,
+def test_card_callbacks_fit_telegram_limit_and_have_no_pagination(youtube) -> None:
+    from openmedia.bot import build_card
+
+    meta, choice_set = youtube
+    rendered = build_card(REQUEST_ID, meta, choice_set)
+    buttons = all_buttons(rendered)
+    assert len(buttons) <= 3
+    assert all(len(button.callback_data.encode("utf-8")) <= 64 for button in buttons)
+    assert not any(button.callback_data.startswith("p:") for button in buttons)
+    assert all(button.callback_data.startswith("s:") for button in buttons)
+
+
+def test_card_text_is_card_text_with_and_without_status(youtube) -> None:
+    from openmedia.bot import build_card
+
+    meta, choice_set = youtube
+    assert build_card(REQUEST_ID, meta, choice_set).text == card_text(meta, choice_set)
+    status = "Video — downloading…"
+    rendered = build_card(REQUEST_ID, meta, choice_set, status=status)
+    assert rendered.text == card_text(meta, choice_set, status)
+    assert rendered.text.splitlines()[-1] == status
+
+
+def test_automatic_choice_set_renders_card_without_keyboard() -> None:
+    from openmedia.bot import build_card
+
+    meta, choice_set = inspected("linkedin-video-progressive.json")
+    assert choice_set.automatic
+    rendered = build_card(REQUEST_ID, meta, choice_set, status="Video — only version available, downloading…")
+    assert rendered.keyboard is None
+    assert rendered.text == card_text(meta, choice_set, "Video — only version available, downloading…")
+
+
+def test_card_has_at_most_three_lines_besides_the_title_sc001(youtube) -> None:
+    from openmedia.bot import build_card
+
+    meta, choice_set = youtube
+    # Worst case for the YouTube card: an unavailable line is present too.
+    worst = ChoiceSet(options=choice_set.options[:2], missing={"audio": "too_large"}, automatic=False)
+    for current in (choice_set, worst):
+        before = build_card(REQUEST_ID, meta, current)
+        after = build_card(REQUEST_ID, meta, current, status="Video — downloading…")
+        for rendered in (before, after):
+            lines = rendered.text.splitlines()
+            assert lines[0] == meta.title_or_caption
+            assert len(lines) - 1 <= 3
+            assert len(all_buttons(rendered)) <= 3
+
+
+# --- send_card: one status surface, photo when possible ----------------------------------
+
+CHECKING_ID = 7
+
+
+def message_result(message_id: int, **extra: object) -> dict[str, object]:
+    return {"message_id": message_id, "date": 0, "chat": {"id": 1, "type": "private"}, **extra}
+
+
+def photo_result(message_id: int) -> dict[str, object]:
+    return message_result(message_id, photo=[{
+        "file_id": "photo-file", "file_unique_id": "photo-unique", "width": 320, "height": 180,
+    }], caption="card")
+
+
+@pytest.fixture
+def thumbnail(tmp_path: Path) -> Path:
+    path = tmp_path / "thumb.jpg"
+    path.write_bytes(b"fixture-thumbnail")
+    return path
+
+
+async def test_send_card_with_thumbnail_sends_photo_then_deletes_checking(
+    fake_bot, fake_transport, youtube, thumbnail
+) -> None:
+    from openmedia.bot import build_card, send_card
+
+    meta, choice_set = youtube
+    rendered = build_card(REQUEST_ID, meta, choice_set)
+    fake_transport.queue_result("sendPhoto", photo_result(42))
+    result = await send_card(
+        fake_bot, chat_id=1, rendered=rendered, thumbnail_path=thumbnail,
+        checking_message_id=CHECKING_ID,
     )
-    selection_buttons = [row[0] for row in rendered.keyboard.inline_keyboard if row[0].callback_data.startswith("s:")]
-    assert len(selection_buttons) == 8
-    assert all(len(button.callback_data.encode()) <= 64 for button in selection_buttons)
-    assert any(button.callback_data.endswith(":1") for row in rendered.keyboard.inline_keyboard for button in row if button.callback_data.startswith("p:"))
+    assert result == (42, True)
+    photos = fake_transport.calls_to("sendPhoto")
+    assert len(photos) == 1
+    assert photos[0].parameters["caption"] == rendered.text
+    assert "parse_mode" not in photos[0].parameters
+    markup = photos[0].parameters["reply_markup"]
+    if isinstance(markup, str):
+        import json
+
+        markup = json.loads(markup)
+    assert [row[0]["text"] for row in markup["inline_keyboard"]] == [
+        "Video", "Video (no sound)", "Audio only",
+    ]
+    deletes = fake_transport.calls_to("deleteMessage")
+    assert [call.parameters["message_id"] for call in deletes] == [CHECKING_ID]
+    methods = [call.method for call in fake_transport.calls]
+    assert methods.index("sendPhoto") < methods.index("deleteMessage")
+    assert not fake_transport.calls_to("sendMessage")
+    assert not fake_transport.calls_to("editMessageText")
 
 
-class CaptureBot:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, dict[str, object]]] = []
+async def test_send_card_ignores_delete_failure(fake_bot, fake_transport, youtube, thumbnail) -> None:
+    from openmedia.bot import build_card, send_card
 
-    async def send_message(self, **kwargs):
-        self.calls.append(("message", kwargs))
-        return type("Message", (), {"message_id": 10})()
-
-    async def send_photo(self, **kwargs):
-        assert hasattr(kwargs["photo"], "read")
-        self.calls.append(("photo", kwargs))
-        return type("Message", (), {"message_id": 11})()
-
-
-async def test_worker_thumbnail_is_uploaded_from_local_file_and_is_optional(tmp_path: Path) -> None:
-    rendered = build_preview(
-        request_id="0123456789abcdef0123456789abcdef",
-        metadata=metadata(),
-        options=(option(0),),
+    meta, choice_set = youtube
+    rendered = build_card(REQUEST_ID, meta, choice_set)
+    fake_transport.queue_result("sendPhoto", photo_result(43))
+    fake_transport.queue_error("deleteMessage", "Bad Request: message to delete not found")
+    result = await send_card(
+        fake_bot, chat_id=1, rendered=rendered, thumbnail_path=thumbnail,
+        checking_message_id=CHECKING_ID,
     )
-    bot = CaptureBot()
-    assert await send_preview(bot, chat_id=1, rendered=rendered) == 10
-    thumbnail = tmp_path / "thumb.jpg"
-    thumbnail.write_bytes(b"fixture")
-    assert await send_preview(bot, chat_id=1, rendered=rendered, thumbnail_path=thumbnail) == 10
-    assert [kind for kind, _ in bot.calls] == ["message", "photo", "message"]
+    assert result == (43, True)
 
 
-async def test_long_thumbnail_preview_keeps_every_option_and_audio_guidance(tmp_path):
-    rendered = build_preview(request_id="a" * 32,
-        metadata=metadata(title_or_caption="x" * 500, creator="y" * 200),
-        options=tuple(option(index) for index in range(9)))
-    path = tmp_path / "thumbnail.jpg"; path.write_bytes(b"image")
-    bot = CaptureBot()
-    await send_preview(bot, chat_id=1, rendered=rendered, thumbnail_path=path)
-    assert bot.calls[-1][0] == "message"
-    assert "8. video" in bot.calls[-1][1]["text"]
-    assert "audio-only" in bot.calls[-1][1]["text"]
+def assert_edited_checking_message(fake_transport, rendered) -> None:
+    edits = fake_transport.calls_to("editMessageText")
+    assert len(edits) == 1
+    assert edits[0].parameters["message_id"] == CHECKING_ID
+    assert edits[0].parameters["text"] == rendered.text
+    assert "parse_mode" not in edits[0].parameters
+    assert "reply_markup" in edits[0].parameters
+    assert not fake_transport.calls_to("sendMessage")
+    assert not fake_transport.calls_to("deleteMessage")
+
+
+async def test_send_card_without_thumbnail_edits_checking_message(fake_bot, fake_transport, youtube) -> None:
+    from openmedia.bot import build_card, send_card
+
+    meta, choice_set = youtube
+    rendered = build_card(REQUEST_ID, meta, choice_set)
+    fake_transport.queue_result("editMessageText", message_result(CHECKING_ID, text=rendered.text))
+    result = await send_card(
+        fake_bot, chat_id=1, rendered=rendered, thumbnail_path=None,
+        checking_message_id=CHECKING_ID,
+    )
+    assert result == (CHECKING_ID, False)
+    assert not fake_transport.calls_to("sendPhoto")
+    assert_edited_checking_message(fake_transport, rendered)
+
+
+async def test_send_card_falls_back_to_edit_when_photo_fails(
+    fake_bot, fake_transport, youtube, thumbnail
+) -> None:
+    from openmedia.bot import build_card, send_card
+
+    meta, choice_set = youtube
+    rendered = build_card(REQUEST_ID, meta, choice_set)
+    fake_transport.queue_error("sendPhoto", "Bad Request: IMAGE_PROCESS_FAILED")
+    fake_transport.queue_result("editMessageText", message_result(CHECKING_ID, text=rendered.text))
+    result = await send_card(
+        fake_bot, chat_id=1, rendered=rendered, thumbnail_path=thumbnail,
+        checking_message_id=CHECKING_ID,
+    )
+    assert result == (CHECKING_ID, False)
+    assert len(fake_transport.calls_to("sendPhoto")) == 1
+    assert_edited_checking_message(fake_transport, rendered)

@@ -11,8 +11,9 @@ from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
-from openmedia.models import Availability, FormatOption, MediaMetadata
-from openmedia.presentation import option_label, sort_options
+from openmedia.choices import ChoiceSet, kind_of
+from openmedia.models import MediaMetadata
+from openmedia.presentation import card_text, choice_label
 from openmedia.sources import (
     ErrorCategory,
     SourceAdapterError,
@@ -26,10 +27,11 @@ from openmedia.sources import (
 PRIVATE_CHAT_GUIDANCE = "Please send the link in a private chat with this bot."
 ONE_LINK_GUIDANCE = "Send exactly one supported public YouTube, LinkedIn, or Instagram link."
 HELP_TEXT = (
-    "Send one public YouTube video, LinkedIn video/image post, or Instagram video/image "
-    "post in this private chat. I will show native choices before downloading anything."
+    "Send one public YouTube video, LinkedIn post, or Instagram post in this private chat. "
+    "Videos: pick Video, Video (no sound), or Audio only. Pictures are sent as-is."
 )
-_CALLBACK = re.compile(r"^(s|p):([0-9a-f]{32}):(0|[1-9][0-9]{0,9})$")
+# Only the selection payload exists; the 001 ``p:`` page payload is malformed (003 contract).
+_CALLBACK = re.compile(r"^s:([0-9a-f]{32}):(0|[1-9][0-9]{0,9})$")
 
 
 def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
@@ -75,11 +77,9 @@ class InputError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class RenderedPreview:
+class RenderedCard:
     text: str
-    keyboard: InlineKeyboardMarkup
-    page: int
-    page_count: int
+    keyboard: InlineKeyboardMarkup | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,10 +95,10 @@ def parse_callback_data(data: str) -> CallbackAction:
     match = _CALLBACK.fullmatch(data)
     if match is None:
         raise InputError("This choice is invalid. Please submit the link again.")
-    index = int(match.group(3))
+    index = int(match.group(2))
     if index > 2_147_483_647:
         raise InputError("This choice is invalid. Please submit the link again.")
-    return CallbackAction(match.group(1), match.group(2), index)
+    return CallbackAction("s", match.group(1), index)
 
 
 def message_links(message: Any) -> tuple[str, ...]:
@@ -130,108 +130,65 @@ def parse_link_message(
     return recognize_source_url(urls[0])
 
 
-def selected_label(option: FormatOption) -> str:
-    """The numbered label a user saw in the preview, used to confirm their choice."""
-    return f"{option.option_id + 1}. {option_label(option)}"
-
-
-def _duration(seconds: float) -> str:
-    total = int(seconds)
-    minutes, second = divmod(total, 60)
-    hours, minute = divmod(minutes, 60)
-    if hours:
-        return f"{hours:d}:{minute:02d}:{second:02d}"
-    return f"{minute:d}:{second:02d}"
-
-
-def build_preview(
-    *,
+def build_card(
     request_id: str,
     metadata: MediaMetadata,
-    options: tuple[FormatOption, ...] | list[FormatOption],
-    page: int = 0,
-    page_size: int = 8,
-) -> RenderedPreview:
-    if page_size != 8:
-        raise ValueError("Telegram preview pages contain exactly eight choices")
-    selectable = [
-        option for option in sort_options(options) if option.availability is Availability.SELECTABLE
-    ]
-    if not selectable:
-        raise SourceAdapterError(ErrorCategory.TOO_LARGE if options else ErrorCategory.NO_FORMATS, stage="checking")
-    page_count = (len(selectable) + page_size - 1) // page_size
-    if page < 0 or page >= page_count:
-        raise ValueError("preview page is out of range")
-    start = page * page_size
-    visible = selectable[start : start + page_size]
-
-    lines = [f"Platform: {metadata.platform.title()}", f"Source: {metadata.canonical_url}"]
-    if metadata.title_or_caption is not None:
-        lines.append(f"Title: {metadata.title_or_caption[:500]}")
-    if metadata.creator is not None:
-        lines.append(f"Creator: {metadata.creator[:200]}")
-    if metadata.duration_seconds is not None:
-        lines.append(f"Duration: {_duration(metadata.duration_seconds)}")
-    lines.append("")
-    lines.append("Choose one native format:")
-    for option in visible:
-        lines.append(selected_label(option))
-    if metadata.media_kind == "video" and not any(option.media_type == "audio" for option in options):
-        lines.append("The source has no downloadable native audio-only option.")
-    excluded = [option for option in options if option.availability is Availability.EXCLUDED]
-    for option in excluded[:4]:
-        lines.append(f"Unavailable: {option_label(option)} — {option.unavailable_reason}")
-    if len(excluded) > 4:
-        # Keep the message short, but never let an excluded choice go unexplained.
-        reasons = "; ".join(dict.fromkeys(str(option.unavailable_reason) for option in excluded[4:]))
-        lines.append(f"{len(excluded) - 4} more choices are unavailable: {reasons[:300]}")
-
-    rows = [
-        [
-            InlineKeyboardButton(
-                str(option.option_id + 1),
-                callback_data=f"s:{request_id}:{option.option_id}",
-            )
-        ]
-        for option in visible
-    ]
-    navigation: list[InlineKeyboardButton] = []
-    if page > 0:
-        navigation.append(
-            InlineKeyboardButton("Previous", callback_data=f"p:{request_id}:{page - 1}")
-        )
-    if page + 1 < page_count:
-        navigation.append(
-            InlineKeyboardButton("Next", callback_data=f"p:{request_id}:{page + 1}")
-        )
-    if navigation:
-        rows.append(navigation)
-    keyboard = InlineKeyboardMarkup(rows)
-    for row in keyboard.inline_keyboard:
-        for button in row:
-            if button.callback_data is None or len(button.callback_data.encode("utf-8")) > 64:
-                raise ValueError("callback data exceeds Telegram's 64-byte boundary")
-    return RenderedPreview("\n".join(lines)[:4096], keyboard, page, page_count)
+    choice_set: ChoiceSet,
+    status: str | None = None,
+) -> RenderedCard:
+    """Plain-text card plus one button per kept choice; no keyboard for an automatic choice."""
+    text = card_text(metadata, choice_set, status)
+    if choice_set.automatic:
+        return RenderedCard(text, None)
+    rows = []
+    for option in choice_set.options:
+        data = f"s:{request_id}:{option.option_id}"
+        if len(data.encode("utf-8")) > 64:
+            raise ValueError("callback data exceeds Telegram's 64-byte boundary")
+        rows.append([InlineKeyboardButton(choice_label(kind_of(option)), callback_data=data)])
+    return RenderedCard(text, InlineKeyboardMarkup(rows) if rows else None)
 
 
-async def send_preview(
+async def send_card(
     bot: Any,
     *,
     chat_id: int,
-    rendered: RenderedPreview,
-    thumbnail_path: Path | None = None,
-) -> int:
-    """Upload a worker-provided thumbnail path, never ask Telegram to fetch its URL."""
+    rendered: RenderedCard,
+    thumbnail_path: Path | None,
+    checking_message_id: int,
+) -> tuple[int, bool]:
+    """Show the card on the request's one status surface; return ``(message_id, is_caption)``.
+
+    With a thumbnail the card becomes a photo caption and ``Checking link…`` is deleted (best
+    effort). Without one, or when the photo upload fails, ``Checking link…`` is edited into
+    the card. The thumbnail is a worker-provided local file, never a URL for Telegram to fetch.
+    """
     if thumbnail_path is not None:
+        photo_id: int | None = None
         try:
             with Path(thumbnail_path).open("rb") as thumbnail:
-                await bot.send_photo(chat_id=chat_id, photo=thumbnail)
+                message = await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=thumbnail,
+                    caption=rendered.text,
+                    reply_markup=rendered.keyboard,
+                )
+            photo_id = int(message.message_id)
         except Exception:
-            pass
-    # The keyboard always belongs to a text message, so pagination and full option
-    # descriptions work identically with or without an optional thumbnail.
-    message = await bot.send_message(chat_id=chat_id, text=rendered.text, reply_markup=rendered.keyboard)
-    return int(message.message_id)
+            photo_id = None
+        if photo_id is not None:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=checking_message_id)
+            except Exception:
+                pass
+            return photo_id, True
+    await bot.edit_message_text(
+        chat_id=chat_id,
+        message_id=checking_message_id,
+        text=rendered.text,
+        reply_markup=rendered.keyboard,
+    )
+    return checking_message_id, False
 
 
 class BotHandlers:
@@ -313,37 +270,6 @@ class BotHandlers:
         except InputError as exc:
             await query.answer(str(exc), show_alert=True)
             return
-        if action.action == "p":
-            message = query.message
-            if message is None:
-                await query.answer("Submit the link again.", show_alert=True)
-                return
-            authorized = await self.workflow.registry.authorize_preview_callback(
-                action.request_id,
-                user_id=query.from_user.id,
-                chat_id=message.chat.id,
-                preview_message_id=message.message_id,
-            )
-            if authorized.outcome is not SelectionOutcome.ACCEPTED or authorized.request is None:
-                await query.answer(self._selection_feedback(authorized.outcome), show_alert=True)
-                return
-            request = authorized.request
-            if request.metadata is None:
-                await query.answer("Submit the link again.", show_alert=True)
-                return
-            try:
-                rendered = build_preview(
-                    request_id=request.request_id,
-                    metadata=request.metadata,
-                    options=request.options,
-                    page=action.index,
-                )
-            except ValueError:
-                await query.answer("That page is unavailable.", show_alert=True)
-                return
-            await query.answer()
-            await query.edit_message_text(text=rendered.text, reply_markup=rendered.keyboard)
-            return
         message = query.message
         if message is None:
             await query.answer("Submit the link again.", show_alert=True)
@@ -370,7 +296,7 @@ class BotHandlers:
             job.close()
             await self.workflow.registry.finalize(selection.request.request_id, state="failed")
             raise
-        confirmation = f"Selected {selected_label(selection.option)}"[:200]
+        confirmation = choice_label(kind_of(selection.option))
         for action in (
             lambda: query.answer(confirmation),
             lambda: query.edit_message_reply_markup(reply_markup=None),

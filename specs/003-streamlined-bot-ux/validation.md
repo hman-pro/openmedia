@@ -17,3 +17,19 @@
 |---|---|---|---|
 | `with_sound.mp4` (H.264 + AAC, 640×360) | `video` | yes | `4ce084623333a8b9b289b87fe752bebe9a8bae90c117b5f2e92744a5fef89bbd` |
 | `silent.mp4` (H.264 only, 360×640) | `video` | yes | `39fdff979f91ab4a82e8e09b95201183018bc75d9bb809c048efd697a394ff89` |
+
+## US1
+
+- Date: 2026-09-23
+- Branch: `003-streamlined-bot-ux` on top of `f4708eb` (phase 2), phase 3 uncommitted
+- Command: `uv run pytest` — green, 491 passed, 3 deselected (`live`), 0 failed
+- Rows walked with the fake transport and controlled fixtures (quickstart §2):
+
+| Scenario | Evidence (test) | Result |
+|---|---|---|
+| YouTube video, thumbnail | `test_bot_preview.py::test_send_card_with_thumbnail_sends_photo_then_deletes_checking`, `test_youtube_card_has_three_plain_buttons_in_kind_order`, `test_card_has_at_most_three_lines_besides_the_title_sc001` | Pass: one `sendPhoto` carrying caption (title + duration) and buttons `Video`, `Video (no sound)`, `Audio only`, then `deleteMessage` of `Checking link…`; no `sendMessage` |
+| No thumbnail | `test_send_card_without_thumbnail_edits_checking_message`, `test_send_card_falls_back_to_edit_when_photo_fails` | Pass: `Checking link…` edited into the card with its keyboard; no new message |
+| Tap `Video` | `test_download_flow.py::test_youtube_card_offers_three_choices_and_video_downloads_format_18`, `test_delivery_errors.py::test_video_kinds_use_send_video_with_streaming_and_known_metadata` | Pass: exactly format `18` downloaded; `sendVideo` with `supports_streaming=True` and known width/height/duration |
+| LinkedIn muxed video | `test_download_flow.py::test_linkedin_progressive_single_video_is_claimed_and_sent_without_a_tap`, `test_bot_preview.py::test_automatic_choice_set_renders_card_without_keyboard` | Pass for US1 scope: card without keyboard, `publish_and_claim`, download starts without a callback, delivered on the `video` path (`sendVideo`). The kept rendition is yt-dlp format `1` (higher bitrate of two unknown-codec MP4s, R2 tie-break), not `0` as the T018 task line says; the test pins `1`. The `Video — only version available, downloading…` line on the card belongs to US3 (T032); until then progress is still sent as separate messages |
+| Every video choice too large | `test_download_flow.py::test_every_video_candidate_over_the_limit_fails_as_too_large`, `test_bot_errors.py::test_all_excluded_preview_sends_exactly_one_notice_saying_nothing_fits` | Pass: no card, no keyboard, one failure notice with the 001 `too_large` meaning at stage `checking` |
+| Old `p:` callback | `test_bot_callbacks.py::test_page_callback_gets_the_invalid_choice_alert_without_touching_the_registry`, `test_malformed_callbacks_are_rejected` | Pass: answered with the invalid-choice alert; registry untouched; no edit |

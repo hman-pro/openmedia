@@ -72,7 +72,7 @@ def oversized_option(index: int):
 async def test_all_excluded_preview_sends_exactly_one_notice_saying_nothing_fits() -> None:
     from unittest.mock import AsyncMock
 
-    from openmedia.bot import BotHandlers, build_preview
+    from openmedia.bot import BotHandlers, build_card
     from openmedia.coordinator import MediaWorkflow, RequestRegistry
     from openmedia.models import MediaMetadata
     from openmedia.sources import InspectResult
@@ -83,20 +83,25 @@ async def test_all_excluded_preview_sends_exactly_one_notice_saying_nothing_fits
     async def inspect(request):
         return InspectResult(metadata, (oversized_option(0), oversized_option(1)))
 
-    async def preview(request, result):
-        build_preview(request_id=request.request_id, metadata=result.metadata, options=result.options)
+    cards: list[object] = []
+
+    async def preview(request, result, choice_set):
+        cards.append(build_card(request.request_id, result.metadata, choice_set))
         return 1
 
     async def notify(request, result):
         sent.append(f"The {result.failed_stage} stage failed. {result.next_step}")
 
     workflow = MediaWorkflow(RequestRegistry(), inspect=inspect, publish_preview=preview,
-        download=AsyncMock(), deliver=AsyncMock(), status=AsyncMock(), notify_failure=notify)
+        download=AsyncMock(), deliver=AsyncMock(), status=AsyncMock(), notify_failure=notify,
+        max_file_bytes=50_000_000)
     reply = AsyncMock(side_effect=sent.append)
     await BotHandlers(workflow)._submit(private_update("https://youtu.be/abcDEF12345", reply), None)
     assert len(sent) == 1
     assert "none of the available choices" in sent[0].lower()
     assert "smaller available option" not in sent[0]
+    # Nothing fits, so no card (and no keyboard) is ever rendered.
+    assert cards == []
 
 
 @pytest.mark.parametrize(

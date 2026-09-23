@@ -1,4 +1,4 @@
-"""Native-byte Telegram document delivery with explicit uncertainty semantics."""
+"""Native-byte Telegram delivery (inline video or document) with explicit uncertainty semantics."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 
 from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, TelegramError, TimedOut
 
-from openmedia.models import DeliveryResult, DownloadRequest
+from openmedia.models import DeliveryResult, DownloadRequest, FormatOption, MediaType
 from openmedia.network import FileBoundaryError, ResponseTooLarge, validate_owned_file
 from openmedia.sources import DownloadResult
 
@@ -26,7 +26,36 @@ def _failure(status: str, category: str, next_step: str) -> DeliveryResult:
     )
 
 
-async def deliver_document(
+async def _send(
+    bot: Any,
+    *,
+    request: DownloadRequest,
+    selected: FormatOption,
+    file: Any,
+    duration_seconds: float | None,
+    timeout: float,
+) -> Any:
+    """``video``/``silent`` play inline via ``sendVideo``; audio and pictures stay documents."""
+    common = {
+        "chat_id": request.chat_id,
+        "filename": f"media.{selected.extension}",
+        "read_timeout": timeout,
+        "write_timeout": timeout,
+    }
+    if selected.media_type == MediaType.VIDEO:
+        # Metadata hints only; the uploaded bytes are the downloaded file, unchanged (R7).
+        hints: dict[str, int] = {}
+        if selected.width:
+            hints["width"] = selected.width
+        if selected.height:
+            hints["height"] = selected.height
+        if duration_seconds is not None and duration_seconds >= 0:
+            hints["duration"] = int(round(duration_seconds))
+        return await bot.send_video(video=file, supports_streaming=True, **hints, **common)
+    return await bot.send_document(document=file, **common)
+
+
+async def deliver_media(
     bot: Any,
     *,
     request: DownloadRequest,
@@ -34,6 +63,7 @@ async def deliver_document(
     owned_directory: Path,
     max_file_bytes: int,
     deadline: float,
+    duration_seconds: float | None = None,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> DeliveryResult:
@@ -64,13 +94,14 @@ async def deliver_document(
         if monotonic() >= deadline:
             return _failure("failed", "timeout", "Retry with the link later.")
         try:
-            with downloaded.path.open("rb") as document:
-                message = await bot.send_document(
-                    chat_id=request.chat_id,
-                    document=document,
-                    filename=f"media.{selected.extension}",
-                    read_timeout=max(0.1, deadline - monotonic()),
-                    write_timeout=max(0.1, deadline - monotonic()),
+            with downloaded.path.open("rb") as file:
+                message = await _send(
+                    bot,
+                    request=request,
+                    selected=selected,
+                    file=file,
+                    duration_seconds=duration_seconds,
+                    timeout=max(0.1, deadline - monotonic()),
                 )
             message_id = getattr(message, "message_id", None)
             if not isinstance(message_id, int) or message_id <= 0:

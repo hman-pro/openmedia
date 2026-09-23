@@ -88,8 +88,6 @@ def test_estimated_and_unknown_sizes_remain_distinct() -> None:
 
 
 def test_unknown_codecs_are_present_not_absent() -> None:
-    from openmedia.presentation import option_label
-
     result = normalize_info(load("linkedin-video-progressive.json"), max_file_bytes=50_000_000)
     assert [option.source_format_id for option in result.options if option.availability is Availability.SELECTABLE] != []
     assert {option.source_format_id for option in result.options} == {"0", "1"}
@@ -100,7 +98,10 @@ def test_unknown_codecs_are_present_not_absent() -> None:
         assert option.size_kind is SizeKind.UNKNOWN
         assert not option.transport_ref.get("vcodec")
         assert not option.transport_ref.get("acodec")
-    assert len({option_label(option) for option in result.options}) == 2
+        assert option.extension == "mp4"
+    # The two renditions stay distinguishable by their fields: native bitrate, not a label.
+    assert len({option.bitrate for option in result.options}) == 2
+    assert all(option.bitrate for option in result.options)
 
 
 def test_unknown_codecs_never_pair_for_merging() -> None:

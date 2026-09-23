@@ -86,7 +86,8 @@ async def test_shutdown_reaps_real_child_group_cleans_workspace_and_removes_heal
     monkeypatch.setattr(runtime.HealthTrackingBot, "send_message", AsyncMock(), raising=False)
     workflow = MediaWorkflow(registry, inspect=callbacks.inspect, publish_preview=callbacks.preview,
         download=callbacks.download, deliver=callbacks.deliver, status=callbacks.status,
-        cleanup=callbacks.cleanup, notify_failure=callbacks.notify_failure)
+        cleanup=callbacks.cleanup, notify_failure=callbacks.notify_failure,
+        max_file_bytes=settings.max_file_bytes)
     await app.post_init(app)
     health = app.bot_data["openmedia_health"]
     health.record_successful_poll()
@@ -308,15 +309,19 @@ async def test_timing_events_record_measured_preview_ack_and_upstream(tmp_path, 
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
     from openmedia.coordinator import RequestRegistry
+    from openmedia.choices import choose
     from openmedia.models import MediaMetadata, FormatOption
     from openmedia.sources import InspectResult
     callbacks = runtime.RuntimeCallbacks(Settings.from_env(environment(tmp_path)),
-        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=1)))))
+        SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=1)),
+            edit_message_text=AsyncMock())))
     request = RequestRegistry().new_request(user_id=1, chat_id=1, source_url="https://youtu.be/abcDEF12345", platform="youtube", media_id="abcDEF12345")
+    result = InspectResult(MediaMetadata("youtube", request.source_url, request.media_id),
+        (FormatOption(0, "fixture", "v", "video", "mp4", "video/mp4", includes_audio=True),))
     with caplog.at_level("INFO", logger="openmedia"):
         await callbacks.status(request, "checking")
-        await callbacks.preview(request, InspectResult(MediaMetadata("youtube", request.source_url, request.media_id),
-            (FormatOption(0, "fixture", "v", "video", "mp4", "video/mp4", includes_audio=True),)))
+        await callbacks.preview(request, result,
+            choose(result.options, media_kind=result.metadata.media_kind, max_file_bytes=50_000_000))
         callbacks.upstream(request, {"upstream_status_class": "429"})
     events = [json.loads(record.message) for record in caplog.records]
     assert {event["stage"] for event in events} >= {"acknowledgment", "preview", "source_response"}
@@ -385,7 +390,8 @@ async def test_downloading_status_names_the_selected_option(tmp_path):
         options=(option,), preview_message_id=9)
     await registry.claim_selection(request.request_id, user_id=1, chat_id=1, preview_message_id=9, option_id=3)
     await callbacks.status(request, "downloading")
-    assert "4. audio · M4A · 129.5 kbps" in send.await_args.kwargs["text"]
+    # The plain choice label replaces the 001 numbered format description (003 R9).
+    assert send.await_args.kwargs["text"] == "Audio only — downloading…"
 
 
 async def test_request_logs_separate_service_timing_from_external_failures(tmp_path, caplog):
@@ -432,7 +438,7 @@ async def test_confirmed_delivery_logs_measured_selection_time_and_terminal_outc
     request.processing_deadline = time.monotonic() + settings.processing_seconds - 7.5  # selected 7.5s ago
     async def deliver(*args, **kwargs):
         return DeliveryResult(status="confirmed", message_id=5, actual_bytes=7)
-    monkeypatch.setattr(runtime, "deliver_document", deliver)
+    monkeypatch.setattr(runtime, "deliver_media", deliver)
     with caplog.at_level("INFO", logger="openmedia"):
         await callbacks.deliver(request, SimpleNamespace())
     events = {event["stage"]: event for event in (json.loads(record.message) for record in caplog.records)}

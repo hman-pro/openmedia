@@ -23,6 +23,10 @@ TOKEN = "123456789:AAEXAMPLE-controlled-tests-only-not-a-real-token"
 LINK = "https://youtu.be/abcDEF12345"
 MEDIA_ID = "abcDEF12345"
 OPTION = FormatOption(0, "fixture", "18", "video", "mp4", "video/mp4", includes_audio=True)
+# A second kind keeps the default journey on the tapped card: one kept choice would be automatic.
+AUDIO_OPTION = FormatOption(1, "fixture", "140", "audio", "m4a", "audio/mp4")
+MAX_FILE_BYTES = 50_000_000
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ytdlp"
 
 
 class Trace:
@@ -53,7 +57,7 @@ def workflow_for(registry: RequestRegistry, tmp_path: Path, **overrides: Any) ->
     path.write_bytes(b"fixture")
     metadata = MediaMetadata("youtube", LINK, MEDIA_ID)
     callbacks: dict[str, Any] = {
-        "inspect": AsyncMock(return_value=InspectResult(metadata=metadata, options=(OPTION,))),
+        "inspect": AsyncMock(return_value=InspectResult(metadata=metadata, options=(OPTION, AUDIO_OPTION))),
         "publish_preview": AsyncMock(return_value=7),
         "download": AsyncMock(return_value=DownloadResult(path=path, media_id=MEDIA_ID,
             source_format_id="18", media_type="video", extension="mp4", mime_type="video/mp4",
@@ -63,7 +67,7 @@ def workflow_for(registry: RequestRegistry, tmp_path: Path, **overrides: Any) ->
         "notify_failure": AsyncMock(),
     }
     callbacks.update(overrides)
-    return MediaWorkflow(registry, **callbacks)
+    return MediaWorkflow(registry, max_file_bytes=MAX_FILE_BYTES, **callbacks)
 
 
 async def submit(workflow: MediaWorkflow) -> Any:
@@ -87,6 +91,67 @@ async def test_success_flow_records_every_stage(trace: Trace, tmp_path: Path) ->
     assert finished["bytes"] == 7
     selection = next(entry for entry in entries if entry["stage"] == "selection")
     assert selection["option_id"] == 0
+
+
+def fixture_workflow(registry: RequestRegistry, tmp_path: Path, fixture: str) -> MediaWorkflow:
+    """A workflow whose inspection is the normalized yt-dlp fixture and whose download echoes the choice."""
+    from openmedia.sources.ytdlp import normalize_info
+
+    info = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
+    result = normalize_info(info, max_file_bytes=MAX_FILE_BYTES)
+
+    async def download(_request: Any, option: FormatOption) -> DownloadResult:
+        path = tmp_path / f"media.{option.extension}"
+        path.write_bytes(b"fixture")
+        return DownloadResult(path=path, media_id=result.metadata.media_id,
+            source_format_id=option.source_format_id, media_type=str(option.media_type),
+            extension=option.extension, mime_type=option.mime_type, actual_bytes=7)
+
+    return workflow_for(registry, tmp_path, inspect=AsyncMock(return_value=result), download=download)
+
+
+def assert_no_link_or_identifier(entry: dict[str, Any], *secrets: str) -> None:
+    assert not {"source_url", "chat_id", "user_id", "url", "canonical_url", "media_id"} & set(entry)
+    text = json.dumps(entry)
+    assert "http" not in text
+    for secret in secrets:
+        assert secret not in text
+
+
+async def test_tapped_choice_records_choice_kinds_and_a_manual_selection(trace: Trace, tmp_path: Path) -> None:
+    workflow = fixture_workflow(RequestRegistry(), tmp_path, "youtube-video.json")
+    request = await workflow.submit(user_id=42, chat_id=4200,
+        text="https://www.youtube.com/watch?v=fixtureYT01", chat_type="private")
+    await select(workflow, request)
+    entries = [entry for entry in trace.entries() if entry.get("request_id") == request.request_id]
+    finished = next(entry for entry in entries if entry["stage"] == "inspection_finished")
+    assert finished["choices"] == ["video", "silent", "audio"]
+    assert finished["options"] > 3  # still the count of native options the source offered
+    selection = next(entry for entry in entries if entry["stage"] == "selection")
+    assert selection["automatic"] is False
+    assert selection["option_id"] == 0
+    for entry in (finished, selection):
+        assert_no_link_or_identifier(entry, "fixtureYT01", "4200")
+
+
+async def test_linkedin_single_choice_records_an_automatic_selection(trace: Trace, tmp_path: Path) -> None:
+    link = "https://www.linkedin.com/posts/example-author_example-slug-ugcPost-7507745133358940161-abcd"
+    workflow = fixture_workflow(RequestRegistry(), tmp_path, "linkedin-video-progressive.json")
+    request = await workflow.submit(user_id=42, chat_id=4200, text=link, chat_type="private")
+    entries = [entry for entry in trace.entries() if entry.get("request_id") == request.request_id]
+    seen = [entry["stage"] for entry in entries]
+    assert seen[:5] == ["received", "inspection_started", "inspection_finished", "selection", "download_started"]
+    finished = next(entry for entry in entries if entry["stage"] == "inspection_finished")
+    assert finished["choices"] == ["video"]
+    assert finished["options"] == 2
+    selection = next(entry for entry in entries if entry["stage"] == "selection")
+    assert selection["automatic"] is True
+    assert selection["option_id"] == 0
+    for entry in (finished, selection):
+        # `platform: "linkedin"` is a required field on every request entry (002 data model),
+        # so the check targets the link's host and path fragments, not the platform name.
+        assert_no_link_or_identifier(entry, "7507745133358940161", "linkedin.com",
+            "example-author", "example-slug", "4200")
 
 
 async def test_worker_failure_names_stage_cause_chain_and_worker_output(trace: Trace, tmp_path: Path) -> None:
@@ -427,14 +492,14 @@ async def test_runtime_journey_puts_every_fr002_stage_in_one_trace(
     callbacks = runtime.RuntimeCallbacks(Settings(telegram_bot_token=TOKEN, work_dir=work),
         SimpleNamespace(bot=bot))
 
-    async def send_preview(*_args: Any, **_kwargs: Any) -> int:
-        return 7
+    async def send_card(*_args: Any, **_kwargs: Any) -> tuple[int, bool]:
+        return 7, False
 
-    async def deliver_document(*_args: Any, **_kwargs: Any) -> DeliveryResult:
+    async def deliver_media(*_args: Any, **_kwargs: Any) -> DeliveryResult:
         return DeliveryResult(status="confirmed", message_id=9, actual_bytes=7)
 
-    monkeypatch.setattr(runtime, "send_preview", send_preview)
-    monkeypatch.setattr(runtime, "deliver_document", deliver_document)
+    monkeypatch.setattr(runtime, "send_card", send_card)
+    monkeypatch.setattr(runtime, "deliver_media", deliver_media)
 
     async def download(request: Any, _option: Any) -> DownloadResult:
         # The real download creates the workspace; deliver and cleanup need it to exist.

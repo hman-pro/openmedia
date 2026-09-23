@@ -21,13 +21,15 @@ from dataclasses import fields
 from telegram.ext import Application, ApplicationBuilder, ExtBot
 from telegram.request import HTTPXRequest
 
-from openmedia.bot import build_preview, register_handlers, selected_label, send_preview
+from openmedia.bot import build_card, register_handlers, send_card
+from openmedia.choices import ChoiceSet, kind_of
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
-from openmedia.delivery import deliver_document
+from openmedia.delivery import deliver_media
 from openmedia.diagnostics import REQUEST_CONTEXT, configure_diagnostics, redact
 from openmedia.diagnostics import event as record_event  # `event` names worker messages here
 from openmedia.models import DeliveryResult, DownloadRequest, FormatOption
+from openmedia.presentation import CHECKING_TEXT, card_text, choice_label, status_text
 from openmedia.sources import DownloadInput, DownloadResult, InspectInput, InspectResult
 from openmedia.workers import (
     WorkerSupervisor,
@@ -368,14 +370,17 @@ class RuntimeCallbacks:
             raise RuntimeError("inspect worker returned an invalid result")
         return decode_inspect_result(value)
 
-    async def preview(self, request: DownloadRequest, result: InspectResult) -> int:
-        rendered = build_preview(
-            request_id=request.request_id,
-            metadata=result.metadata,
-            options=result.options,
-        )
-        message_id = await send_preview(self.application.bot, chat_id=request.chat_id,
-            rendered=rendered, thumbnail_path=result.thumbnail_path)
+    async def preview(self, request: DownloadRequest, result: InspectResult, choice_set: ChoiceSet) -> int:
+        if request.status_message_id is None:
+            raise RuntimeError("the card needs the request's Checking link… message")
+        rendered = build_card(request.request_id, result.metadata, choice_set)
+        message_id, is_caption = await send_card(self.application.bot, chat_id=request.chat_id,
+            rendered=rendered, thumbnail_path=result.thumbnail_path,
+            checking_message_id=request.status_message_id)
+        # The card is now the request's one status surface; later stages edit below its text.
+        request.status_message_id = message_id
+        request.status_is_caption = is_caption
+        request.status_prefix = card_text(result.metadata, choice_set)
         self.observe(request, "preview")
         return message_id
 
@@ -411,13 +416,14 @@ class RuntimeCallbacks:
     async def deliver(self, request: DownloadRequest, result: DownloadResult) -> DeliveryResult:
         if request.work_directory is None or request.processing_deadline is None:
             raise RuntimeError("selected request has no delivery context")
-        result = await deliver_document(
+        result = await deliver_media(
                 self.application.bot,
                 request=request,
                 downloaded=result,
                 owned_directory=request.work_directory,
                 max_file_bytes=self.settings.max_file_bytes,
                 deadline=request.processing_deadline,
+                duration_seconds=request.metadata.duration_seconds if request.metadata else None,
         )
         selected_at = request.processing_deadline - self.settings.processing_seconds
         self.observe(request, "delivery", outcome=result.status.value, bytes=result.actual_bytes,
@@ -430,20 +436,16 @@ class RuntimeCallbacks:
     async def status(self, request: DownloadRequest, stage: str) -> None:
         REQUEST_CONTEXT.set(request.request_id)
         self.observe(request, stage)
-        labels = {
-            "checking": "Checking the public link…",
-            "downloading": "Downloading the selected native format…",
-            "sending": "Sending the file…",
-        }
-        text = labels[stage]
-        if stage == "downloading" and request.selected_option_id is not None:
-            text = f"Downloading your choice: {selected_label(request.option(request.selected_option_id))}"
-        await self.application.bot.send_message(
-                chat_id=request.chat_id,
-                text=text,
-        )
         if stage == "checking":
+            message = await self.application.bot.send_message(chat_id=request.chat_id, text=CHECKING_TEXT)
+            # The request's one status surface until a card replaces it (003 "Progress surface").
+            request.status_message_id = int(message.message_id)
             self.observe(request, "acknowledgment")
+            return
+        if request.selected_option_id is None:
+            raise RuntimeError(f"stage {stage} has no selected choice")
+        label = choice_label(kind_of(request.option(request.selected_option_id)))
+        await self.application.bot.send_message(chat_id=request.chat_id, text=status_text(label, stage))
 
     async def cleanup(self, request: DownloadRequest) -> None:
         directory = request.work_directory
@@ -628,6 +630,7 @@ def build_application(settings: Settings) -> tuple[Application[Any, ...], Reques
         download=callbacks.download,
         deliver=callbacks.deliver,
         status=callbacks.status,
+        max_file_bytes=settings.max_file_bytes,
         cleanup=callbacks.cleanup,
         notify_failure=callbacks.notify_failure,
     )

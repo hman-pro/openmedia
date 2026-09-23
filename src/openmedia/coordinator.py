@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, AsyncIterator
 
+from openmedia.choices import ChoiceSet, choose
 from openmedia.diagnostics import event
 from openmedia.models import (
     DeliveryResult,
@@ -567,7 +568,7 @@ class WorkflowBusy(WorkflowError):
 
 
 InspectCallable = Callable[[DownloadRequest], Awaitable[InspectResult]]
-PreviewCallable = Callable[[DownloadRequest, InspectResult], Awaitable[int]]
+PreviewCallable = Callable[[DownloadRequest, InspectResult, ChoiceSet], Awaitable[int]]
 DownloadCallable = Callable[[DownloadRequest, FormatOption], Awaitable[DownloadResult]]
 DeliverCallable = Callable[[DownloadRequest, DownloadResult], Awaitable[DeliveryResult]]
 StatusCallable = Callable[[DownloadRequest, str], Awaitable[Any]]
@@ -586,6 +587,7 @@ class MediaWorkflow:
         download: DownloadCallable,
         deliver: DeliverCallable,
         status: StatusCallable,
+        max_file_bytes: int,
         cleanup: CleanupCallable | None = None,
         notify_failure: Callable[[DownloadRequest, DeliveryResult], Awaitable[Any]] | None = None,
         inspection_seconds: float = 60,
@@ -598,6 +600,7 @@ class MediaWorkflow:
         self._deliver = deliver
         self._status = status
         self._cleanup = cleanup
+        self.max_file_bytes = max_file_bytes
         self.notify_failure = notify_failure
         self.inspection_seconds = inspection_seconds
         self.reap_reserve = reap_reserve
@@ -637,22 +640,55 @@ class MediaWorkflow:
                 result = await self._inspect(request)
                 if result.metadata.media_id != request.media_id:
                     raise WorkflowError("inspection returned a different media identity")
-                event("inspection_finished", request=request, outcome="ok", options=len(result.options))
-                preview_message_id = await self._publish_preview(request, result)
-                published = await self.registry.publish_preview(
-                    request.request_id,
-                    metadata=result.metadata,
-                    options=result.options,
-                    preview_message_id=preview_message_id,
+                choice_set = choose(
+                    result.options,
+                    media_kind=result.metadata.media_kind,
+                    max_file_bytes=self.max_file_bytes,
                 )
-                if not published:
-                    raise WorkflowError("request was replaced before preview publication")
+                if not choice_set.options:
+                    from openmedia.sources import ErrorCategory, SourceAdapterError
+
+                    category = (
+                        ErrorCategory.TOO_LARGE
+                        if "too_large" in choice_set.missing.values()
+                        else ErrorCategory.NO_FORMATS
+                    )
+                    raise SourceAdapterError(category, stage="checking")
+                event("inspection_finished", request=request, outcome="ok",
+                    options=len(result.options),
+                    choices=_kinds(choice_set))
+                preview_message_id = await self._publish_preview(request, result, choice_set)
+                claimed: FormatOption | None = None
+                if choice_set.automatic:
+                    # One possible choice: publish and claim atomically, no tap (research R8).
+                    selection = await self.registry.publish_and_claim(
+                        request.request_id,
+                        metadata=result.metadata,
+                        options=choice_set.options,
+                        preview_message_id=preview_message_id,
+                    )
+                    if selection.outcome is not SelectionOutcome.ACCEPTED or selection.option is None:
+                        raise WorkflowError("request changed before automatic claim")
+                    claimed = selection.option
+                else:
+                    published = await self.registry.publish_preview(
+                        request.request_id,
+                        metadata=result.metadata,
+                        options=choice_set.options,
+                        preview_message_id=preview_message_id,
+                    )
+                    if not published:
+                        raise WorkflowError("request was replaced before preview publication")
                 await self._run_cleanup(request)
-                return request
         except BaseException as exc:
             await self._run_cleanup(request)
             await self._fail(request, exc, "checking")
             raise
+        if claimed is not None:
+            # Outside the inspection deadline: the claimed download runs under its own
+            # processing deadline, exactly like a tapped choice.
+            await self.process_claimed(request, claimed, automatic=True)
+        return request
 
     async def select(
         self,
@@ -680,10 +716,12 @@ class MediaWorkflow:
         self,
         request: DownloadRequest,
         option: FormatOption,
+        *,
+        automatic: bool = False,
     ) -> DeliveryResult:
-        """Continue a selection already atomically claimed by a short callback handler."""
+        """Continue a selection already claimed atomically, by a tap or automatically."""
         request_id = request.request_id
-        event("selection", request=request, option_id=option.option_id)
+        event("selection", request=request, option_id=option.option_id, automatic=automatic)
         try:
             async with asyncio.timeout(max(0, (request.processing_deadline or self.registry.monotonic()) - self.reap_reserve - self.registry.monotonic())):
                 await self._status(request, "downloading")
@@ -801,6 +839,12 @@ class MediaWorkflow:
             raise WorkflowError("downloaded output is unavailable") from exc
         if actual != result.actual_bytes:
             raise WorkflowError("downloaded output byte count changed")
+
+
+def _kinds(choice_set: ChoiceSet) -> list[str]:
+    from openmedia.choices import kind_of
+
+    return [kind_of(option).value for option in choice_set.options]
 
 
 class ParentRateController:
