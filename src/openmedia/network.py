@@ -282,9 +282,18 @@ class GuardedHTTPTransport:
         workspace_limit: int,
         headers: Mapping[str, str] | None = None,
         deadline: float | None = None,
+        range_bytes: int | None = None,
     ) -> int:
+        """Stream one URL into a new owned file.
+
+        With ``range_bytes``, the file is fetched as ``range=start-end`` query pieces of at most
+        that size, as yt-dlp does for YouTube: a whole-file GET is throttled to about playback
+        speed. A piece shorter than requested ends the file.
+        """
         if output_limit <= 0 or workspace_limit <= 0:
             raise ValueError("download limits must be positive")
+        if range_bytes is not None and range_bytes <= 0:
+            raise ValueError("range_bytes must be positive")
         destination = Path(destination)
         if not destination.is_absolute() or destination.name in ("", ".", ".."):
             raise FileBoundaryError("destination must be a named absolute path")
@@ -297,32 +306,31 @@ class GuardedHTTPTransport:
             raise ResponseTooLarge("workspace limit is already exhausted")
         limit = min(output_limit, remaining_workspace)
 
-        connection, response, _final_url = self._open(
-            url, headers=headers, deadline=deadline
-        )
         descriptor: int | None = None
         written = 0
+
+        def create() -> int:
+            # Created only once the source answered 2xx, so a refused attempt leaves nothing behind.
+            nonlocal descriptor
+            if descriptor is None:
+                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                if hasattr(os, "O_NOFOLLOW"):
+                    flags |= os.O_NOFOLLOW
+                descriptor = os.open(destination, flags, 0o600)
+            return descriptor
+
         try:
-            if not 200 <= response.status < 300:
-                # Classified from the status line alone; the error body is never read or written.
-                from openmedia.sources import EXPIRED_URL, SourceAdapterError, ErrorCategory
-                category = ErrorCategory.RATE_LIMITED if response.status == 429 else ErrorCategory.UNAVAILABLE
-                detail = EXPIRED_URL if response.status in {403, 410} else None
-                raise SourceAdapterError(category, stage="download", detail=detail)
-            self._check_content_length(response, limit)
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-            if hasattr(os, "O_NOFOLLOW"):
-                flags |= os.O_NOFOLLOW
-            descriptor = os.open(destination, flags, 0o600)
-            while chunk := response.read(self.chunk_size):
-                if written + len(chunk) > limit:
-                    raise ResponseTooLarge(f"download exceeded {limit} bytes")
-                view = memoryview(chunk)
-                while view:
-                    count = os.write(descriptor, view)
-                    view = view[count:]
-                written += len(chunk)
-            os.fsync(descriptor)
+            while True:
+                piece_url = url
+                if range_bytes is not None:
+                    separator = "&" if urlsplit(url).query else "?"
+                    piece_url = f"{url}{separator}range={written}-{written + range_bytes - 1}"
+                piece = self._download_piece(piece_url, create, headers=headers, deadline=deadline,
+                    limit=limit, written=written)
+                written += piece
+                if range_bytes is None or piece < range_bytes:
+                    break
+            os.fsync(create())
         except BaseException:
             if descriptor is not None:
                 os.close(descriptor)
@@ -335,9 +343,41 @@ class GuardedHTTPTransport:
         finally:
             if descriptor is not None:
                 os.close(descriptor)
-            connection.close()
         validate_owned_file(destination, parent, max_bytes=output_limit)
         return written
+
+    def _download_piece(
+        self,
+        url: str,
+        create: Callable[[], int],
+        *,
+        headers: Mapping[str, str] | None,
+        deadline: float | None,
+        limit: int,
+        written: int,
+    ) -> int:
+        connection, response, _final_url = self._open(url, headers=headers, deadline=deadline)
+        try:
+            if not 200 <= response.status < 300:
+                # Classified from the status line alone; the error body is never read or written.
+                from openmedia.sources import EXPIRED_URL, SourceAdapterError, ErrorCategory
+                category = ErrorCategory.RATE_LIMITED if response.status == 429 else ErrorCategory.UNAVAILABLE
+                detail = EXPIRED_URL if response.status in {403, 410} else None
+                raise SourceAdapterError(category, stage="download", detail=detail)
+            self._check_content_length(response, limit - written)
+            descriptor = create()
+            received = 0
+            while chunk := response.read(self.chunk_size):
+                if written + received + len(chunk) > limit:
+                    raise ResponseTooLarge(f"download exceeded {limit} bytes")
+                view = memoryview(chunk)
+                while view:
+                    count = os.write(descriptor, view)
+                    view = view[count:]
+                received += len(chunk)
+            return received
+        finally:
+            connection.close()
 
     def _open(
         self,

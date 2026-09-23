@@ -558,6 +558,9 @@ def _child_main() -> int:
             category = "unsafe_destination"
         elif isinstance(exc, OSError) and exc.errno == 28:
             category = "storage_exhausted"
+        elif isinstance(exc, (ConnectionError, TimeoutError)) and category == "internal":
+            # A dropped or stalled upstream connection is retryable, not a fault in the service.
+            category = "timeout"
         if isinstance(exc, (ConnectionError, TimeoutError)):
             print(json.dumps({"event": "progress", "upstream_status_class": "connection_failure"}), flush=True)
         stage = getattr(exc, "stage", None)

@@ -170,10 +170,15 @@ requests from two different users; verify the response and destination for each.
   available metadata before asking for selection (Story 1.1–1.2).
 - **FR-004**: Metadata MUST identify the source platform and link and include available
   title or caption, creator, applicable duration, and thumbnail. Missing optional fields
-  MUST NOT prevent a download with usable options (Story 1.2, 1.5).
+  MUST NOT prevent a download with usable options (Story 1.2, 1.5). (amended by 003) The
+  preview now shows only thumbnail, title, and duration, and a picture gets no preview;
+  see `specs/003-streamlined-bot-ux/spec.md` FR-001 and FR-008.
 - **FR-005**: Each selectable option MUST identify its media type, file format, available
   quality, known or estimated size, and whether video includes audio. Unknown values MUST
   be labeled or omitted without fabrication (Story 1.6; size and silent-video edge cases).
+  (amended by 003) Options are no longer listed: a video offers at most the labeled choices
+  `Video`, `Video (no sound)`, and `Audio only`, with no format, quality, or size shown; see
+  `specs/003-streamlined-bot-ux/spec.md` FR-002–FR-006.
 - **FR-006**: Offered video and audio formats and quality choices MUST be available from
   the source and supported by the service without format conversion. The service MUST
   preserve the selected source format and MUST NOT generate additional formats or quality
@@ -183,7 +188,9 @@ requests from two different users; verify the response and destination for each.
   (Story 1.3, 1.6–1.7; image and audio-only edge cases).
 - **FR-007**: The service MUST wait for an explicit selection before downloading the
   requested media file, including when only one choice exists. Metadata and thumbnail
-  retrieval are allowed during inspection (Story 1.1, 1.4).
+  retrieval are allowed during inspection (Story 1.1, 1.4). (amended by 003) Pictures and
+  videos with exactly one available choice are now delivered without a tap; see
+  `specs/003-streamlined-bot-ux/spec.md` FR-002a and FR-008.
 - **FR-008**: A valid selection MUST start processing of the selected output and provide
   user-visible downloading and sending states. The service MUST NOT silently change the
   chosen media type, format, or quality (Story 1.3; Story 2.5).

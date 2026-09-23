@@ -12,6 +12,11 @@ a private-chat instruction; no extraction or source preview is performed there.
 
 ## Preview and selection
 
+(amended by 003) This section is replaced by the video card, automatic delivery, callback,
+and stage-text rules in `specs/003-streamlined-bot-ux/contracts/telegram-bot.md`, with the
+choice set defined in `specs/003-streamlined-bot-ux/contracts/choice-policy.md`. The text
+below records the original 001 behavior; where it conflicts with 003, 003 wins.
+
 1. Acknowledge the accepted link with a checking state.
 2. Present platform, canonical source link, and available title/caption, creator, duration,
    and thumbnail. Missing thumbnail or failed thumbnail fetch must not block the text preview.
@@ -32,7 +37,9 @@ exceeding Telegram message limits.
 Callback payloads:
 
 - `s:<32-hex-request-id>:<option-index>` selects an option.
-- `p:<32-hex-request-id>:<page-index>` changes the displayed page.
+- `p:<32-hex-request-id>:<page-index>` changes the displayed page. (amended by 003) Removed:
+  a `p:` payload is now malformed, and `s:` carries an `option_id` of 0–2; see
+  `specs/003-streamlined-bot-ux/contracts/telegram-bot.md` "Callbacks".
 
 Payloads must fit 64 UTF-8 bytes and contain no URLs, file paths, format expressions, or
 credentials. Validate exact syntax and bounds; verify user ID, chat ID, preview message ID,
@@ -43,6 +50,9 @@ stale ones. A forged or foreign callback cannot inspect another user's request d
 
 After an accepted selection, remove the keyboard and show the selected choice and downloading
 state, then sending. Upload the local file with `sendDocument` to preserve native bytes.
+(amended by 003) `Video` and `Video (no sound)` choices are uploaded with `sendVideo`
+(`supports_streaming=true`) so they play inline; `Audio only` and pictures stay on
+`sendDocument`. See `specs/003-streamlined-bot-ux/contracts/telegram-bot.md` "Delivery method".
 Do not require a media-player-compatible format or convert an image into a photo upload.
 A successful returned Message confirms delivery; a separate completion notice is optional
 because the delivered attachment itself completes the flow.

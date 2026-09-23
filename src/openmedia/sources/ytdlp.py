@@ -124,6 +124,13 @@ def _combined_size(
     return video_size + audio_size, kind
 
 
+def _range_bytes(item: Mapping[str, Any]) -> int | None:
+    # yt-dlp's own YouTube download size per request; a whole-file GET is throttled upstream.
+    options = item.get("downloader_options")
+    size = options.get("http_chunk_size") if isinstance(options, Mapping) else None
+    return int(size) if isinstance(size, int) and not isinstance(size, bool) and size > 0 else None
+
+
 def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectResult:
     """Convert one yt-dlp inspection result into immutable server-bound choices."""
     if max_file_bytes <= 0:
@@ -226,6 +233,7 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
                     "headers": dict(item.get("http_headers") or {}),
                     "vcodec": video_codec,
                     "acodec": audio_codec,
+                    "range_bytes": _range_bytes(item),
                 },
                 availability=availability,
                 unavailable_reason=reason,
@@ -263,6 +271,8 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
                         "audio_headers": dict(audio.get("http_headers") or {}),
                         "vcodec": str(video.get("vcodec")),
                         "acodec": str(audio.get("acodec")),
+                        "video_range_bytes": _range_bytes(video),
+                        "audio_range_bytes": _range_bytes(audio),
                     },
                     availability=availability,
                     unavailable_reason=reason,
@@ -508,6 +518,7 @@ class YtDlpAdapter:
                     workspace_limit=request.workspace_limit,
                     headers=reference.get("video_headers"),
                     deadline=request.deadline,
+                    range_bytes=reference.get("video_range_bytes"),
                 )
                 transport.download(
                     str(reference["audio_url"]),
@@ -516,6 +527,7 @@ class YtDlpAdapter:
                     workspace_limit=request.workspace_limit,
                     headers=reference.get("audio_headers"),
                     deadline=request.deadline,
+                    range_bytes=reference.get("audio_range_bytes"),
                 )
                 actual = merge_streams(
                     video,
@@ -543,6 +555,7 @@ class YtDlpAdapter:
                     workspace_limit=request.workspace_limit,
                     headers=reference.get("headers"),
                     deadline=request.deadline,
+                    range_bytes=reference.get("range_bytes"),
                 )
             except KeyError as exc:
                 raise SourceAdapterError(ErrorCategory.FORMAT_UNAVAILABLE, stage="download") from exc

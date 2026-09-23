@@ -318,3 +318,29 @@ def test_adapter_limits_and_fixed_output_paths_are_forwarded(tmp_path: Path, mon
         transport=transport,
     )
     assert ("fetch", 1024 * 1024) in transport.calls
+
+
+def test_adapter_forwards_range_bytes_for_each_merge_component(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("openmedia.sources.ytdlp._validate_selected_streams", lambda *args: None)
+    monkeypatch.setattr("openmedia.sources.ytdlp.merge_streams", lambda video, audio, destination, **kwargs: destination.write_bytes(b"merged") or 6)
+    class RecordingTransport(Transport):
+        def __init__(self) -> None:
+            super().__init__()
+            self.ranges: list[tuple[str, int | None]] = []
+
+        def download(self, url, destination, **kwargs):
+            self.ranges.append((Path(destination).name, kwargs.get("range_bytes")))
+            return super().download(url, destination, **kwargs)
+
+    transport = RecordingTransport()
+    metadata = MediaMetadata(platform="youtube", canonical_url="https://www.youtube.com/watch?v=abcDEF12345",
+        media_id="abcDEF12345")
+    option = FormatOption(option_id=0, adapter="yt_dlp", source_format_id="137+140", media_type="video",
+        extension="mp4", mime_type="video/mp4", includes_audio=True,
+        transport_ref={"video_url": "https://media.example.invalid/v", "audio_url": "https://media.example.invalid/a",
+            "video_headers": {}, "audio_headers": {}, "vcodec": "avc1", "acodec": "mp4a",
+            "video_range_bytes": 10_485_760, "audio_range_bytes": None})
+    request = DownloadInput(request_id="0123456789abcdef0123456789abcdef", metadata=metadata, option=option,
+        work_directory=tmp_path, deadline=100, output_limit=50_000_000, workspace_limit=128 * 1024 * 1024)
+    YtDlpAdapter().download(request, transport=transport, rate_control=Rate())
+    assert transport.ranges == [("component-video", 10_485_760), ("component-audio", None)]

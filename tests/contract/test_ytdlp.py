@@ -147,3 +147,21 @@ def test_audio_without_language_preference_is_kept_unfiltered() -> None:
         item.pop("language_preference", None)
     result = normalize_info(info, max_file_bytes=50_000_000)
     assert sum(1 for option in result.options if option.media_type is MediaType.AUDIO) == 3
+
+
+def test_youtube_http_chunk_size_is_kept_for_ranged_download() -> None:
+    info = _dubbed_info(languages=1)
+    for item in info["formats"]:
+        item["downloader_options"] = {"http_chunk_size": 10_485_760}
+    result = normalize_info(info, max_file_bytes=50_000_000)
+    by_id = {option.source_format_id: option for option in result.options}
+    assert by_id["140-0"].transport_ref["range_bytes"] == 10_485_760
+    assert by_id["v0+140-0"].transport_ref["video_range_bytes"] == 10_485_760
+    assert by_id["v0+140-0"].transport_ref["audio_range_bytes"] == 10_485_760
+
+
+def test_formats_without_chunk_size_download_whole() -> None:
+    result = normalize_info(_dubbed_info(languages=1), max_file_bytes=50_000_000)
+    by_id = {option.source_format_id: option for option in result.options}
+    assert by_id["140-0"].transport_ref.get("range_bytes") is None
+    assert by_id["v0+140-0"].transport_ref.get("video_range_bytes") is None

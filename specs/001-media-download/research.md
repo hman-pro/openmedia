@@ -177,6 +177,13 @@ Dubbed tracks are dropped before pairing. This keeps the original language and b
 pair count: a live video with 100 dubbed audio streams produced 840 pairs and a 3 MB worker
 result, over the 2 MiB protocol line limit. Streams without `language_preference` are unaffected.
 
+(amended by 003) A stream whose yt-dlp format carries `downloader_options.http_chunk_size`
+(YouTube: 10 MiB) is downloaded as `range=start-end` query pieces of that size, as yt-dlp
+itself does, each through the same pinned, bounded transport. YouTube throttles a whole-file
+GET to about playback speed: measured on one audio stream, 32 KB/s whole versus 9 MB/s ranged,
+and a merged choice took 120 s or dropped its connection. The file is created only after the
+first 2xx response; a piece shorter than requested ends it.
+
 Why merge rather than rely on source-muxed files: on current YouTube the only source-muxed
 rendition is format `18`, at most 360p. Without merging, every higher quality is silent. In
 the spike, merging raised the best deliverable-with-sound quality for a 213-second video

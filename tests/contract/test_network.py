@@ -185,3 +185,45 @@ def test_repeated_set_cookie_headers_survive_outside_the_header_dict(monkeypatch
     assert result.set_cookies == ("csrftoken=abc; Path=/; Secure", "mid=xyz; Path=/")
     assert "abc" not in repr(result) and "xyz" not in repr(result)
     assert transport.head("https://example.invalid").set_cookies == result.set_cookies
+
+
+def _ranged_source(monkeypatch, transport, body: bytes):
+    # Serves `&range=a-b` query pieces the way YouTube does: 200 with only the requested bytes.
+    import io
+    import re
+    from types import SimpleNamespace
+    requested: list[str] = []
+
+    def open_(url, **_kwargs):
+        requested.append(url)
+        start, end = map(int, re.search(r"[?&]range=(\d+)-(\d+)$", url).groups())
+        piece = body[start:end + 1]
+        response = SimpleNamespace(status=200, read=io.BytesIO(piece).read,
+            getheader=lambda name: str(len(piece)) if name.lower() == "content-length" else None)
+        return SimpleNamespace(close=lambda: None), response, url
+
+    monkeypatch.setattr(transport, "_open", open_)
+    return requested
+
+
+@pytest.mark.parametrize("size", [10, 8])
+def test_ranged_download_fetches_bounded_pieces_into_one_file(tmp_path, monkeypatch, size):
+    # YouTube throttles a whole-file GET to about playback speed; ranged pieces arrive at full speed.
+    body = bytes(range(size))
+    transport = GuardedHTTPTransport()
+    requested = _ranged_source(monkeypatch, transport, body)
+    destination = tmp_path / "component-audio"
+    written = transport.download("https://media.example/a?id=1", destination, output_limit=100,
+        workspace_limit=200, range_bytes=4)
+    assert written == size and destination.read_bytes() == body
+    assert requested[:3] == ["https://media.example/a?id=1&range=0-3", "https://media.example/a?id=1&range=4-7",
+        "https://media.example/a?id=1&range=8-11"]
+
+
+def test_ranged_download_enforces_the_limit_across_pieces(tmp_path, monkeypatch):
+    transport = GuardedHTTPTransport()
+    _ranged_source(monkeypatch, transport, bytes(10))
+    with pytest.raises(ResponseTooLarge):
+        transport.download("https://media.example/a?id=1", tmp_path / "component-audio", output_limit=6,
+            workspace_limit=200, range_bytes=4)
+    assert not list(tmp_path.iterdir())

@@ -62,6 +62,8 @@ One JSON object per line. Keys appear in this order; absent keys are omitted, no
 | `dropped` | integer | after queue overflow | Records dropped since the last written entry |
 | `truncated` | boolean | when cut | Entry exceeded `DIAGNOSTIC_ENTRY_MAX_BYTES` |
 | `options` | integer | `inspection_finished` | Number of format options found |
+| `choices` | array of string | `inspection_finished` | (amended by 003) Kept choice kinds in order, e.g. `["video","audio"]`; empty when none; see `specs/003-streamlined-bot-ux/data-model.md` |
+| `automatic` | boolean | `selection` | (amended by 003) True when no tap was needed (one choice or a picture) |
 | `progress` | object | `worker_progress` (DEBUG) | Scalar fields of one worker protocol message |
 | `settings` | object | `startup` | Effective `Settings` without `telegram_bot_token` |
 | `reason` | string | `shutdown` | `signal` or `error` |

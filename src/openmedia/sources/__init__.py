@@ -346,6 +346,7 @@ class GuardedTransport(Protocol):
         workspace_limit: int,
         headers: Mapping[str, str] | None = None,
         deadline: float | None = None,
+        range_bytes: int | None = None,
     ) -> int: ...
 
 

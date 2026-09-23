@@ -196,6 +196,30 @@ def test_worker_child_applies_the_socket_guard_around_library_code(monkeypatch, 
     assert socket.getaddrinfo is guarded_before
 
 
+@pytest.mark.parametrize("error", [ConnectionResetError("reset by peer"), TimeoutError("timed out")])
+def test_worker_child_reports_network_failures_as_timeout_not_internal(monkeypatch, capsys, tmp_path, error):
+    """A dropped or stalled upstream connection is retryable, not a fault in the service."""
+    import io
+    import sys
+
+    import openmedia.sources as sources
+    from openmedia import workers
+
+    def inspect(self, request, **kwargs):
+        raise error
+
+    monkeypatch.setattr(sources.SourceRouter, "inspect", inspect)
+    message = {"operation": "inspect", "source_url": "https://youtu.be/abcDEF12345", "request_id": "a" * 32,
+        "work_directory": str(tmp_path), "deadline": time.monotonic() + 30}
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(message) + "\n"))
+
+    assert workers._child_main() == 1
+
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert events[-2:] == [{"event": "progress", "upstream_status_class": "connection_failure"},
+        {"event": "error", "category": "timeout", "stage": None}]
+
+
 # --------------------------------------------------------------------------------------
 # Source-issued anonymous cookies live for one Instagram operation and go nowhere else.
 # --------------------------------------------------------------------------------------

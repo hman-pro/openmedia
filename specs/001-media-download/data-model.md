@@ -12,10 +12,13 @@ migration or database is required. `spec.md` defines behavior; the contracts def
 | source_url, platform, media_id | Validated canonical public source; recognized route and stable source item identity |
 | state | checking, awaiting_selection, downloading, sending, completed, failed, expired, replaced |
 | metadata | Optional MediaMetadata, populated by successful inspection |
-| options | Ordered FormatOption records bound to this request; immutable after preview |
+| options | Ordered FormatOption records bound to this request; immutable after preview. (amended by 003) Holds only the ≤3 choice-policy options (`video`, `silent`, `audio`, or the one image), rebound to `option_id` 0..n-1; see `specs/003-streamlined-bot-ux/data-model.md` |
 | selected_option_id | Null until one valid callback atomically claims the request |
 | created_at, preview_expires_at, processing_deadline | Monotonic deadlines internally; UTC timestamps only for diagnostics |
-| preview_message_id | Message owning the format keyboard; callbacks must match |
+| preview_message_id | Message owning the format keyboard; callbacks must match. (amended by 003) For automatic requests, the status message ID |
+| status_message_id | (amended by 003) Message whose text or caption carries progress; starts as `Checking link…`, becomes the card once published. Positive integer or null; see `specs/003-streamlined-bot-ux/data-model.md` |
+| status_is_caption | (amended by 003) True when the status surface is a photo caption, false for a text message |
+| status_prefix | (amended by 003) Card text (title, duration) kept above the status line so each edit re-renders the full caption; not logged |
 | work_directory, worker_pid | Internal handles only; no caller-supplied paths; absent while idle |
 | delivery_result | Optional DeliveryResult |
 
@@ -76,6 +79,7 @@ ends in `failed` with an unknown result and asks the user to check the chat befo
 | Current state | Event | Next state and action |
 |---|---|---|
 | None | Valid link and capacity available | checking; reserve user and work slot |
+| checking | One supported item with exactly one choice (amended by 003) | downloading via `publish_and_claim`; keep the work slot, start 600s deadline; see `specs/003-streamlined-bot-ux/data-model.md` |
 | checking | One supported item with usable options | awaiting_selection; publish preview with any worker thumbnail, remove inspection directory, start 900s expiry, release work slot |
 | checking | Invalid source, no usable option, error, deadline | failed; explain, release and clean |
 | awaiting_selection | Owner selects current option, work capacity available | downloading; claim option once, start 600s deadline |
