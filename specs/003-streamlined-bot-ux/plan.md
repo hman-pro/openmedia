@@ -31,7 +31,7 @@ opt-in `live` test for inline video bytes
 **Project Type**: Single-process Telegram bot service
 
 **Performance Goals**: No change to deadlines (60 s inspect, 900 s selection, 600 s
-processing). At most 4 message edits per request
+processing). At most 5 message edits per request (card, keyboard removal, downloading, sending, sent)
 
 **Constraints**: No re-encoding or stream splitting; 50,000,000-byte delivery cap; callback
 data carries an integer `option_id`; links and identifiers only via `openmedia.diagnostic`;
@@ -52,7 +52,7 @@ shape (R5), card/status mechanics (R6), inline delivery and its live gate (R7), 
 | Principle / constraint | Status | Evidence |
 |---|---|---|
 | I. Social media downloading; spec names platforms, media types, journeys | Pass | Spec Assumptions and Stories 1–3 |
-| II. Telegram is the UI; invalid/unsupported/failure/limit behavior defined; download logic separate from handlers | Pass | contracts/telegram-bot.md; policy is a pure module (R4), adapters untouched |
+| II. Telegram is the UI; invalid/unsupported/failure/limit behavior defined; download logic separate from handlers | Pass | contracts/telegram-bot.md; policy is a pure module (R4); adapters change only in two narrow places |
 | III. Python by default; simplest arrangement | Pass | No new service or language |
 | IV. Reuse open source | Pass | Same yt-dlp/FFmpeg/PTB; no custom extraction |
 | V. Container deployment | Pass | No image or runtime change; startup check still run |
@@ -94,6 +94,7 @@ src/openmedia/
 ├── coordinator.py    # publish_and_claim; automatic path in submit; status surface tracking
 ├── models.py         # DownloadRequest.status_message_id / status_is_caption / status_prefix
 ├── delivery.py       # sendVideo for video kinds, sendDocument for audio/picture
+├── sources/__init__.py, sources/ytdlp.py  # shared codec_family; unknown-codec probe
 ├── __main__.py       # runtime callbacks: edit-in-place status, card publish, failure edit
 └── diagnostics.py    # no API change; new fields passed through event()
 
@@ -109,7 +110,10 @@ tests/
 
 **Structure Decision**: Keep the single-package layout from 001. The only new module is
 `choices.py`, placed beside `presentation.py` because both are pure and Telegram-independent.
-Source adapters under `src/openmedia/sources/` are not modified.
+Source adapters change only in two narrow places: `codec_family` moves to
+`src/openmedia/sources/__init__.py` (shared by the merge step and the policy), and
+`src/openmedia/sources/ytdlp.py` gains a post-download H.264/AAC probe for MP4 video whose
+codecs were unknown at inspection (research R1).
 
 ## Delivery order (for /speckit-tasks)
 

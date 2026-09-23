@@ -25,7 +25,12 @@ Card text, in order, plain text only (never parsed as markup):
 
 1. Title, truncated to 200 characters; `Untitled video` when absent.
 2. Duration as `m:ss` or `h:mm:ss`; the line is omitted when unknown.
-3. At most one "unavailable" line (research R9). No platform, creator, link, codec,
+3. At most one "unavailable" line (research R9), built from `missing`:
+   `Not available: <labels>.` for kinds the source does not offer and
+   `Too large to send: <labels>.` for kinds that exceed the limit. Labels follow kind order,
+   joined by `, `. When both apply they share the line, for example
+   `Not available: Audio only. Too large to send: Video.` No line when nothing is missing.
+   No platform, creator, link, codec,
    container, resolution, bitrate, or size appears anywhere.
 
 Keyboard: one row per kept choice, in order `Video`, `Video (no sound)`, `Audio only`. Button

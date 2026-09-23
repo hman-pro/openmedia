@@ -15,18 +15,28 @@ to the tree at `cb50757`.
 - **Alternatives rejected**: AV1 in MP4 (no hardware decode before iPhone 15 Pro and
   many Android devices; software playback stutters). VP9/Opus in WebM (not playable by the
   iOS default player). HEVC (not served by the three sources).
+- **Unknown codecs (analysis C1)**: yt-dlp sometimes reports no codec for a progressive MP4
+  (LinkedIn: `vcodec`/`acodec` absent). Such an MP4 is a **last-resort** candidate: it is
+  considered only when no candidate of that kind has known codecs, and it ranks below every
+  known-codec candidate. After download, the worker probes the file with ffprobe and rejects
+  it unless the video stream is H.264 and, when `includes_audio`, the audio stream is AAC
+  (`FORMAT_UNAVAILABLE`, stage `download`). The phone-playable promise is checked on the real
+  file instead of on missing metadata. Rejected alternative: treating unknown codecs as not
+  phone-playable, which leaves LinkedIn video posts with no deliverable choice.
 
 ## R2. Picking the one "Video" / "Video (no sound)" version
 
 - **Decision**: Among selectable, phone-playable candidates of the right kind:
   1. Size filter: keep candidates whose known size (exact or estimated) is at most the
      delivery limit. Only if no candidate has a known size, consider unknown-size candidates.
-  2. Resolution tier by the **shorter side** `min(width, height)`. Tier 1 is ≤ 720; tier 2
-     is > 720. A candidate with unknown dimensions belongs to tier 1 and ranks below every
-     candidate with known dimensions.
+  2. Resolution tier by the **shorter side**: `min(width, height)` when both are known; the
+     one known dimension when only one is (yt-dlp often reports only `height`); unknown when
+     neither is. Tier 1 is ≤ 720; tier 2 is > 720. A candidate with unknown dimensions
+     belongs to tier 1 and ranks below every candidate with known dimensions.
   3. In tier 1 take the largest shorter side; if tier 1 is empty, take the **smallest**
      shorter side in tier 2.
-  4. Ties: higher bitrate, then exact size before estimated, then lower `option_id`.
+  4. Ties: known codecs before unknown codecs (R1), higher bitrate, then exact size before
+     estimated, then lower `option_id`.
 - **Rationale**: Implements FR-004/FR-006 and clarification Q1/720p exactly. The size filter
   comes first so a long video falls back from 720p to 480p/360p instead of losing its button.
   Unknown sizes stay a last resort because the download-time cap (`validate_owned_file`,
@@ -46,9 +56,11 @@ to the tree at `cb50757`.
 ## R4. Where the three-choice policy runs
 
 - **Decision**: A new pure module `src/openmedia/choices.py`, called in the parent process
-  after `decode_inspect_result` and before the card is published. Adapters, the worker
-  protocol, `SourceRouter.inspect` size exclusion, and URL-refresh (`_same_option`) are
-  unchanged: adapters still return every native option; the parent keeps at most three.
+  after `decode_inspect_result` and before the card is published. The worker protocol,
+  `SourceRouter.inspect` size exclusion, and URL-refresh (`_same_option`) are unchanged:
+  adapters still return every native option; the parent keeps at most three. The only
+  adapter changes are the shared `codec_family` helper and the post-download probe for
+  unknown-codec MP4 video (R1).
 - **Rationale**: Keeps UX policy out of platform adapters (constitution II/IV isolation),
   needs no worker-protocol change, and is testable with plain `FormatOption` fixtures.
   Refresh on expired URLs matches on format identity, not `option_id`, so rebinding ids is safe.
@@ -80,7 +92,7 @@ to the tree at `cb50757`.
 - **Rationale**: Telegram cannot convert a text message into a photo message (`editMessageMedia`
   only works on messages that already have media), so "replace" means send-then-delete when a
   thumbnail exists and edit-in-place otherwise. Edits happen only at stage transitions
-  (≤ 4 per request), far below Telegram's per-chat limits.
+  (≤ 5 per request, including keyboard removal), far below Telegram's per-chat limits.
 - **Alternatives rejected**: A separate status message (clarified away, Q3 → A); keeping the
   checking message and adding a card (3 messages, fails SC-004).
 
@@ -125,9 +137,7 @@ to the tree at `cb50757`.
   - Failure: `<Label> — <stage> failed. <next step>` using the existing `failure_message`
     next steps; unknown upload: `<Label> — could not confirm sending. Check this chat before
     sending the link again.`
-  - Unavailable lines on the card: `No video with sound available.`, `No version without sound
-    available.`, `No audio-only version available.`, `<Label> is too large to send.`
-    At most one line; when several choices are missing, one combined line.
+  - Unavailable line on the card (analysis A5): one line built from `missing`: `Not available: <labels>.` for `not_offered` kinds and `Too large to send: <labels>.` for `too_large` kinds, labels in kind order joined by `, `; when both apply, the two sentences share the line (e.g. `Not available: Audio only. Too large to send: Video.`); no line when nothing is missing.
 - **Rationale**: FR-011 plain English, no codec/container names. Existing failure categories
   and next steps are reused so 001 failure meanings stay intact (FR-012).
 

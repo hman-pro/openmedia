@@ -39,7 +39,9 @@ uv run python -m openmedia
 
 In a private chat with the bot, send one link of each kind and check what you see:
 
-1. A YouTube video → one card, three buttons, tap `Video` → the video plays inline on a phone.
+1. A YouTube video → one card, three buttons, tap `Video` → the video plays inline. Send the
+   link again and tap `Video (no sound)` → it plays inline and is not shown as a looping
+   animation (SC-005). Do both on an iPhone and on an Android phone.
 2. A LinkedIn video post → the video arrives without a tap.
 3. An Instagram picture → the picture arrives as a file, with no buttons.
 

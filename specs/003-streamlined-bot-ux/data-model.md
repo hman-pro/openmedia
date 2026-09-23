@@ -24,13 +24,17 @@ inspection and not kept after the request is published.
 | Field | Meaning and validation |
 |---|---|
 | options | 0–3 `FormatOption` records, at most one per kind, in kind order, rebound to `option_id` 0..n-1; each `availability=selectable`. For images, exactly the one image option |
-| missing | For each absent video kind: `not_offered` (no candidate from the source) or `too_large` (candidates exist but none fits the delivery limit) |
+| missing | For each absent kind among `video`, `silent`, `audio` (never `image`): `not_offered` (no candidate from the source) or `too_large` (candidates exist but none fits the delivery limit) |
 | automatic | True when `options` has exactly one entry (FR-002a, pictures) |
 
 Rules:
 
 - `video` and `silent` candidates must be phone-playable (research R1): extension `mp4`, video
-  codec family H.264, audio codec family AAC when `includes_audio`.
+  codec family H.264, audio codec family AAC when `includes_audio`. An `mp4` with unknown
+  codecs (`transport_ref` `vcodec`/`acodec` absent) is a last-resort candidate, used only when
+  no known-codec candidate of that kind exists; the worker verifies H.264/AAC after download.
+- Shorter side: `min(width, height)` when both are known, the one known dimension when only
+  one is, unknown when neither is (research R2).
 - `audio` accepts any adapter-accepted audio extension; highest bitrate wins (R3).
 - No option is created, split, or re-encoded by the policy; it only selects among adapter
   options. A merged `<video>+<audio>` option is a valid `video` candidate.
@@ -65,6 +69,10 @@ checking ──publish_preview──▶ awaiting_selection ──claim_selection
   It sets `metadata`, `options`, `preview_message_id`, `selected_option_id = 0`, and
   `processing_deadline = now + 600 s`, sets `state = downloading`, and **keeps** the work and
   Instagram reservations instead of releasing them. There is no `preview_expires_at`.
+- If `publish_and_claim` does not return `ACCEPTED` (request replaced, no longer active, or
+  no longer `checking`), the workflow raises `WorkflowError`; the request fails at stage
+  `checking`, and the status surface (by then the card) shows the failure text instead of
+  "downloading…" (analysis U4).
 - All other transitions, expiry, replacement, and terminal records are unchanged.
 
 ## DeliveryResult (unchanged)

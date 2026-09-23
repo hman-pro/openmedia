@@ -155,7 +155,8 @@ that its text changes through the stages, and that it ends showing the outcome.
 ### Functional Requirements
 
 - **FR-001**: For a video link, the preview MUST show only the thumbnail, the title, and the
-  duration. Platform name, creator, canonical link, format lists, codecs, bitrates,
+  duration, plus the single unavailable line required by FR-007 and the status line required
+  by FR-010. Platform name, creator, canonical link, format lists, codecs, bitrates,
   resolutions, and file-size tables MUST NOT appear.
 - **FR-002**: For a video link, the bot MUST offer at most three choices: "Video" (with
   sound), "Video (no sound)", and "Audio only". No other video or audio choice is offered,
