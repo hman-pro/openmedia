@@ -216,6 +216,11 @@ class DownloadRequest:
     work_directory: Path | None = field(default=None, repr=False)
     worker_pid: int | None = field(default=None, repr=False)
     delivery_result: DeliveryResult | None = None
+    # The message whose text or photo caption carries progress for this request.
+    status_message_id: int | None = None
+    status_is_caption: bool = False
+    # Card text kept above the status line; it names the media, so it stays out of repr.
+    status_prefix: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not _REQUEST_ID.fullmatch(self.request_id):
@@ -242,6 +247,8 @@ class DownloadRequest:
                 raise ValueError(f"{name} cannot precede created_at")
         if self.preview_message_id is not None and self.preview_message_id <= 0:
             raise ValueError("preview_message_id must be a positive Telegram message ID")
+        if self.status_message_id is not None and self.status_message_id <= 0:
+            raise ValueError("status_message_id must be a positive Telegram message ID")
         if self.worker_pid is not None and self.worker_pid <= 0:
             raise ValueError("worker_pid must be positive")
 

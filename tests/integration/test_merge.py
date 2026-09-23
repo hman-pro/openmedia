@@ -142,3 +142,127 @@ def test_expired_url_refreshes_once_through_real_download_validation(tmp_path, m
         time.monotonic()+10, 1_000_000, 2_000_000), transport=transport, rate_control=rate)
     assert result.path.read_bytes() == body
     assert len(inspections) == 1 and len(urls) == 2 and urls[-1].endswith("fresh")
+
+
+# --- T007: post-download codec check for unknown-codec MP4 video (research R1, analysis C1) ---
+
+
+def make_clip(root: Path, name: str, video_args: list[str] | None, audio_args: list[str] | None) -> Path:
+    """Encode one tiny local clip from lavfi sources with real ffmpeg."""
+    output = root / name
+    inputs: list[str] = []
+    maps: list[str] = []
+    codecs: list[str] = []
+    if video_args is not None:
+        inputs += ["-f", "lavfi", "-i", "color=size=32x32:rate=5:duration=1"]
+        maps += ["-map", f"{len(maps) // 2}:v"]
+        codecs += video_args
+    if audio_args is not None:
+        inputs += ["-f", "lavfi", "-i", "sine=frequency=440:duration=1"]
+        maps += ["-map", f"{len(maps) // 2}:a"]
+        codecs += audio_args
+    subprocess.run(
+        [tool("ffmpeg"), "-nostdin", "-v", "error", *inputs, *maps, *codecs, "-shortest", str(output)],
+        check=True,
+    )
+    return output
+
+
+H264 = ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
+MPEG4 = ["-c:v", "mpeg4"]
+VP9 = ["-c:v", "libvpx-vp9", "-deadline", "realtime"]
+AAC = ["-c:a", "aac"]
+AC3 = ["-c:a", "ac3"]
+
+
+def unknown_codec_option(*, includes_audio: bool, extension: str = "mp4", **reference: str):
+    from openmedia.models import FormatOption
+
+    mime = "video/mp4" if extension == "mp4" else f"video/{extension}"
+    return FormatOption(
+        0,
+        "yt_dlp",
+        "progressive",
+        "video",
+        extension,
+        mime,
+        height=32,
+        includes_audio=includes_audio,
+        transport_ref={"url": "https://cdn.invalid/progressive", **reference},
+    )
+
+
+@pytest.mark.parametrize("includes_audio", [False, True])
+def test_unknown_codec_mp4_with_h264_and_aac_passes(tmp_path: Path, includes_audio: bool) -> None:
+    from openmedia.sources.ytdlp import _validate_selected_streams
+
+    clip = make_clip(tmp_path, "clip.mp4", H264, AAC if includes_audio else None)
+    _validate_selected_streams(clip, unknown_codec_option(includes_audio=includes_audio))
+
+
+@pytest.mark.parametrize(
+    ("video_args", "audio_args", "includes_audio"),
+    [
+        pytest.param(MPEG4, None, False, id="mpeg4-video-no-sound"),
+        pytest.param(MPEG4, AAC, True, id="mpeg4-video-aac-audio"),
+        pytest.param(VP9, None, False, id="vp9-video-no-sound"),
+        pytest.param(H264, AC3, True, id="h264-video-ac3-audio"),
+    ],
+)
+def test_unknown_codec_mp4_rejects_non_phone_playable_streams(
+    tmp_path: Path, video_args: list[str], audio_args: list[str] | None, includes_audio: bool
+) -> None:
+    from openmedia.sources.ytdlp import _validate_selected_streams
+
+    clip = make_clip(tmp_path, "clip.mp4", video_args, audio_args)
+    with pytest.raises(SourceAdapterError) as caught:
+        _validate_selected_streams(clip, unknown_codec_option(includes_audio=includes_audio))
+    assert caught.value.category is ErrorCategory.FORMAT_UNAVAILABLE
+    assert caught.value.stage == "download"
+
+
+def test_unknown_codec_mp4_rejection_deletes_downloaded_file(tmp_path: Path) -> None:
+    import time
+    from types import SimpleNamespace
+
+    from openmedia.models import MediaMetadata
+    from openmedia.sources import DownloadInput
+    from openmedia.sources.ytdlp import YtDlpAdapter
+
+    source = tmp_path / "source"
+    source.mkdir()
+    body = make_clip(source, "clip.mp4", MPEG4, None).read_bytes()
+    work = tmp_path / "work"
+    work.mkdir()
+    option = unknown_codec_option(includes_audio=False)
+    metadata = MediaMetadata("linkedin", "https://www.linkedin.com/posts/example", "example")
+
+    def download(url, destination, **kwargs):
+        Path(destination).write_bytes(body)
+        return len(body)
+
+    transport = SimpleNamespace(download=download)
+    rate = SimpleNamespace(acquire=lambda *args, **kwargs: None)
+    request = DownloadInput("a" * 32, metadata, option, work, time.monotonic() + 10, 1_000_000, 2_000_000)
+    with pytest.raises(SourceAdapterError) as caught:
+        YtDlpAdapter().download(request, transport=transport, rate_control=rate)
+    assert caught.value.category is ErrorCategory.FORMAT_UNAVAILABLE
+    assert caught.value.stage == "download"
+    assert not (work / "selected.mp4").exists()
+    assert list(work.iterdir()) == []
+
+
+def test_known_codec_options_keep_existing_validation(tmp_path: Path) -> None:
+    from openmedia.sources.ytdlp import _validate_selected_streams
+
+    h264 = make_clip(tmp_path, "h264.mp4", H264, None)
+    mpeg4 = make_clip(tmp_path, "mpeg4.mp4", MPEG4, None)
+    vp9 = make_clip(tmp_path, "vp9.webm", VP9, None)
+    # Known codec that matches the file: still accepted.
+    _validate_selected_streams(h264, unknown_codec_option(includes_audio=False, vcodec="avc1.64000c"))
+    # Known codec that the file contradicts: still rejected as a changed codec.
+    with pytest.raises(SourceAdapterError) as caught:
+        _validate_selected_streams(mpeg4, unknown_codec_option(includes_audio=False, vcodec="avc1.64000c"))
+    assert caught.value.category is ErrorCategory.FORMAT_UNAVAILABLE
+    # The new rule is scoped to MP4: an unknown-codec WebM video is unaffected.
+    _validate_selected_streams(vp9, unknown_codec_option(includes_audio=False, extension="webm"))

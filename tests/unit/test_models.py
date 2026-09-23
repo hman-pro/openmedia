@@ -122,3 +122,53 @@ def test_download_request_has_immutable_options_and_valid_selection() -> None:
             options=(option,),
             selected_option_id=99,
         )
+
+
+def minimal_request(**changes: object) -> DownloadRequest:
+    values: dict[str, object] = {
+        "request_id": "2123456789abcdef0123456789abcdef",
+        "user_id": 1,
+        "chat_id": 1,
+        "source_url": "https://www.youtube.com/watch?v=abc",
+        "platform": "youtube",
+        "media_id": "abc",
+    }
+    values.update(changes)
+    return DownloadRequest(**values)  # type: ignore[arg-type]
+
+
+def test_download_request_status_surface_defaults() -> None:
+    request = minimal_request()
+    assert request.status_message_id is None
+    assert request.status_is_caption is False
+    assert request.status_prefix is None
+
+
+def test_download_request_accepts_status_surface_values() -> None:
+    request = minimal_request(
+        status_message_id=42,
+        status_is_caption=True,
+        status_prefix="Some title\n1:23",
+    )
+    assert request.status_message_id == 42
+    assert request.status_is_caption is True
+    assert request.status_prefix == "Some title\n1:23"
+    request.status_message_id = 43
+    assert request.status_message_id == 43
+
+
+@pytest.mark.parametrize("message_id", [0, -1])
+def test_download_request_rejects_nonpositive_status_message_id(message_id: int) -> None:
+    with pytest.raises(ValueError, match="status_message_id"):
+        minimal_request(status_message_id=message_id)
+
+
+def test_download_request_status_prefix_is_kept_out_of_repr() -> None:
+    request = minimal_request(
+        status_message_id=7,
+        status_prefix="Secret caption title",
+        work_directory=None,
+    )
+    assert "Secret caption title" not in repr(request)
+    assert "status_prefix" not in repr(request)
+    assert "work_directory" not in repr(request)

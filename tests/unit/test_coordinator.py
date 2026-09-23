@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from openmedia.coordinator import AdmissionOutcome, RequestRegistry, SelectionOutcome
 from openmedia.models import FormatOption, MediaMetadata, RequestState
 
@@ -181,3 +183,225 @@ async def test_closed_admission_also_refuses_new_selection_claims() -> None:
     assert claimed.outcome is SelectionOutcome.WORK_BUSY
     assert item.state is RequestState.AWAITING_SELECTION
     assert registry.active_work_count == 0
+
+
+# --- publish_and_claim (003, research R8, data-model "State transitions (changed)") ---
+
+
+def metadata_for(item) -> MediaMetadata:
+    return MediaMetadata(
+        platform=item.platform,
+        canonical_url=item.source_url,
+        media_id=item.media_id,
+    )
+
+
+def snapshot(registry: RequestRegistry, item) -> tuple:
+    return (
+        item.state,
+        item.metadata,
+        item.options,
+        item.preview_message_id,
+        item.preview_expires_at,
+        item.selected_option_id,
+        item.processing_deadline,
+        registry.active_work_count,
+        registry.instagram_work_count,
+        registry.pending_count,
+        registry.active_request_by_user.get(item.user_id),
+    )
+
+
+async def test_publish_and_claim_moves_checking_to_downloading_keeping_work_reservation() -> None:
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    work_before = registry.active_work_count
+    only = option()
+
+    result = await registry.publish_and_claim(
+        item.request_id,
+        metadata=metadata_for(item),
+        options=(only,),
+        preview_message_id=77,
+        now=10,
+    )
+
+    assert result.outcome is SelectionOutcome.ACCEPTED
+    assert result.request is item
+    assert result.option == only
+    assert item.state is RequestState.DOWNLOADING
+    assert item.selected_option_id == 0
+    assert item.processing_deadline == 610
+    assert item.preview_expires_at is None
+    assert item.preview_message_id == 77
+    assert item.options == (only,)
+    assert item.metadata == metadata_for(item)
+    assert registry.active_work_count == work_before == 1
+    assert item.request_id in registry._work_reservations
+    assert registry.pending_count == 0
+    assert registry.active_request_by_user[1] == item.request_id
+
+
+async def test_publish_and_claim_keeps_instagram_reservation() -> None:
+    registry = RequestRegistry(max_workers=2, max_instagram_workers=1)
+    item = request(registry, 1, "instagram")
+    await registry.admit(item)
+    assert registry.instagram_work_count == 1
+
+    result = await registry.publish_and_claim(
+        item.request_id,
+        metadata=metadata_for(item),
+        options=(option(),),
+        preview_message_id=77,
+        now=10,
+    )
+
+    assert result.outcome is SelectionOutcome.ACCEPTED
+    assert registry.active_work_count == 1
+    assert registry.instagram_work_count == 1
+    assert item.request_id in registry._instagram_reservations
+    # The held Instagram slot still blocks a second Instagram request.
+    other = request(registry, 2, "instagram")
+    assert (await registry.admit(other)).outcome is AdmissionOutcome.INSTAGRAM_BUSY
+
+
+async def test_publish_and_claim_uses_registry_clock_when_now_is_omitted() -> None:
+    registry = RequestRegistry(monotonic=lambda: 100.0)
+    item = request(registry, 1)
+    await registry.admit(item)
+
+    result = await registry.publish_and_claim(
+        item.request_id,
+        metadata=metadata_for(item),
+        options=(option(),),
+        preview_message_id=77,
+    )
+
+    assert result.outcome is SelectionOutcome.ACCEPTED
+    assert item.processing_deadline == 700.0
+
+
+async def test_publish_and_claim_refuses_request_not_in_checking() -> None:
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    await preview(registry, item)
+    before = snapshot(registry, item)
+
+    result = await registry.publish_and_claim(
+        item.request_id,
+        metadata=metadata_for(item),
+        options=(option(),),
+        preview_message_id=77,
+        now=11,
+    )
+
+    assert result.outcome is not SelectionOutcome.ACCEPTED
+    assert result.option is None
+    assert snapshot(registry, item) == before
+
+
+async def test_publish_and_claim_refuses_request_that_is_not_users_active_request() -> None:
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    registry.active_request_by_user[1] = "someone-else"
+    before = snapshot(registry, item)
+
+    result = await registry.publish_and_claim(
+        item.request_id,
+        metadata=metadata_for(item),
+        options=(option(),),
+        preview_message_id=77,
+        now=10,
+    )
+
+    assert result.outcome is not SelectionOutcome.ACCEPTED
+    assert result.option is None
+    assert snapshot(registry, item) == before
+    assert item.state is RequestState.CHECKING
+
+
+async def test_publish_and_claim_refuses_replaced_request() -> None:
+    registry = RequestRegistry()
+    old = request(registry, 1)
+    await registry.admit(old)
+    await preview(registry, old)
+    new = request(registry, 1)
+    assert (await registry.admit(new)).outcome is AdmissionOutcome.REPLACED
+    old_before = snapshot(registry, old)
+    new_before = snapshot(registry, new)
+
+    result = await registry.publish_and_claim(
+        old.request_id,
+        metadata=metadata_for(old),
+        options=(option(),),
+        preview_message_id=77,
+        now=11,
+    )
+
+    assert result.outcome is not SelectionOutcome.ACCEPTED
+    assert result.option is None
+    assert snapshot(registry, old) == old_before
+    assert snapshot(registry, new) == new_before
+    assert registry.terminal(old.request_id).state is RequestState.REPLACED  # type: ignore[union-attr]
+
+
+async def test_publish_and_claim_refuses_finalized_request() -> None:
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    await registry.finalize(item.request_id, state=RequestState.FAILED)
+    before = snapshot(registry, item)
+
+    result = await registry.publish_and_claim(
+        item.request_id,
+        metadata=metadata_for(item),
+        options=(option(),),
+        preview_message_id=77,
+        now=10,
+    )
+
+    assert result.outcome is not SelectionOutcome.ACCEPTED
+    assert result.option is None
+    assert snapshot(registry, item) == before
+
+
+async def test_publish_and_claim_refuses_unknown_request() -> None:
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    before = snapshot(registry, item)
+
+    result = await registry.publish_and_claim(
+        "0" * 32,
+        metadata=metadata_for(item),
+        options=(option(),),
+        preview_message_id=77,
+        now=10,
+    )
+
+    assert result.outcome is not SelectionOutcome.ACCEPTED
+    assert result.request is None
+    assert result.option is None
+    assert snapshot(registry, item) == before
+
+
+@pytest.mark.parametrize("count", [0, 2])
+async def test_publish_and_claim_requires_exactly_one_option(count: int) -> None:
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    before = snapshot(registry, item)
+
+    with pytest.raises(ValueError):
+        await registry.publish_and_claim(
+            item.request_id,
+            metadata=metadata_for(item),
+            options=tuple(option(i) for i in range(count)),
+            preview_message_id=77,
+            now=10,
+        )
+
+    assert snapshot(registry, item) == before

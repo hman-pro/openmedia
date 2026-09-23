@@ -498,6 +498,22 @@ def _same_option(original: FormatOption, refreshed: FormatOption) -> bool:
     )
 
 
+def codec_family(value: str) -> str:
+    """Map a yt-dlp or ffprobe codec string to its family name (h264, av1, aac, vp9, opus)."""
+    lowered = value.lower()
+    if lowered.startswith(("avc1", "h264")):
+        return "h264"
+    if lowered.startswith(("av01", "av1")):
+        return "av1"
+    if lowered.startswith(("mp4a", "aac")):
+        return "aac"
+    if lowered.startswith("vp9"):
+        return "vp9"
+    if lowered.startswith("opus"):
+        return "opus"
+    return lowered
+
+
 _IMAGE_CODECS = {"jpg": "mjpeg", "png": "png", "webp": "webp"}
 
 
@@ -564,6 +580,7 @@ __all__ = [
     "SourceRoute",
     "SourceRouter",
     "TransportResponse",
+    "codec_family",
     "fetch_optional_thumbnail",
     "normalize_supported_link",
     "recognize_source_url",

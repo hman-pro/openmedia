@@ -228,6 +228,51 @@ class RequestRegistry:
             self._instagram_reservations.discard(request_id)
             return True
 
+    async def publish_and_claim(
+        self,
+        request_id: str,
+        *,
+        metadata: MediaMetadata,
+        options: Sequence[FormatOption],
+        preview_message_id: int,
+        now: float | None = None,
+    ) -> SelectionResult:
+        """Publish a single-choice request and claim it at once, with no tap (research R8).
+
+        Same eligibility as ``publish_preview``; the work (and Instagram) reservation taken at
+        admission is kept rather than released, because the download starts immediately. Only
+        the registry lock is needed: ``submit`` is the sole writer while a request is checking.
+        """
+        bound_options = tuple(options)
+        if len(bound_options) != 1:
+            raise ValueError("an automatic claim requires exactly one option")
+        option = bound_options[0]
+        if option.option_id != 0:
+            raise ValueError("the automatic option must be bound to option_id 0")
+        async with self._registry_lock:
+            request = self.requests_by_id.get(request_id)
+            if request is None:
+                terminal = self.terminal_by_id.get(request_id)
+                if terminal is not None and terminal.state is RequestState.REPLACED:
+                    return SelectionResult(SelectionOutcome.REPLACED)
+                return SelectionResult(SelectionOutcome.NOT_FOUND)
+            if (
+                request.state is not RequestState.CHECKING
+                or self.active_request_by_user.get(request.user_id) != request_id
+                or request_id not in self._work_reservations
+            ):
+                return SelectionResult(SelectionOutcome.STALE, request)
+            current = self.monotonic() if now is None else now
+            request.metadata = metadata
+            request.options = bound_options
+            request.preview_message_id = preview_message_id
+            request.preview_expires_at = None
+            request.selected_option_id = option.option_id
+            request.processing_deadline = current + self.processing_seconds
+            request.state = RequestState.DOWNLOADING
+            self._pending_reservations.discard(request_id)
+            return SelectionResult(SelectionOutcome.ACCEPTED, request, option)
+
     async def claim_selection(
         self,
         request_id: str,

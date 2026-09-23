@@ -27,6 +27,7 @@ from openmedia.sources import (
     InspectResult,
     RateController,
     SourceAdapterError,
+    codec_family,
     recognize_source_url,
 )
 
@@ -270,21 +271,6 @@ def _inside_regular_file(path: Path, root: Path) -> Path:
     return resolved
 
 
-def _codec_family(value: str) -> str:
-    lowered = value.lower()
-    if lowered.startswith(("avc1", "h264")):
-        return "h264"
-    if lowered.startswith(("av01", "av1")):
-        return "av1"
-    if lowered.startswith(("mp4a", "aac")):
-        return "aac"
-    if lowered.startswith("vp9"):
-        return "vp9"
-    if lowered.startswith("opus"):
-        return "opus"
-    return lowered
-
-
 def merge_streams(
     video_path: Path,
     audio_path: Path,
@@ -311,8 +297,8 @@ def merge_streams(
         raise SourceAdapterError(ErrorCategory.UNSAFE_DESTINATION, stage="merge") from exc
     if not output.is_absolute() or output.exists() or output.is_symlink():
         raise SourceAdapterError(ErrorCategory.UNSAFE_DESTINATION, stage="merge")
-    video_family = _codec_family(video_codec)
-    audio_family = _codec_family(audio_codec)
+    video_family = codec_family(video_codec)
+    audio_family = codec_family(audio_codec)
     compatible = (
         extension == "mp4" and video_family in {"h264", "av1"} and audio_family == "aac"
     ) or (extension == "webm" and video_family == "vp9" and audio_family == "opus")
@@ -380,7 +366,7 @@ def merge_streams(
         streams = json.loads(probe.stdout).get("streams")
         if not isinstance(streams, list) or len(streams) != 2:
             raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="merge")
-        actual = [(item.get("codec_type"), _codec_family(str(item.get("codec_name")))) for item in streams]
+        actual = [(item.get("codec_type"), codec_family(str(item.get("codec_name")))) for item in streams]
         if actual != [("video", video_family), ("audio", audio_family)]:
             raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="merge")
         return size
@@ -425,8 +411,15 @@ def _validate_selected_streams(path: Path, option: FormatOption) -> None:
             raise ValueError("stream types changed")
         reference = option.transport_ref or {}
         for kind, entries, codec_key in (("video", video, "vcodec"), ("audio", audio, "acodec")):
-            if entries and reference.get(codec_key) and _codec_family(entries[0]["codec_name"]) != _codec_family(reference[codec_key]):
+            if entries and reference.get(codec_key) and codec_family(entries[0]["codec_name"]) != codec_family(reference[codec_key]):
                 raise ValueError("source codec changed")
+        # An MP4 offered with no codec information was chosen as a last-resort "phone-playable"
+        # candidate (research R1), so the promise is checked on the real file instead.
+        if option.media_type == "video" and option.extension == "mp4" and not reference.get("vcodec"):
+            if codec_family(video[0]["codec_name"]) != "h264":
+                raise ValueError("unknown-codec MP4 video is not H.264")
+            if option.includes_audio and codec_family(audio[0]["codec_name"]) != "aac":
+                raise ValueError("unknown-codec MP4 audio is not AAC")
         if video and any(getattr(option, field) is not None and video[0].get(field) != getattr(option, field) for field in ("width", "height")):
             raise ValueError("source dimensions changed")
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
