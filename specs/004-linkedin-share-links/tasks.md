@@ -35,7 +35,7 @@ implementation task, and confirm the test fails.
 
 **Purpose**: Confirm a green baseline before any change.
 
-- [ ] T001 Run `uv sync --locked --group dev && uv run pytest` on branch `004-linkedin-share-links`. Confirm it is green, then create `specs/004-linkedin-share-links/validation.md` with a "Baseline" section recording the date and pass count.
+- [X] T001 Run `uv sync --locked --group dev && uv run pytest` on branch `004-linkedin-share-links`. Confirm it is green, then create `specs/004-linkedin-share-links/validation.md` with a "Baseline" section recording the date and pass count.
 
 **Checkpoint**: Baseline recorded. No commit needed if nothing else changed (fold it into phase 2).
 
