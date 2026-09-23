@@ -275,20 +275,6 @@ uv run pytest -m live                                                # opt-in, r
   space out Instagram cases. See
   [`specs/001-media-download/quickstart.md`](specs/001-media-download/quickstart.md).
 
-### Spec-driven workflow
-
-This repository uses [Spec Kit](https://github.com/github/spec-kit). The specifications are
-the source of truth, and the code implements them:
-
-| Feature | Spec | Plan | Tasks | Evidence |
-|---|---|---|---|---|
-| 001 · Media download | [spec](specs/001-media-download/spec.md) | [plan](specs/001-media-download/plan.md) | [tasks](specs/001-media-download/tasks.md) | [validation](specs/001-media-download/validation.md) |
-| 002 · Diagnostic log | [spec](specs/002-file-logging/spec.md) | [plan](specs/002-file-logging/plan.md) | [tasks](specs/002-file-logging/tasks.md) | [validation](specs/002-file-logging/validation.md) |
-
-Interface contracts cover the [Telegram bot](specs/001-media-download/contracts/telegram-bot.md),
-the [source adapters](specs/001-media-download/contracts/source-adapters.md), the
-[runtime](specs/001-media-download/contracts/runtime.md), and the
-[diagnostic log](specs/002-file-logging/contracts/diagnostic-log.md).
 
 ### Repository layout
 
