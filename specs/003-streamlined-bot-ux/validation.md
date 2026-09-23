@@ -70,3 +70,61 @@
   callback is answered with the label as a toast; no confirmation message is sent.
 - `Tap Audio only` (quickstart §2) is covered by the same runtime path as the tapped video
   row (label from the selected option); it has no dedicated runtime test.
+
+## Completion (T038)
+
+- Date: 2026-09-23
+- Branch: `003-streamlined-bot-ux` at `960b4dc`
+
+### Automated checks
+
+| Check | Result |
+|---|---|
+| `uv run pytest` | green: 517 passed, 3 deselected (`live`), 0 failed (baseline 357) |
+| `uv run python -m openmedia --check-config` | `configuration valid` (token redacted) |
+
+The 20 warnings are python-telegram-bot `PTBDeprecationWarning` about `retry_after` as an
+integer, raised through `src/openmedia/delivery.py`, which 003 does not touch.
+
+### Manual Telegram run (quickstart §3)
+
+Run on one iPhone and one Android phone in a private chat, bot started locally with
+`OPENMEDIA_DIAGNOSTIC_LOG=1`. Times are from the console stage log.
+
+| Case | Result |
+|---|---|
+| YouTube `Video` (auto-dubbed video, 17.4 MB merged) | delivered and confirmed; card in 2.1 s, 5.8 s from tap to delivery; plays inline on both phones |
+| YouTube `Video (no sound)` | plays inline on both phones, not shown as a looping animation (SC-005 holds) |
+| Instagram (4.8 MB) | delivered and confirmed; card in 5.1 s, 4.1 s from tap to delivery |
+| LinkedIn, two app-shared links (`lnkd.in/p/…`) | rejected as unsupported before a request is created; see limitations |
+
+### Defects found and fixed during this run
+
+Both lie in 001's yt-dlp adapter; 003 exposed them.
+
+- `697210f fix(001): keep only the original-language audio track`: an auto-dubbed video with
+  100 audio streams produced 840 merge pairs and a 3 MB inspect result, over the worker
+  protocol's 2 MiB line limit, so inspection failed as `internal`. Now 42 pairs, 182 KB, and
+  the audio is the original language rather than a dub.
+- `960b4dc fix(001): download YouTube streams in ranged pieces`: a whole-file GET is
+  throttled by YouTube (measured 32 KB/s vs 9 MB/s ranged), so a merged choice took 120 s or
+  dropped its connection. Now 1–2 s per choice. A dropped or stalled connection is also
+  reported as `timeout` instead of `internal`.
+
+### Remaining limitations
+
+- **LinkedIn app share links (`lnkd.in`) are unsupported.** They 301 to
+  `linkedin.com/posts/…`, but recognition never contacts the source, so the short host is
+  refused. Supporting it adds a pre-recognition network hop and is a scope decision for a
+  follow-up feature. Resolved by hand, one of the two sampled links downloads (a picture).
+- **Some LinkedIn post slugs end in a hyphenated code** (`…-7508434034927017984-lwx-`). Both
+  our slug pattern and yt-dlp's `LinkedInIE` (`-\w{4}`) reject it; not yet investigated.
+- **Merged `Video` may pair low-bitrate audio.** Pairs with equal video bitrate fall through
+  to the lowest `option_id`, which picked HE-AAC 139 (49 kbps) over AAC 140 (130 kbps).
+  Playable; a tie-break on audio bitrate is a follow-up.
+- **Opus audio on iOS**: `Audio only` is usually Opus 251 (`.webm`), which iOS may need
+  another app to play (accepted in the spec edge cases).
+- **LinkedIn usually offers one choice**, so it is delivered without a tap.
+- **Rejected links leave no diagnostic event**, which slowed diagnosis of the LinkedIn case.
+- **Local runs on macOS** need `OPENMEDIA_WORK_DIR=/private/tmp/openmedia`: `/tmp` is a
+  symlink and the workspace sweep refuses a symlinked root. The container is unaffected.
