@@ -116,6 +116,37 @@ class TestJsonLineFormatter:
         assert TOKEN not in line
         assert "AAEXAMPLE" not in line
 
+    # Feature 004 (R8): refused links and the resolved short-link address keep their URLs.
+    REFUSED_LINKS = ["https://bit.ly/x", "https://lnkd.in/p/dMhfr6kG"]
+    RESOLVED_URL = "https://www.linkedin.com/posts/x-share-7508424761698410497-2cX9"
+
+    def test_links_and_resolved_url_are_kept_unredacted(self) -> None:
+        entry = render(make_record(origin="input", stage="refused", reason="too_many_links",
+            links=self.REFUSED_LINKS, resolution="resolved", resolved_url=self.RESOLVED_URL))
+        assert entry["links"] == self.REFUSED_LINKS
+        assert entry["resolved_url"] == self.RESOLVED_URL
+
+    def test_urls_in_reason_msg_and_error_are_still_redacted(self) -> None:
+        link = self.REFUSED_LINKS[1]
+        entry = render(make_record(origin="input", stage="refused", reason=f"bad {link}",
+            msg=f"refused {link}", error=f"failed {link}", links=self.REFUSED_LINKS,
+            resolved_url=self.RESOLVED_URL))
+        for key in ("reason", "msg", "error"):
+            assert link not in entry[key]
+            assert "<redacted-url>" in entry[key]
+
+    def test_a_token_inside_links_is_still_redacted(self) -> None:
+        other = "987654321:BBother-token-shaped-value"
+        record = make_record(origin="input", stage="refused", reason="unsupported_link",
+            links=[f"https://example.com/bot{TOKEN}/x", f"https://example.com/{other}"])
+        line = JsonLineFormatter(secrets=(TOKEN,)).format(record)
+        entry = json.loads(line)
+        assert TOKEN not in line
+        assert "AAEXAMPLE" not in line
+        assert other not in line
+        assert entry["links"][0].startswith("https://example.com/")
+        assert "<redacted-token>" in entry["links"][1]
+
 
 class TestDailyFileHandler:
     def handler(self, directory: Path) -> DailyFileHandler:

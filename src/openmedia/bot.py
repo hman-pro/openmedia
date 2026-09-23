@@ -12,10 +12,13 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity
 from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
+from openmedia import diagnostics
 from openmedia.choices import ChoiceSet, kind_of
 from openmedia.models import DownloadRequest, MediaMetadata
 from openmedia.presentation import MAX_CAPTION_CHARACTERS, card_text, choice_label
 from openmedia.sources import (
+    _BARE_SUPPORTED_HOST,
+    _SCHEME,
     ErrorCategory,
     SourceAdapterError,
     SourceRoute,
@@ -31,6 +34,10 @@ HELP_TEXT = (
     "Send one public YouTube video, LinkedIn post, or Instagram post in this private chat. "
     "Videos: pick Video, Video (no sound), or Audio only. Pictures are sent as-is."
 )
+# A refusal record keeps at most this many raw link candidates, each cut to this length
+# (004 data-model "Refusal record").
+REFUSAL_MAX_LINKS = 5
+REFUSAL_MAX_LINK_CHARACTERS = 2_048
 # Only the selection payload exists; the 001 ``p:`` page payload is malformed (003 contract).
 _CALLBACK = re.compile(r"^s:([0-9a-f]{32}):(0|[1-9][0-9]{0,9})$")
 
@@ -106,22 +113,68 @@ def parse_callback_data(data: str) -> CallbackAction:
     return CallbackAction("s", match.group(1), index)
 
 
-def message_links(message: Any) -> tuple[str, ...]:
-    """Supported-platform links from Telegram URL/text-link entities, else from plain text.
+def message_link_candidates(message: Any) -> tuple[str, ...]:
+    """Raw link candidates from a message, supported or not, in message order.
 
-    A ``text_link`` hides its URL behind display text, and Telegram marks scheme-less links
-    as ``url`` entities, so entities are authoritative whenever the message carries any.
+    Telegram URL/text-link entities are authoritative whenever the message carries any: a
+    ``text_link`` hides its URL behind display text, and Telegram marks scheme-less links as
+    ``url`` entities. Without entities, each whitespace-separated token that holds ``://`` or
+    names a supported host bare is one candidate. The rest of the text is never returned.
     """
     entities = getattr(message, "entities", None) or ()
     kinds = (MessageEntity.URL, MessageEntity.TEXT_LINK)
     if any(entity.type in kinds for entity in entities):
         parsed = message.parse_entities(list(kinds))
-        return supported_links(
+        return tuple(
             entity.url if entity.type == MessageEntity.TEXT_LINK else value
             for entity, value in parsed.items()
             if entity.type != MessageEntity.TEXT_LINK or entity.url
         )
-    return supported_urls_in_text(getattr(message, "text", None) or "")
+    candidates: list[str] = []
+    for token in (getattr(message, "text", None) or "").split():
+        if "://" in token:
+            scheme = _SCHEME.search(token)
+            candidates.append(token[scheme.start():] if scheme is not None else token)
+        elif _BARE_SUPPORTED_HOST.match(bare := token.lstrip("(<[{\"'")):
+            candidates.append(bare)
+    return tuple(candidates)
+
+
+def message_links(message: Any) -> tuple[str, ...]:
+    """Supported-platform links among the message's link candidates, in order."""
+    return supported_links(message_link_candidates(message))
+
+
+def refusal_reason(
+    chat_type: str, candidates: tuple[str, ...], links: tuple[str, ...], exc: BaseException | None
+) -> str:
+    """Why a message was turned away, by the data-model "Refusal record" rules in order."""
+    if chat_type != "private" and links:
+        return "not_private"
+    if not candidates:
+        return "no_link"
+    if not links:
+        return "unsupported_link"
+    if len(links) > 1:
+        return "too_many_links"
+    if isinstance(exc, SourceAdapterError):
+        return ErrorCategory(exc.category).value
+    return ErrorCategory.UNSUPPORTED_URL.value
+
+
+def _record_refusal(
+    chat: Any, user: Any, candidates: tuple[str, ...], links: tuple[str, ...],
+    exc: BaseException | None = None,
+) -> None:
+    # Only the diagnostic logger may see links and identifiers; never pass message text.
+    diagnostics.event(
+        "refused",
+        origin="input",
+        reason=refusal_reason(chat.type, candidates, links, exc),
+        links=[link[:REFUSAL_MAX_LINK_CHARACTERS] for link in candidates[:REFUSAL_MAX_LINKS]],
+        chat_id=chat.id,
+        user_id=user.id,
+    )
 
 
 def parse_link_message(
@@ -266,16 +319,19 @@ class BotHandlers:
         chat = update.effective_chat
         if message is None or user is None or chat is None:
             return
-        links = message_links(message)
+        candidates = message_link_candidates(message)
+        links = supported_links(candidates)
         if chat.type != "private":
             # Ordinary group chatter is ignored; only a shared link earns the private-chat
             # pointer, and nothing from a group is ever inspected or previewed.
             if links:
+                _record_refusal(chat, user, candidates, links)
                 await message.reply_text(PRIVATE_CHAT_GUIDANCE)
             return
         try:
             parse_link_message(message.text or "", chat_type=chat.type, links=links)
         except Exception as exc:
+            _record_refusal(chat, user, candidates, links, exc)
             if isinstance(exc, InputError):
                 text = str(exc)
             elif isinstance(exc, SourceAdapterError):

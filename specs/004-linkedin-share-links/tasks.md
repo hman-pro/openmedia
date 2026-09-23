@@ -240,11 +240,11 @@ and `links`. With it off, no file exists (quickstart §2 last rows, US3 scenario
 
 ### Tests for User Story 3
 
-- [ ] T023 [P] [US3] Add failing tests to `tests/unit/test_diagnostics.py` for `JsonLineFormatter`:
+- [X] T023 [P] [US3] Add failing tests to `tests/unit/test_diagnostics.py` for `JsonLineFormatter`:
   - A record with `links=["https://bit.ly/x", "https://lnkd.in/p/dMhfr6kG"]` and `resolved_url="https://www.linkedin.com/posts/x-share-7508424761698410497-2cX9"` keeps both values unredacted.
   - A URL in `reason`, `msg`, or `error` is still replaced by `<redacted-url>`.
   - A bot-token-shaped string inside `links` is still replaced by `<redacted-token>`.
-- [ ] T024 [P] [US3] Add failing tests to `tests/integration/test_diagnostic_trace.py`, using the `trace` fixture and `BotHandlers(workflow).message` with updates shaped like `private_update` in `tests/contract/test_bot_errors.py`. Give them URL entities where needed, through a `parse_entities` stub.
+- [X] T024 [P] [US3] Add failing tests to `tests/integration/test_diagnostic_trace.py`, using the `trace` fixture and `BotHandlers(workflow).message` with updates shaped like `private_update` in `tests/contract/test_bot_errors.py`. Give them URL entities where needed, through a `parse_entities` stub.
   - Each case writes exactly one entry with `origin == "input"`, `stage == "refused"`, `chat_id`, `user_id`, the `reason`, and `links`:
     - `hello` → `no_link`, `[]`
     - `https://bit.ly/x` → `unsupported_link`, `["https://bit.ly/x"]`
@@ -260,25 +260,25 @@ and `links`. With it off, no file exists (quickstart §2 last rows, US3 scenario
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] In `src/openmedia/diagnostics.py`:
+- [X] T025 [US3] In `src/openmedia/diagnostics.py`:
   - Extend `_KEEPS_URL` to `frozenset({"source_url", "links", "resolved_url"})`.
   - Add `reason`, `links`, `resolution`, and `resolved_url` to `_FIELD_ORDER` after `outcome`.
   - Update the comment above `_KEEPS_URL` to name the three fields.
 
   Pass T023.
-- [ ] T026 [US3] In `src/openmedia/bot.py`:
+- [X] T026 [US3] In `src/openmedia/bot.py`:
   - Add `message_link_candidates(message) -> tuple[str, ...]` returning the raw `url` entity values and `text_link` URLs, or, when there are no such entities, the plain-text tokens that contain `://` or match `_BARE_SUPPORTED_HOST`. Make `message_links` call `supported_links(message_link_candidates(message))`.
   - Add `refusal_reason(chat_type, candidates, links, exc) -> str`, using the data-model "Refusal record" reason rules in their stated order.
   - In `BotHandlers.message`, call `diagnostics.event("refused", origin="input", reason=..., links=[link[:2048] for link in candidates[:5]], chat_id=chat.id, user_id=user.id)`, at the group-reply branch and in the `except` branch before `reply_text`.
   - Never pass message text.
 
   Pass the refusal cases of T024.
-- [ ] T027 [US3] In `src/openmedia/coordinator.py`:
+- [X] T027 [US3] In `src/openmedia/coordinator.py`:
   - In `_record_failure`, add `resolution=detail` to the event when `detail := getattr(exc, "detail", None)` is in `RESOLUTION_FAILURES`.
   - In `submit`, when `_bind_identity` rebound a short-link request, add `resolution="resolved"` and `resolved_url=request.source_url` to the successful `inspection_finished` event.
 
   Pass the remaining cases of T024.
-- [ ] T028 [US3] Run `uv run pytest` until green. Record US3 scenarios 1–3 in `specs/004-linkedin-share-links/validation.md` under "US3".
+- [X] T028 [US3] Run `uv run pytest` until green. Record US3 scenarios 1–3 in `specs/004-linkedin-share-links/validation.md` under "US3".
 
 **Checkpoint**: All three stories pass independently. Commit
 `feat(004): phase 5 us3 refusal diagnostics`.

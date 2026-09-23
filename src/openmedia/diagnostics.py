@@ -48,11 +48,13 @@ _CORE_KEYS = ("ts", "level", "origin", "stage", "request_id", "truncated")
 # Entry keys after ts/level/origin/stage, in file order (data-model.md). Unknown keys follow.
 _FIELD_ORDER = (
     "request_id", "msg", "platform", "elapsed_seconds", "source_url", "chat_id", "user_id",
-    "option_id", "outcome", "error_category", "failed_stage", "deadline", "deadline_seconds",
-    "error", "worker_output", "bytes",
+    "option_id", "outcome", "reason", "links", "resolution", "resolved_url", "error_category",
+    "failed_stage", "deadline", "deadline_seconds", "error", "worker_output", "bytes",
 )
-# The submitted link is the one URL the file may hold; every other string is fully redacted.
-_KEEPS_URL = frozenset({"source_url"})
+# Only these fields may hold a URL: the submitted link (`source_url`), a refused message's raw
+# link candidates (`links`), and a short link's resolved post address (`resolved_url`). Every
+# other string is fully redacted; secrets and token-shaped values are redacted everywhere.
+_KEEPS_URL = frozenset({"source_url", "links", "resolved_url"})
 
 _logger = logging.getLogger(LOGGER_NAME)
 _logger.propagate = False

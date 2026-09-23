@@ -55,3 +55,27 @@ Upgrade pin: `test_ytdlp.py::test_linkedin_ie_still_reads_its_id_through_match_i
 Notes:
 - `OpenMediaLinkedInPostIE` is added per `YoutubeDL` instance with `add_info_extractor`, after
   the default extractors, so addresses the stock `LinkedInIE` accepts are still handled by it.
+
+## US3
+
+- Date: 2026-09-23
+- Branch: `004-linkedin-share-links` on top of `4f73fed`, phase 5 changes uncommitted
+- Command: `uv run pytest`
+- Result: green — 622 passed, 3 deselected (`live`), 0 failed
+
+Acceptance scenarios, walked through controlled tests (`BotHandlers.message` with URL entities
+through a `parse_entities` stub; fake worker for the short-link requests):
+
+| Scenario | Covered by | Observed |
+|---|---|---|
+| 1. Log on: a refused link writes one entry with the link, reason, and chat; console shows none | `tests/integration/test_diagnostic_trace.py::test_a_refused_message_writes_one_refusal_entry` (six cases), `test_a_refusal_never_records_the_message_text`, `test_a_refusal_stores_at_most_five_links`, `test_a_refusal_cuts_each_link_to_2048_characters`, `test_group_chatter_without_a_link_writes_nothing`; `tests/unit/test_diagnostics.py::TestJsonLineFormatter::test_links_and_resolved_url_are_kept_unredacted`, `test_urls_in_reason_msg_and_error_are_still_redacted`, `test_a_token_inside_links_is_still_redacted`, `test_diagnostic_logger_never_propagates_even_before_configuration` | Exactly one `origin="input"`, `stage="refused"` entry per refused message, with `chat_id`, `user_id`, and the reason: `hello` → `no_link` `[]`; `bit.ly/x` → `unsupported_link`; short link + YouTube → `too_many_links` with both; `lnkd.in/abc` → `unsupported_url`; YouTube playlist → `unsupported_collection`; group message with `lnkd.in/p/…` → `not_private`. No message text, names, or usernames. Six links keep the first 5; a 3,000-character link is cut to 2,048. Group chatter with no link writes nothing. `links`/`resolved_url` keep URLs; `reason`/`msg`/`error` stay URL-redacted, and tokens inside `links` are still redacted. The diagnostic logger never propagates, so the console cannot see these entries |
+| 2. Log off: nothing written anywhere | `test_diagnostic_trace.py::test_flag_off_refusals_create_no_file_and_reach_no_console` (six cases) | No log directory created. `capsys` and `caplog` (with a root console handler attached) hold none of the links, chat IDs, or user IDs |
+| 3. Short link fails to resolve: the trace says why | `test_diagnostic_trace.py::test_an_unresolved_short_link_records_its_resolution_outcome`, `test_a_resolved_short_link_records_the_query_free_resolved_url` | `WorkerRemoteError("short_link_unresolved", "inspection", "not_found")` gives one `inspection_finished` entry with `error_category="short_link_unresolved"`, `resolution="not_found"`, and no `refused` entry. A resolved short link's ok `inspection_finished` has `resolution="resolved"` and `resolved_url` equal to the rebound, query-free `source_url`; no entry holds `rcm=` or `utm_` |
+
+Notes:
+- `resolution` is added only when the worker error's `detail` is one of `RESOLUTION_FAILURES`,
+  so the other outcomes (`outside_linkedin`, `too_many_redirects`, `timeout`, …) follow the
+  same path as `not_found`.
+- A group message whose only links are unsupported (for example `bit.ly`) still gets no
+  reply and writes no entry: the `not_private` rule needs a supported link, matching the
+  existing group-reply branch.

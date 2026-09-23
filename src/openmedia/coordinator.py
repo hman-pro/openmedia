@@ -23,7 +23,7 @@ from openmedia.models import (
     MediaMetadata,
     RequestState,
 )
-from openmedia.sources import DownloadResult, InspectResult
+from openmedia.sources import RESOLUTION_FAILURES, DownloadResult, InspectResult
 
 
 class AdmissionOutcome(StrEnum):
@@ -576,11 +576,12 @@ StatusCallable = Callable[[DownloadRequest, str], Awaitable[Any]]
 CleanupCallable = Callable[[DownloadRequest], Awaitable[Any]]
 
 
-def _bind_identity(request: DownloadRequest, result: InspectResult) -> None:
+def _bind_identity(request: DownloadRequest, result: InspectResult) -> bool:
     """Check that inspection describes the requested media, rebinding a resolved short link.
 
     A LinkedIn short link names no post until the worker resolves it, so its request adopts the
     post identity that inspection returns. Every other request keeps a strict equality check.
+    Returns whether the request was rebound.
     """
     from openmedia.sources import SourceAdapterError, recognize_source_url
 
@@ -597,9 +598,10 @@ def _bind_identity(request: DownloadRequest, result: InspectResult) -> None:
             raise WorkflowError("inspection returned a different media identity")
         request.source_url = route.canonical_url
         request.media_id = route.media_id
-        return
+        return True
     if result.metadata.media_id != request.media_id:
         raise WorkflowError("inspection returned a different media identity")
+    return False
 
 
 class MediaWorkflow:
@@ -665,7 +667,7 @@ class MediaWorkflow:
                 await self._status(request, "checking")
                 event("inspection_started", request=request)
                 result = await self._inspect(request)
-                _bind_identity(request, result)
+                rebound = _bind_identity(request, result)
                 choice_set = choose(
                     result.options,
                     media_kind=result.metadata.media_kind,
@@ -681,9 +683,12 @@ class MediaWorkflow:
                         else ErrorCategory.NO_FORMATS
                     )
                     raise SourceAdapterError(category, stage="checking")
+                # A resolved short link records the query-free post address it now points at.
+                resolution = ({"resolution": "resolved", "resolved_url": request.source_url}
+                    if rebound else {})
                 event("inspection_finished", request=request, outcome="ok",
                     options=len(result.options),
-                    choices=_kinds(choice_set))
+                    choices=_kinds(choice_set), **resolution)
                 claimed: FormatOption | None = None
                 if result.metadata.media_kind == MediaKind.IMAGE:
                     # A picture has no card: the `Checking link…` message carries the status
@@ -828,18 +833,22 @@ class MediaWorkflow:
         self, request: DownloadRequest, exc: BaseException, stage: str, result: DeliveryResult
     ) -> None:
         finished = {"checking": "inspection_finished", "downloading": "download_finished"}
-        deadline: dict[str, Any] = {}
+        fields: dict[str, Any] = {}
         if result.error_category == "timeout":
-            deadline = ({"deadline": "inspection", "deadline_seconds": self.inspection_seconds}
+            fields = ({"deadline": "inspection", "deadline_seconds": self.inspection_seconds}
                 if stage == "checking"
                 else {"deadline": "processing", "deadline_seconds": self.registry.processing_seconds})
         cancelled = isinstance(exc, asyncio.CancelledError)
+        # A short link that failed to resolve names its resolution outcome (004 R8).
+        detail = getattr(exc, "detail", None)
+        if isinstance(detail, str) and detail in RESOLUTION_FAILURES:
+            fields["resolution"] = detail
         event(finished.get(stage, "delivery"), request=request,
             level=logging.WARNING if cancelled else logging.ERROR,
             outcome="cancelled" if cancelled else str(result.status),
             error_category=result.error_category, failed_stage=stage,
             worker_output=getattr(exc, "worker_output", None),
-            exc_info=(type(exc), exc, exc.__traceback__), **deadline)
+            exc_info=(type(exc), exc, exc.__traceback__), **fields)
 
     async def _notify(self, request: DownloadRequest, result: DeliveryResult) -> DeliveryResult:
         if self.notify_failure is not None:

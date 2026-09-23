@@ -527,3 +527,224 @@ async def test_runtime_journey_puts_every_fr002_stage_in_one_trace(
     assert by_stage["terminal"]["outcome"] == "confirmed"
     assert by_stage["cleanup"]["outcome"] == "removed"
     assert all(entry["origin"] == "request" for entry in by_stage.values())
+
+
+# --- 004 User Story 3: refused links leave a diagnostic trace (004 T024) -------------------
+#
+# Every message refused before a request starts writes one `refused` entry with the refusal
+# reason, the raw link candidates, and the chat and user identifiers, and never the message
+# text (data-model "Refusal record"; contracts/telegram-bot.md "Refused messages in the
+# diagnostic log"; FR-009, FR-010). A short-link request is admitted, so its resolution
+# outcome lands on its own `inspection_finished` entry instead (data-model "Request trace
+# additions").
+
+SHORT = "https://lnkd.in/p/dMhfr6kG"
+YOUTUBE = "https://youtu.be/abcdefghijk"
+REFUSED_CHAT = 5550001
+REFUSED_USER = 7770001
+RESOLVED_ACTIVITY = "7508424761698410497"
+RESOLVED_POST = f"https://www.linkedin.com/posts/sample-author_sample-text-share-{RESOLVED_ACTIVITY}-2cX9"
+
+
+class UrlEntity:
+    """A hashable stand-in for a Telegram `url` entity; identity keeps repeated links apart."""
+
+    type = "url"
+    url = None
+
+
+def link_message(text: str, links: tuple[str, ...], reply: AsyncMock) -> Any:
+    """A message whose URL entities are the given links, exposed through a `parse_entities` stub."""
+    from types import SimpleNamespace
+
+    entities = tuple(UrlEntity() for _ in links)
+    parsed = dict(zip(entities, links, strict=True))
+    return SimpleNamespace(text=text, entities=entities, reply_text=reply,
+        parse_entities=lambda _kinds=None: dict(parsed))
+
+
+def refused_update(text: str, links: tuple[str, ...] = (), *, chat_type: str = "private") -> Any:
+    """Shaped like `private_update` in tests/contract/test_bot_errors.py, with URL entities."""
+    from types import SimpleNamespace
+
+    chat_id = REFUSED_CHAT if chat_type == "private" else -100 - REFUSED_CHAT
+    return SimpleNamespace(
+        edited_message=None,
+        effective_user=SimpleNamespace(id=REFUSED_USER),
+        effective_chat=SimpleNamespace(id=chat_id, type=chat_type),
+        effective_message=link_message(text, links, AsyncMock()),
+    )
+
+
+def refused_context() -> Any:
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    return SimpleNamespace(application=SimpleNamespace(create_task=MagicMock()))
+
+
+async def send_refused(update: Any) -> Any:
+    from types import SimpleNamespace
+
+    from openmedia.bot import BotHandlers
+
+    workflow = SimpleNamespace(submit=AsyncMock(), notify_failure=None)
+    context = refused_context()
+    await BotHandlers(workflow).message(update, context)
+    # Nothing refused is ever handed to the workflow.
+    workflow.submit.assert_not_awaited()
+    context.application.create_task.assert_not_called()
+    return update
+
+
+def refused_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [entry for entry in entries if entry.get("stage") == "refused"]
+
+
+REFUSAL_CASES = [
+    pytest.param("hello", (), "private", "no_link", [], id="no_link"),
+    pytest.param("https://bit.ly/x", ("https://bit.ly/x",), "private", "unsupported_link",
+        ["https://bit.ly/x"], id="unsupported_link"),
+    pytest.param(f"{SHORT} {YOUTUBE}", (SHORT, YOUTUBE), "private", "too_many_links",
+        [SHORT, YOUTUBE], id="too_many_links"),
+    pytest.param("https://lnkd.in/abc", ("https://lnkd.in/abc",), "private", "unsupported_url",
+        ["https://lnkd.in/abc"], id="unsupported_url"),
+    pytest.param("https://www.youtube.com/playlist?list=abc",
+        ("https://www.youtube.com/playlist?list=abc",), "private", "unsupported_collection",
+        ["https://www.youtube.com/playlist?list=abc"], id="unsupported_collection"),
+    pytest.param(f"look {SHORT}", (SHORT,), "supergroup", "not_private", [SHORT], id="not_private"),
+]
+
+
+@pytest.mark.parametrize(("text", "links", "chat_type", "reason", "logged"), REFUSAL_CASES)
+async def test_a_refused_message_writes_one_refusal_entry(
+    trace: Trace, text: str, links: tuple[str, ...], chat_type: str, reason: str, logged: list[str]
+) -> None:
+    update = await send_refused(refused_update(text, links, chat_type=chat_type))
+    entries = trace.entries()
+    refused = refused_entries(entries)
+    assert len(refused) == 1, entries
+    entry = refused[0]
+    assert entry["origin"] == "input"
+    assert entry["stage"] == "refused"
+    assert entry["chat_id"] == update.effective_chat.id
+    assert entry["user_id"] == REFUSED_USER
+    assert entry["reason"] == reason
+    assert entry.get("links", []) == logged
+    # The refusal is the only bot entry: no request was started.
+    assert [item for item in entries if item.get("origin") != "library"] == [entry]
+    # The user was still told why, exactly once.
+    assert update.effective_message.reply_text.await_count == 1
+
+
+async def test_a_refusal_never_records_the_message_text(trace: Trace) -> None:
+    await send_refused(refused_update("hello"))
+    await send_refused(refused_update("please grab https://bit.ly/x for me",
+        ("https://bit.ly/x",)))
+    entries = trace.entries()
+    assert [entry["reason"] for entry in refused_entries(entries)] == ["no_link", "unsupported_link"]
+    text = json.dumps(entries)
+    for fragment in ("hello", "please grab", "for me"):
+        assert fragment not in text
+    forbidden = {"text", "username", "first_name", "last_name"}
+    assert not any(forbidden & set(entry) for entry in entries)
+
+
+async def test_a_refusal_stores_at_most_five_links(trace: Trace) -> None:
+    links = tuple(f"https://youtu.be/abcdefghij{index}" for index in range(6))
+    await send_refused(refused_update(" ".join(links), links))
+    [entry] = refused_entries(trace.entries())
+    assert entry["reason"] == "too_many_links"
+    assert entry["links"] == list(links[:5])
+
+
+async def test_a_refusal_cuts_each_link_to_2048_characters(trace: Trace) -> None:
+    link = "https://bit.ly/" + "x" * (3_000 - len("https://bit.ly/"))
+    assert len(link) == 3_000
+    await send_refused(refused_update(link, (link,)))
+    [entry] = refused_entries(trace.entries())
+    assert entry["reason"] == "unsupported_link"
+    assert entry["links"] == [link[:2048]]
+
+
+async def test_group_chatter_without_a_link_writes_nothing(trace: Trace) -> None:
+    await send_refused(refused_update("good morning everyone", chat_type="supergroup"))
+    await send_refused(refused_update(f"look {SHORT}", (SHORT,), chat_type="supergroup"))
+    entries = [entry for entry in trace.entries() if entry.get("origin") != "library"]
+    # Only the group message that held a link is a refusal; chatter leaves no trace at all.
+    assert [entry.get("reason") for entry in entries] == ["not_private"]
+    assert "good morning" not in json.dumps(entries)
+
+
+@pytest.mark.parametrize(("text", "links", "chat_type", "reason", "logged"), REFUSAL_CASES)
+async def test_flag_off_refusals_create_no_file_and_reach_no_console(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture,
+    text: str, links: tuple[str, ...], chat_type: str, reason: str, logged: list[str]
+) -> None:
+    directory = tmp_path / "logs"
+    stop = diagnostics.configure_diagnostics(Settings(telegram_bot_token=TOKEN,
+        diagnostic_log=False, diagnostic_log_dir=directory))
+    console = logging.StreamHandler()
+    logging.getLogger().addHandler(console)
+    try:
+        with caplog.at_level(logging.DEBUG):
+            update = await send_refused(refused_update(text, links, chat_type=chat_type))
+    finally:
+        logging.getLogger().removeHandler(console)
+        stop()
+    assert not directory.exists()
+    captured = capsys.readouterr()
+    console_text = captured.out + captured.err + caplog.text
+    for link in links:
+        assert link not in console_text
+    assert str(update.effective_chat.id) not in console_text
+    assert str(REFUSED_USER) not in console_text
+
+
+async def test_an_unresolved_short_link_records_its_resolution_outcome(trace: Trace, tmp_path: Path) -> None:
+    error = WorkerRemoteError("short_link_unresolved", "inspection", "not_found")
+    workflow = workflow_for(RequestRegistry(), tmp_path, inspect=AsyncMock(side_effect=error))
+    with pytest.raises(WorkerRemoteError):
+        await workflow.submit(user_id=42, chat_id=4200, text=SHORT, chat_type="private", links=(SHORT,))
+    entries = trace.entries()
+    finished = [entry for entry in entries if entry["stage"] == "inspection_finished"]
+    assert len(finished) == 1, entries
+    assert finished[0]["error_category"] == "short_link_unresolved"
+    assert finished[0]["resolution"] == "not_found"
+    # An admitted request that fails resolution is not a refusal.
+    assert refused_entries(entries) == []
+
+
+async def test_a_resolved_short_link_records_the_query_free_resolved_url(trace: Trace, tmp_path: Path) -> None:
+    from dataclasses import replace as dataclass_replace
+
+    from openmedia.sources.ytdlp import normalize_info
+
+    info = json.loads((FIXTURES / "linkedin-video-progressive.json").read_text(encoding="utf-8"))
+    result = normalize_info(info, max_file_bytes=MAX_FILE_BYTES)
+    # The worker reports the resolved post with LinkedIn's tracking query still attached.
+    tracked = f"{RESOLVED_POST}/?rcm=ACoAAB123&utm_source=share&utm_medium=member_desktop"
+    metadata = dataclass_replace(result.metadata, canonical_url=tracked, media_id=RESOLVED_ACTIVITY)
+    result = dataclass_replace(result, metadata=metadata)
+
+    async def download(_request: Any, option: FormatOption) -> DownloadResult:
+        path = tmp_path / f"media.{option.extension}"
+        path.write_bytes(b"fixture")
+        return DownloadResult(path=path, media_id=RESOLVED_ACTIVITY,
+            source_format_id=option.source_format_id, media_type=str(option.media_type),
+            extension=option.extension, mime_type=option.mime_type, actual_bytes=7)
+
+    workflow = workflow_for(RequestRegistry(), tmp_path, inspect=AsyncMock(return_value=result),
+        download=download)
+    request = await workflow.submit(user_id=42, chat_id=4200, text=SHORT, chat_type="private",
+        links=(SHORT,))
+    assert request.source_url == RESOLVED_POST
+    entries = trace.entries()
+    finished = next(entry for entry in entries
+        if entry["stage"] == "inspection_finished" and entry.get("request_id") == request.request_id)
+    assert finished["outcome"] == "ok"
+    assert finished["resolution"] == "resolved"
+    assert finished["resolved_url"] == request.source_url
+    text = "\n".join(json.dumps(entry) for entry in entries)
+    assert "rcm=" not in text
+    assert "utm_" not in text
