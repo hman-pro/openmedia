@@ -476,7 +476,7 @@ def _validate_selected_streams(path: Path, option: FormatOption) -> tuple[int | 
     """Check the file against the option; return its measured width, height, and duration."""
     try:
         probe = subprocess.run(["ffprobe", "-v", "error", "-protocol_whitelist", "file",
-            "-show_entries", "stream=codec_type,codec_name,width,height:format=duration", "-of", "json", str(path)],
+            "-show_entries", "stream=codec_type,codec_name,width,height:stream_tags=rotate:stream_side_data=rotation:format=duration", "-of", "json", str(path)],
             check=True, capture_output=True, text=True, timeout=10)
         report = json.loads(probe.stdout)
         streams = report["streams"]
@@ -500,11 +500,22 @@ def _validate_selected_streams(path: Path, option: FormatOption) -> tuple[int | 
         if video and any(getattr(option, field) is not None and video[0].get(field) != getattr(option, field) for field in ("width", "height")):
             raise ValueError("source dimensions changed")
         width, height = (_positive_number(video[0].get(side)) if video else None for side in ("width", "height"))
+        if video and _quarter_turn(video[0]):
+            # Stored pixels plus a display matrix: report the frame as players show it.
+            width, height = height, width
         duration = _positive_number(_float_or_none(report.get("format", {}).get("duration")))
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         raise SourceAdapterError(ErrorCategory.FORMAT_UNAVAILABLE, stage="download") from exc
     return (int(width) if width else None, int(height) if height else None,
         float(duration) if duration else None)
+
+
+def _quarter_turn(stream: Mapping[str, Any]) -> bool:
+    """True when the display matrix (or legacy ``rotate`` tag) turns the frame by 90 or 270."""
+    angles = [entry.get("rotation") for entry in stream.get("side_data_list", ()) if isinstance(entry, Mapping)]
+    angles.append((stream.get("tags") or {}).get("rotate"))
+    rotation = next((angle for angle in map(_float_or_none, angles) if angle is not None), 0.0)
+    return round(rotation) % 180 == 90
 
 
 def _float_or_none(value: object) -> float | None:

@@ -307,3 +307,26 @@ def test_download_result_carries_measured_video_metadata(tmp_path: Path) -> None
     result = YtDlpAdapter().download(request, transport=transport, rate_control=rate)
     assert (result.width, result.height) == (32, 32)
     assert result.duration_seconds == pytest.approx(1.0, abs=0.2)
+
+
+@pytest.mark.parametrize(("rotation", "expected"), [(0, (32, 16)), (90, (16, 32)), (-90, (16, 32)), (180, (32, 16))])
+def test_measured_frame_is_the_displayed_frame_after_rotation(tmp_path: Path, rotation: int, expected: tuple[int, int]) -> None:
+    # A phone clip stores landscape pixels plus a display matrix; Telegram needs the frame
+    # as shown, so a quarter turn swaps the reported sides.
+    from dataclasses import replace
+
+    from openmedia.sources.ytdlp import _validate_selected_streams
+
+    stored = tmp_path / "stored.mp4"
+    subprocess.run(
+        [tool("ffmpeg"), "-nostdin", "-v", "error", "-f", "lavfi", "-i", "color=size=32x16:rate=5:duration=1", *H264, str(stored)],
+        check=True,
+    )
+    clip = tmp_path / "rotated.mp4"
+    subprocess.run(
+        [tool("ffmpeg"), "-nostdin", "-v", "error", "-display_rotation", str(rotation), "-i", str(stored), "-c", "copy", str(clip)],
+        check=True,
+    )
+    option = replace(unknown_codec_option(includes_audio=False), height=None)
+    width, height, _ = _validate_selected_streams(clip, option)
+    assert (width, height) == expected
