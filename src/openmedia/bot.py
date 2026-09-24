@@ -50,6 +50,20 @@ HELP_TEXT = (
     "• Choices expire after 15 minutes. Send the link again if they do.\n"
     "• One link per message, in this private chat."
 )
+# Bot profile texts, shown before the first /start; Telegram caps them at 512 and 120 characters.
+DESCRIPTION_TEXT = (
+    "Send one public YouTube, LinkedIn, or Instagram link and get the media file back, "
+    "unchanged. Files up to 50 MB. Tap Start, then paste a link."
+)
+SHORT_DESCRIPTION_TEXT = "Public YouTube, LinkedIn, and Instagram media, sent back unchanged."
+
+
+async def publish_profile(bot: Any) -> None:
+    """Write the bot description and short description only when Telegram's copy differs."""
+    if (await bot.get_my_description()).description != DESCRIPTION_TEXT:
+        await bot.set_my_description(DESCRIPTION_TEXT)
+    if (await bot.get_my_short_description()).short_description != SHORT_DESCRIPTION_TEXT:
+        await bot.set_my_short_description(SHORT_DESCRIPTION_TEXT)
 # A refusal record keeps at most this many raw link candidates, each cut to this length
 # (004 data-model "Refusal record").
 REFUSAL_MAX_LINKS = 5

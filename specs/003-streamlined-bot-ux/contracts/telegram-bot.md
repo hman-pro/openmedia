@@ -103,6 +103,19 @@ Good to know:
 • One link per message, in this private chat.
 ```
 
+## Bot profile
+
+(amended) At startup the bot reads its description and short description and writes each one
+with `setMyDescription` / `setMyShortDescription` only when Telegram's copy differs. This runs
+as a background task. A failure is logged by exception type only and never blocks polling.
+
+Description (≤512 characters, shown in an empty chat before `/start`): "Send one public
+YouTube, LinkedIn, or Instagram link and get the media file back, unchanged. Files up to
+50 MB. Tap Start, then paste a link."
+
+Short description (≤120 characters, shown on the profile and when shared): "Public YouTube,
+LinkedIn, and Instagram media, sent back unchanged."
+
 ## Amendments to 001 artifacts
 
 Applied during implementation, each marked "(amended by 003)":

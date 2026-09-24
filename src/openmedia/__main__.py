@@ -21,7 +21,7 @@ from dataclasses import fields
 from telegram.ext import Application, ApplicationBuilder, ExtBot
 from telegram.request import HTTPXRequest
 
-from openmedia.bot import build_card, register_handlers, send_card, update_status
+from openmedia.bot import build_card, publish_profile, register_handlers, send_card, update_status
 from openmedia.choices import ChoiceKind, ChoiceSet, kind_of
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
@@ -592,6 +592,15 @@ def validate_diagnostic_directory(directory: Path) -> None:
         ) from exc
 
 
+async def _publish_profile(bot: Any) -> None:
+    # Cosmetic and best-effort: a failed profile write must never stop the bot from polling.
+    try:
+        await publish_profile(bot)
+    except Exception as exc:  # noqa: BLE001 - only the type name is logged, never request data
+        logging.getLogger("openmedia").warning("openmedia: bot profile not updated (%s)",
+            type(exc).__name__)
+
+
 def build_application(settings: Settings) -> tuple[Application[Any, ...], RequestRegistry]:
     registry = RequestRegistry(
         max_workers=settings.max_workers,
@@ -612,12 +621,16 @@ def build_application(settings: Settings) -> tuple[Application[Any, ...], Reques
             health.maintain(),
             name="openmedia-health",
         )
+        application.bot_data["openmedia_profile"] = application.create_task(
+            _publish_profile(application.bot),
+            name="openmedia-profile",
+        )
 
     async def post_stop(application: Application[Any, ...]) -> None:
         await registry.close_admission()
 
     async def post_shutdown(application: Application[Any, ...]) -> None:
-        for key in ("openmedia_maintenance", "openmedia_health_task"):
+        for key in ("openmedia_maintenance", "openmedia_health_task", "openmedia_profile"):
             task = application.bot_data.get(key)
             if task is None:
                 continue

@@ -218,3 +218,44 @@ def test_help_limits_match_the_fixed_deadlines_and_cap() -> None:
 
     assert f"{MAX_HOSTED_FILE_BYTES // 1_000_000} MB" in HELP_TEXT
     assert f"{SELECTION_SECONDS // 60} minutes" in HELP_TEXT
+
+
+def test_profile_texts_fit_telegram_limits_and_name_the_cap() -> None:
+    from openmedia.bot import DESCRIPTION_TEXT, SHORT_DESCRIPTION_TEXT
+    from openmedia.config import MAX_HOSTED_FILE_BYTES
+
+    assert len(DESCRIPTION_TEXT) <= 512
+    assert len(SHORT_DESCRIPTION_TEXT) <= 120
+    assert f"{MAX_HOSTED_FILE_BYTES // 1_000_000} MB" in DESCRIPTION_TEXT
+
+
+@pytest.mark.parametrize("current", ["", "stale text"])
+async def test_profile_is_written_only_when_telegram_copy_differs(current: str) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from openmedia.bot import DESCRIPTION_TEXT, SHORT_DESCRIPTION_TEXT, publish_profile
+
+    bot = SimpleNamespace(
+        get_my_description=AsyncMock(return_value=SimpleNamespace(description=current)),
+        get_my_short_description=AsyncMock(
+            return_value=SimpleNamespace(short_description=SHORT_DESCRIPTION_TEXT)),
+        set_my_description=AsyncMock(),
+        set_my_short_description=AsyncMock(),
+    )
+    await publish_profile(bot)
+    bot.set_my_description.assert_awaited_once_with(DESCRIPTION_TEXT)
+    bot.set_my_short_description.assert_not_awaited()
+
+
+async def test_profile_failure_is_logged_and_swallowed(caplog) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from telegram.error import NetworkError
+
+    from openmedia.__main__ import _publish_profile
+
+    bot = SimpleNamespace(get_my_description=AsyncMock(side_effect=NetworkError("down")))
+    await _publish_profile(bot)
+    assert "bot profile not updated (NetworkError)" in caplog.text
