@@ -124,7 +124,18 @@ uv run --locked --env-file .env python -m openmedia --check-config
 uv run --locked --env-file .env python -m openmedia
 ```
 
-On macOS, also set `OPENMEDIA_WORK_DIR=/private/tmp/openmedia` in `.env`. The default
+On a development machine, `scripts/dev.sh` does all of this in one step. It checks for the
+required executables, syncs from the lock, validates the config, and starts the bot. It reads
+the token from the OS keyring rather than `.env`, and refuses to start if `.env` contains one:
+
+```sh
+# Store the token once (macOS; on Linux use `secret-tool store … service openmedia-bot-test-token`).
+security add-generic-password -s openmedia-bot-test-token -a "$USER" -w
+scripts/dev.sh                   # extra arguments go to the bot, e.g. --check-config
+```
+
+On macOS, also set `OPENMEDIA_WORK_DIR=/private/tmp/openmedia` in `.env` (`scripts/dev.sh`
+defaults to it when `.env` leaves it unset). The default
 `/tmp/openmedia` sits behind the `/tmp` symlink, and the bot refuses a symlinked workspace at
 startup, even though `--check-config` passes.
 

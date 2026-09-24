@@ -71,6 +71,7 @@ uv sync --locked --group dev     # install from the lock
 uv run pytest                    # controlled tests; network is disabled in conftest
 uv run pytest -m live            # opt-in, hits real sources, run deliberately
 uv run python -m openmedia --check-config
+scripts/dev.sh                   # dev run: preflight, sync, check, start; token from keyring
 ```
 
 Controlled tests use fixtures and a fake Telegram transport. When a test needs the
