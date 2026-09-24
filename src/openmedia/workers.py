@@ -191,7 +191,14 @@ def decode_download_result(value: Mapping[str, Any]) -> DownloadResult:
         media_type=str(value["media_type"]),
         extension=str(value["extension"]),
         mime_type=str(value["mime_type"]),
+        width=_optional_int(value.get("width")),
+        height=_optional_int(value.get("height")),
+        duration_seconds=float(value["duration_seconds"]) if value.get("duration_seconds") is not None else None,
     )
+
+
+def _optional_int(value: object) -> int | None:
+    return int(value) if value is not None else None  # type: ignore[arg-type]
 
 
 class WorkerSupervisor:

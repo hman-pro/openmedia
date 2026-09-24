@@ -31,6 +31,7 @@ async def _send(
     *,
     request: DownloadRequest,
     selected: FormatOption,
+    downloaded: DownloadResult,
     file: Any,
     duration_seconds: float | None,
     timeout: float,
@@ -44,11 +45,17 @@ async def _send(
     }
     if selected.media_type == MediaType.VIDEO:
         # Metadata hints only; the uploaded bytes are the downloaded file, unchanged (R7).
+        # Telegram's player draws the frame from these, so the measured file wins over the
+        # source listing, which some sources (Instagram progressive MP4) leave empty.
         hints: dict[str, int] = {}
-        if selected.width:
-            hints["width"] = selected.width
-        if selected.height:
-            hints["height"] = selected.height
+        width = downloaded.width or selected.width
+        height = downloaded.height or selected.height
+        if downloaded.duration_seconds is not None:
+            duration_seconds = downloaded.duration_seconds
+        if width:
+            hints["width"] = width
+        if height:
+            hints["height"] = height
         if duration_seconds is not None and duration_seconds >= 0:
             hints["duration"] = int(round(duration_seconds))
         return await bot.send_video(video=file, supports_streaming=True, **hints, **common)
@@ -100,6 +107,7 @@ async def deliver_media(
                     bot,
                     request=request,
                     selected=selected,
+                    downloaded=downloaded,
                     file=file,
                     duration_seconds=duration_seconds,
                     timeout=max(0.1, deadline - monotonic()),

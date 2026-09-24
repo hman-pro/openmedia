@@ -332,6 +332,11 @@ class DownloadResult:
     media_type: str
     extension: str
     mime_type: str
+    # Measured from the delivered file, not the source listing: Telegram's player shapes the
+    # frame and shows the length only from these hints.
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: float | None = None
 
     def __post_init__(self) -> None:
         if not self.path.is_absolute():

@@ -27,6 +27,7 @@ def selected_request(
     *,
     width: int | None = 640,
     height: int | None = 360,
+    measured: dict | None = None,
 ) -> tuple[DownloadRequest, DownloadResult]:
     shape = KINDS[kind]
     dims = {"width": width, "height": height} if shape["media_type"] == "video" else {}
@@ -59,6 +60,7 @@ def selected_request(
         shape["media_type"],
         shape["extension"],
         shape["mime_type"],
+        **(measured or {}),
     )
     return request, result
 
@@ -96,6 +98,7 @@ async def deliver(bot: Bot, tmp_path: Path, kind: str = "video", **kwargs):
         kind,
         width=kwargs.get("width", 640),
         height=kwargs.get("height", 360),
+        measured=kwargs.get("measured"),
     )
     return await deliver_media(
         bot,
@@ -136,6 +139,26 @@ async def test_video_metadata_is_omitted_when_unknown(kind, tmp_path: Path) -> N
     assert kwargs["supports_streaming"] is True
     for key in ("width", "height", "duration"):
         assert kwargs.get(key) is None, key
+
+
+@pytest.mark.parametrize("kind", ["video", "silent"])
+async def test_video_metadata_comes_from_the_measured_file_when_the_source_omits_it(kind, tmp_path: Path) -> None:
+    # An Instagram progressive MP4 lists no dimensions or duration; without these hints
+    # Telegram's player guesses the frame shape and shows 0:00.
+    measured = {"width": 720, "height": 1280, "duration_seconds": 209.789}
+    bot = Bot(77)
+    await deliver(bot, tmp_path, kind, width=None, height=None, duration_seconds=None, measured=measured)
+    _, kwargs = bot.calls[0]
+    assert (kwargs["width"], kwargs["height"], kwargs["duration"]) == (720, 1280, 210)
+    assert bot.bytes == [b"fixture-native-bytes"]
+
+
+async def test_measured_video_metadata_wins_over_source_listing(tmp_path: Path) -> None:
+    measured = {"width": 720, "height": 1280, "duration_seconds": 30.4}
+    bot = Bot(77)
+    await deliver(bot, tmp_path, width=640, height=360, duration_seconds=12, measured=measured)
+    _, kwargs = bot.calls[0]
+    assert (kwargs["width"], kwargs["height"], kwargs["duration"]) == (720, 1280, 30)
 
 
 async def test_audio_uses_send_document(tmp_path: Path) -> None:

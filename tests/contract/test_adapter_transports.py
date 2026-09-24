@@ -97,7 +97,7 @@ def test_image_adapters_use_only_supplied_guarded_transport(tmp_path: Path) -> N
 
 
 def test_ytdlp_exact_download_and_thumbnail_use_guard_limits(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("openmedia.sources.ytdlp._validate_selected_streams", lambda *args: None)
+    monkeypatch.setattr("openmedia.sources.ytdlp._validate_selected_streams", lambda *args: (None, None, None))
     transport = Transport()
     metadata = MediaMetadata(
         platform="youtube",
@@ -264,7 +264,7 @@ def test_every_adapter_download_uses_the_public_destination_guard(
 
 
 def test_adapter_limits_and_fixed_output_paths_are_forwarded(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("openmedia.sources.ytdlp._validate_selected_streams", lambda *args: None)
+    monkeypatch.setattr("openmedia.sources.ytdlp._validate_selected_streams", lambda *args: (None, None, None))
     class RecordingTransport(Transport):
         def __init__(self) -> None:
             super().__init__()
@@ -321,7 +321,7 @@ def test_adapter_limits_and_fixed_output_paths_are_forwarded(tmp_path: Path, mon
 
 
 def test_adapter_forwards_range_bytes_for_each_merge_component(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("openmedia.sources.ytdlp._validate_selected_streams", lambda *args: None)
+    monkeypatch.setattr("openmedia.sources.ytdlp._validate_selected_streams", lambda *args: (None, None, None))
     monkeypatch.setattr("openmedia.sources.ytdlp.merge_streams", lambda video, audio, destination, **kwargs: destination.write_bytes(b"merged") or 6)
     class RecordingTransport(Transport):
         def __init__(self) -> None:

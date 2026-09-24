@@ -472,12 +472,14 @@ def _validate_native_signature(path: Path, extension: str) -> None:
         raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="download")
 
 
-def _validate_selected_streams(path: Path, option: FormatOption) -> None:
+def _validate_selected_streams(path: Path, option: FormatOption) -> tuple[int | None, int | None, float | None]:
+    """Check the file against the option; return its measured width, height, and duration."""
     try:
         probe = subprocess.run(["ffprobe", "-v", "error", "-protocol_whitelist", "file",
-            "-show_entries", "stream=codec_type,codec_name,width,height", "-of", "json", str(path)],
+            "-show_entries", "stream=codec_type,codec_name,width,height:format=duration", "-of", "json", str(path)],
             check=True, capture_output=True, text=True, timeout=10)
-        streams = json.loads(probe.stdout)["streams"]
+        report = json.loads(probe.stdout)
+        streams = report["streams"]
         video = [s for s in streams if s.get("codec_type") == "video"]
         audio = [s for s in streams if s.get("codec_type") == "audio"]
         expected_video = option.media_type == "video"
@@ -497,8 +499,20 @@ def _validate_selected_streams(path: Path, option: FormatOption) -> None:
                 raise ValueError("unknown-codec MP4 audio is not AAC")
         if video and any(getattr(option, field) is not None and video[0].get(field) != getattr(option, field) for field in ("width", "height")):
             raise ValueError("source dimensions changed")
+        width, height = (_positive_number(video[0].get(side)) if video else None for side in ("width", "height"))
+        duration = _positive_number(_float_or_none(report.get("format", {}).get("duration")))
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         raise SourceAdapterError(ErrorCategory.FORMAT_UNAVAILABLE, stage="download") from exc
+    return (int(width) if width else None, int(height) if height else None,
+        float(duration) if duration else None)
+
+
+def _float_or_none(value: object) -> float | None:
+    """ffprobe reports duration as a decimal string, or ``N/A`` when it cannot tell."""
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
 
 
 class YtDlpAdapter:
@@ -611,7 +625,7 @@ class YtDlpAdapter:
         try:
             if "+" not in option.source_format_id:
                 _validate_native_signature(destination, option.extension)
-            _validate_selected_streams(destination, option)
+            width, height, duration = _validate_selected_streams(destination, option)
         except SourceAdapterError:
             destination.unlink(missing_ok=True)
             raise
@@ -623,4 +637,7 @@ class YtDlpAdapter:
             media_type=option.media_type.value,
             extension=option.extension,
             mime_type=option.mime_type,
+            width=width if option.media_type == "video" else None,
+            height=height if option.media_type == "video" else None,
+            duration_seconds=duration,
         )

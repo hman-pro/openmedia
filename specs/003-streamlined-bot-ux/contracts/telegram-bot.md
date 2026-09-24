@@ -69,7 +69,7 @@ On a video card the status is the last line of the caption, below the title and 
 
 | Choice | Telegram method | Notes |
 |---|---|---|
-| Video, Video (no sound) | `sendVideo`, `supports_streaming=true`, width/height/duration when known | File is MP4/H.264 (+AAC); see research R7 gate |
+| Video, Video (no sound) | `sendVideo`, `supports_streaming=true`, width/height/duration measured from the delivered file (ffprobe), else from the source listing, omitted when neither knows | File is MP4/H.264 (+AAC); see research R7 gate |
 | Audio only | `sendDocument` | Native bytes, any adapter-accepted format |
 | Picture | `sendDocument` | Never `sendPhoto`: that recompresses |
 

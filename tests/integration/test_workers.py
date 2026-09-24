@@ -167,3 +167,15 @@ async def test_remote_error_without_detail_has_none() -> None:
         await supervisor().run("inspect", {"mode": "unknown"}, timeout=5)
     assert caught.value.category == "internal"
     assert caught.value.detail is None
+
+
+def test_download_result_measured_metadata_survives_the_worker_boundary(tmp_path: Path) -> None:
+    from openmedia.sources import DownloadResult
+    from openmedia.workers import _json_value, decode_download_result
+
+    result = DownloadResult(tmp_path / "selected.mp4", 7, "id", "1", "video", "mp4", "video/mp4",
+        width=720, height=1280, duration_seconds=209.789)
+    assert decode_download_result(_json_value(result)) == result
+    # Image adapters report no measured video metadata.
+    bare = DownloadResult(tmp_path / "selected.jpg", 7, "id", "1", "image", "jpg", "image/jpeg")
+    assert decode_download_result(_json_value(bare)) == bare

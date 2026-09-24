@@ -266,3 +266,44 @@ def test_known_codec_options_keep_existing_validation(tmp_path: Path) -> None:
     assert caught.value.category is ErrorCategory.FORMAT_UNAVAILABLE
     # The new rule is scoped to MP4: an unknown-codec WebM video is unaffected.
     _validate_selected_streams(vp9, unknown_codec_option(includes_audio=False, extension="webm"))
+
+
+@pytest.mark.parametrize("includes_audio", [False, True])
+def test_validation_returns_the_measured_frame_and_duration(tmp_path: Path, includes_audio: bool) -> None:
+    from openmedia.sources.ytdlp import _validate_selected_streams
+
+    clip = make_clip(tmp_path, "clip.mp4", H264, AAC if includes_audio else None)
+    option = unknown_codec_option(includes_audio=includes_audio)
+    width, height, duration = _validate_selected_streams(clip, option)
+    assert (width, height) == (32, 32)
+    assert duration == pytest.approx(1.0, abs=0.2)
+
+
+def test_download_result_carries_measured_video_metadata(tmp_path: Path) -> None:
+    import time
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    from openmedia.models import MediaMetadata
+    from openmedia.sources import DownloadInput
+    from openmedia.sources.ytdlp import YtDlpAdapter
+
+    source = tmp_path / "source"
+    source.mkdir()
+    body = make_clip(source, "clip.mp4", H264, AAC).read_bytes()
+    work = tmp_path / "work"
+    work.mkdir()
+    # Instagram progressive formats list no codec, dimensions, or duration.
+    option = replace(unknown_codec_option(includes_audio=True), height=None)
+    metadata = MediaMetadata("instagram", "https://www.instagram.com/reel/example/", "example")
+
+    def download(url, destination, **kwargs):
+        Path(destination).write_bytes(body)
+        return len(body)
+
+    transport = SimpleNamespace(download=download)
+    rate = SimpleNamespace(acquire=lambda *args, **kwargs: None)
+    request = DownloadInput("a" * 32, metadata, option, work, time.monotonic() + 10, 1_000_000, 2_000_000)
+    result = YtDlpAdapter().download(request, transport=transport, rate_control=rate)
+    assert (result.width, result.height) == (32, 32)
+    assert result.duration_seconds == pytest.approx(1.0, abs=0.2)
