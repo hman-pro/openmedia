@@ -78,8 +78,30 @@ and never retrying an ambiguous upload apply to both methods.
 
 ## Help text
 
-`/start` and `/help`: "Send one public YouTube video, LinkedIn post, or Instagram post in this
-private chat. Videos: pick Video, Video (no sound), or Audio only. Pictures are sent as-is."
+(amended) `/start` and `/help` reply with different texts. Both are plain text (no
+`parse_mode`). `/start` is one line that points to `/help`, and `/help` holds the usage steps
+and limits. The 50 MB cap and the 15-minute expiry in `/help` must match
+`MAX_HOSTED_FILE_BYTES` and `SELECTION_SECONDS`.
+
+`/start`: "Send me one public YouTube, LinkedIn, or Instagram link and I'll send the file back.
+Details: /help"
+
+`/help`:
+
+```
+Send one public link and I'll send the media back unchanged.
+
+How to use:
+1. Paste one link here: a YouTube video, LinkedIn post, or Instagram post.
+2. For videos, tap Video, Video (no sound), or Audio only. Pictures are sent straight away.
+3. Wait for the file. Big videos can take a few minutes.
+
+Good to know:
+• Public posts only. Private, login-only, or age-restricted posts won't work.
+• Files over 50 MB can't be sent (Telegram's limit).
+• Choices expire after 15 minutes. Send the link again if they do.
+• One link per message, in this private chat.
+```
 
 ## Amendments to 001 artifacts
 

@@ -30,9 +30,25 @@ from openmedia.sources import (
 
 PRIVATE_CHAT_GUIDANCE = "Please send the link in a private chat with this bot."
 ONE_LINK_GUIDANCE = "Send exactly one supported public YouTube, LinkedIn, or Instagram link."
+# Both texts are fixed by 003 contracts/telegram-bot.md "Help text"; the limits in HELP_TEXT
+# must match MAX_HOSTED_FILE_BYTES and SELECTION_SECONDS.
+START_TEXT = (
+    "Send me one public YouTube, LinkedIn, or Instagram link and I'll send the file back. "
+    "Details: /help"
+)
 HELP_TEXT = (
-    "Send one public YouTube video, LinkedIn post, or Instagram post in this private chat. "
-    "Videos: pick Video, Video (no sound), or Audio only. Pictures are sent as-is."
+    "Send one public link and I'll send the media back unchanged.\n"
+    "\n"
+    "How to use:\n"
+    "1. Paste one link here: a YouTube video, LinkedIn post, or Instagram post.\n"
+    "2. For videos, tap Video, Video (no sound), or Audio only. Pictures are sent straight away.\n"
+    "3. Wait for the file. Big videos can take a few minutes.\n"
+    "\n"
+    "Good to know:\n"
+    "• Public posts only. Private, login-only, or age-restricted posts won't work.\n"
+    "• Files over 50 MB can't be sent (Telegram's limit).\n"
+    "• Choices expire after 15 minutes. Send the link again if they do.\n"
+    "• One link per message, in this private chat."
 )
 # A refusal record keeps at most this many raw link candidates, each cut to this length
 # (004 data-model "Refusal record").
@@ -305,6 +321,11 @@ class BotHandlers:
     def __init__(self, workflow: Any) -> None:
         self.workflow = workflow
 
+    async def start(self, update: Any, context: Any) -> None:
+        message = update.effective_message
+        if message is not None:
+            await message.reply_text(START_TEXT)
+
     async def help(self, update: Any, context: Any) -> None:
         message = update.effective_message
         if message is not None:
@@ -457,7 +478,8 @@ class BotHandlers:
 
 def register_handlers(application: Any, workflow: Any) -> BotHandlers:
     handlers = BotHandlers(workflow)
-    application.add_handler(CommandHandler(["start", "help"], handlers.help))
+    application.add_handler(CommandHandler("start", handlers.start))
+    application.add_handler(CommandHandler("help", handlers.help))
     application.add_handler(CallbackQueryHandler(handlers.callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.message))
     return handlers

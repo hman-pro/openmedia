@@ -192,3 +192,29 @@ def test_short_link_failures_have_exact_guidance(name: str, expected: str) -> No
 def test_sanitized_guidance_parametrization_covers_short_link_categories() -> None:
     values = {category.value for category in ErrorCategory}
     assert {"short_link_unresolved", "short_link_not_post"} <= values
+
+
+@pytest.mark.parametrize(("command", "text_name"), [("start", "START_TEXT"), ("help", "HELP_TEXT")])
+async def test_start_and_help_reply_with_their_own_text(command: str, text_name: str) -> None:
+    from unittest.mock import AsyncMock
+
+    import openmedia.bot as bot
+
+    reply = AsyncMock()
+    await getattr(bot.BotHandlers(workflow=None), command)(private_update(f"/{command}", reply), None)
+    reply.assert_awaited_once_with(getattr(bot, text_name))
+
+
+def test_start_is_one_line_that_points_to_help() -> None:
+    from openmedia.bot import START_TEXT
+
+    assert "\n" not in START_TEXT
+    assert "/help" in START_TEXT
+
+
+def test_help_limits_match_the_fixed_deadlines_and_cap() -> None:
+    from openmedia.bot import HELP_TEXT
+    from openmedia.config import MAX_HOSTED_FILE_BYTES, SELECTION_SECONDS
+
+    assert f"{MAX_HOSTED_FILE_BYTES // 1_000_000} MB" in HELP_TEXT
+    assert f"{SELECTION_SECONDS // 60} minutes" in HELP_TEXT
