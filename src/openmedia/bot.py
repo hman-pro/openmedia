@@ -79,7 +79,12 @@ def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
     if error is ErrorCategory.UNSUPPORTED_COLLECTION:
         return "Only one finished media item is supported. Send a single-item link."
     if error is ErrorCategory.UNAVAILABLE:
-        return "That content is not publicly available. Send another public link."
+        # One category covers private, login-only, and removed content, so name the
+        # possibilities rather than a precise cause (001 contract).
+        return (
+            "That content can't be opened without logging in. It may be private, removed, "
+            "or shared only with the author's followers or connections. Send another public link."
+        )
     if error is ErrorCategory.NO_FORMATS:
         return "There is no downloadable native option. Send another public link."
     if error is ErrorCategory.FORMAT_UNAVAILABLE:

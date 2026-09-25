@@ -68,7 +68,7 @@ failed notification does not stop cleanup.
 | Condition | Required meaning |
 |---|---|
 | Invalid/multiple links | Send one supported public media link |
-| Private/login-required/removed | Content unavailable; send another public link; do not invent a precise cause |
+| Private/login-required/removed | Content cannot be opened without logging in; name the possible causes (private, removed, followers/connections only) without asserting one; send another public link |
 | Multi-item/live | Only one finished media item is supported |
 | No native audio | Source does not provide a downloadable audio-only option |
 | Too large/no deliverable choice | File exceeds the current delivery limit; choose another available option or link |

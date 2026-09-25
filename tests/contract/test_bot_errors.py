@@ -173,6 +173,14 @@ def test_native_audio_and_no_format_messages_are_explicit() -> None:
     assert "no downloadable" in failure_message(ErrorCategory.NO_FORMATS, stage="checking")
 
 
+def test_unavailable_names_possible_causes_without_asserting_one() -> None:
+    message = failure_message(ErrorCategory.UNAVAILABLE, stage="checking")
+    assert message == (
+        "That content can't be opened without logging in. It may be private, removed, "
+        "or shared only with the author's followers or connections. Send another public link."
+    )
+
+
 SHORT_LINK_TEXTS = {
     "SHORT_LINK_UNRESOLVED":
         "That LinkedIn link could not be opened. Send the post's full linkedin.com address.",
