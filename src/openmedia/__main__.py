@@ -201,6 +201,22 @@ class HealthTrackingBot(ExtBot[None]):
         return updates
 
 
+async def log_application_error(update: object, context: Any) -> None:
+    """Replace PTB's default error log, which prints a full traceback for every poll blip.
+
+    Polling reports errors with no update and retries on its own, so a dropped connection
+    there is one line. Anything else keeps its traceback. The update is never rendered: it
+    carries links and Telegram identifiers, which reach only the diagnostic log.
+    """
+    from telegram.error import BadRequest, NetworkError
+    error = context.error
+    log = logging.getLogger("openmedia")
+    if update is None and isinstance(error, NetworkError) and not isinstance(error, BadRequest):
+        log.warning("openmedia: telegram connection failed (%s); retrying", error)
+        return
+    log.error("openmedia: unhandled %s", type(error).__name__, exc_info=error)
+
+
 def sweep_threshold(cleanup_seconds: float) -> float:
     """Age at which a leftover workspace is swept.
 
@@ -673,6 +689,7 @@ def build_application(settings: Settings) -> tuple[Application[Any, ...], Reques
         notify_failure=callbacks.notify_failure,
     )
     register_handlers(application, workflow)
+    application.add_error_handler(log_application_error)
     application.bot_data["openmedia_registry"] = registry
     application.bot_data["openmedia_callbacks"] = callbacks
     application.bot_data["openmedia_health"] = health

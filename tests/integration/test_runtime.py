@@ -467,6 +467,44 @@ async def test_telegram_failures_are_attributed_only_when_external(tmp_path, mon
     assert seen == ([("a" * 32, expected)] if expected else [])
 
 
+async def test_transient_polling_network_error_logs_one_warning_line(caplog):
+    import httpx
+    from telegram.error import NetworkError
+    from types import SimpleNamespace
+    try:
+        try:
+            raise httpx.ReadError("")
+        except httpx.ReadError as cause:
+            raise NetworkError("httpx.ReadError: ") from cause
+    except NetworkError as exc:
+        error = exc
+    with caplog.at_level("DEBUG"):
+        await runtime.log_application_error(None, SimpleNamespace(error=error))
+    [record] = caplog.records
+    assert record.levelname == "WARNING" and record.exc_info is None
+    assert "httpx.ReadError" in record.getMessage() and "retrying" in record.getMessage()
+
+
+@pytest.mark.parametrize("error", ["bad_request", "conflict", "runtime"])
+async def test_other_application_errors_keep_full_traceback_without_update_content(caplog, error):
+    from telegram.error import BadRequest, Conflict
+    from types import SimpleNamespace
+    raised = {"bad_request": BadRequest("Wrong file identifier"), "runtime": RuntimeError("handler bug"),
+        "conflict": Conflict("terminated by other getUpdates request")}[error]
+    update = SimpleNamespace(text="https://www.linkedin.com/posts/secret-post", chat_id=123456789)
+    with caplog.at_level("DEBUG"):
+        await runtime.log_application_error(update, SimpleNamespace(error=raised))
+    [record] = caplog.records
+    assert record.levelname == "ERROR" and record.exc_info[1] is raised
+    rendered = logging.Formatter().format(record)
+    assert "linkedin.com" not in rendered and "123456789" not in rendered
+
+
+def test_application_registers_the_error_handler(tmp_path):
+    app, _registry = runtime.build_application(Settings.from_env(environment(tmp_path)))
+    assert list(app.error_handlers) == [runtime.log_application_error]
+
+
 def environment(work_dir: Path, token: str = "123456789:test-token-value") -> dict[str, str]:
     return {
         "TELEGRAM_BOT_TOKEN": token,

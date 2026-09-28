@@ -63,7 +63,9 @@ CLI contracts to implement:
 Update the heartbeat every 15s only after startup has completed; include last successful
 poll time. A startup grace period of 120s precedes Docker health failures. Temporary upstream
 outages may mark health degraded; an unhealthy flag alone must not cause an application
-restart loop. Exit nonzero on unrecoverable startup failures.
+restart loop. Exit nonzero on unrecoverable startup failures. A dropped connection while
+polling logs one warning line and polling retries; other unhandled errors keep a traceback
+and never render the update.
 
 SIGTERM stops new admission, cancels tasks, terminates worker process groups, closes uploads,
 and removes scratch files. Escalate unresponsive workers to kill after 5s and exit within
