@@ -27,6 +27,7 @@ class RequestState(StrEnum):
 
 
 class MediaKind(StrEnum):
+    AUDIO = "audio"
     VIDEO = "video"
     IMAGE = "image"
     COLLECTION = "collection"
@@ -99,8 +100,8 @@ class MediaMetadata:
             raise ValueError("duration_seconds must be absent for images")
         if self.media_count < 1:
             raise ValueError("media_count must be at least one")
-        if kind in (MediaKind.VIDEO, MediaKind.IMAGE) and self.media_count != 1:
-            raise ValueError("single video/image metadata cannot hide multiple media items")
+        if kind in (MediaKind.VIDEO, MediaKind.AUDIO, MediaKind.IMAGE) and self.media_count != 1:
+            raise ValueError("single video/audio/image metadata cannot hide multiple media items")
         if kind is MediaKind.COLLECTION and self.media_count < 2:
             raise ValueError("collection metadata must identify multiple media items")
         if self.thumbnail_url is not None:

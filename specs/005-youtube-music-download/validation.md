@@ -28,3 +28,28 @@
 
 Phase 1 establishes the workspace and existing controlled baseline only. It does not
 establish YouTube Music support or live, Telegram, or deployment readiness.
+
+
+## Phase 2 — Foundational
+
+- Date: 2026-10-08; branch: `005-youtube-music-download`.
+- Requirements checklist remains 16 checked / 0 unchecked. Existing Python/Docker
+  ignore patterns remain sufficient; dependency/runtime pins unchanged.
+- T003: added AUDIO media kind and single-item validation. Tests cover absent and
+  supplied metadata, zero/positive duration, negative duration, invalid counts,
+  and blank title rejection.
+- T004: added `music_collection` (input) and `no_native_audio` (inspection);
+  reconstruction tests preserve category/stage and existing error meanings.
+- Test-first check: 10 new model/error cases failed on absent enum values before
+  implementation; all 24 model/error tests passed after implementation.
+- T005: JSON inspection/download payload round trips preserve AUDIO, music canonical
+  identity and native audio options. Subprocess protocol tests preserve both error
+  categories and AUDIO metadata; an oversized music result is rejected under the
+  existing bounded protocol. No changes to workers.py or serialization limits needed.
+- During test development, corrected fixtures to respect existing audio-option and
+  nonempty-inspection invariants and the protocol's `value` result key.
+- `uv run --locked pytest tests/unit tests/contract tests/integration`: PASS;
+  664 passed, 20 existing Telegram deprecation warnings in 4.76s.
+- No extension hook configuration exists at pre/post checks.
+- T003–T005 complete. Phase 3 and later remain unchecked; this foundation does not
+  establish live music extraction, automatic delivery, or release readiness.

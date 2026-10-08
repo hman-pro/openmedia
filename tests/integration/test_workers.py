@@ -179,3 +179,40 @@ def test_download_result_measured_metadata_survives_the_worker_boundary(tmp_path
     # Image adapters report no measured video metadata.
     bare = DownloadResult(tmp_path / "selected.jpg", 7, "id", "1", "image", "jpg", "image/jpeg")
     assert decode_download_result(_json_value(bare)) == bare
+
+
+@pytest.mark.parametrize(("category", "stage"), [
+    ("music_collection", "input"), ("no_native_audio", "inspection"),
+])
+async def test_music_errors_survive_worker_protocol(category: str, stage: str) -> None:
+    from openmedia.sources import SourceAdapterError
+    from openmedia.workers import WorkerRemoteError
+
+    worker = _error_event_worker({"event": "error", "category": category, "stage": stage})
+    with pytest.raises(WorkerRemoteError) as caught:
+        await worker.run("inspect", {}, timeout=5)
+    error = SourceAdapterError(caught.value.category, stage=caught.value.stage)
+    assert error.category.value == category
+    assert error.stage == stage
+
+
+async def test_audio_inspection_survives_bounded_worker_protocol() -> None:
+    import json
+    from openmedia.models import FormatOption, MediaKind, MediaMetadata
+    from openmedia.sources import InspectResult
+    from openmedia.workers import _json_value, decode_inspect_result
+
+    expected = InspectResult(MediaMetadata(
+        platform="youtube", canonical_url="https://music.youtube.com/watch?v=abcDEF12345",
+        media_id="abcDEF12345", media_kind="audio",
+    ), (FormatOption(option_id=0, adapter="yt_dlp", source_format_id="140",
+        media_type="audio", extension="m4a", mime_type="audio/mp4"),))
+    event = {"event": "result", "value": _json_value(expected)}
+    script = "import sys; sys.stdin.readline(); " + f"print({json.dumps(json.dumps(event))}, flush=True)"
+    worker = WorkerSupervisor([sys.executable, "-c", script])
+    decoded = decode_inspect_result(await worker.run("inspect", {}, timeout=5))
+    assert decoded == expected
+    assert decoded.metadata.media_kind is MediaKind.AUDIO
+    assert decoded.metadata.canonical_url == expected.metadata.canonical_url
+    with pytest.raises(WorkerProtocolError):
+        await WorkerSupervisor([sys.executable, "-c", script], result_limit=32).run("inspect", {}, timeout=5)

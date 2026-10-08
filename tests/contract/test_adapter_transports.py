@@ -512,3 +512,32 @@ def test_router_short_link_rate_limit_propagates_unchanged_and_calls_no_adapter(
     assert ytdlp.requests == []
     assert image.requests == []
     assert transport.urls == [SHORT_LINK]
+
+
+def test_music_inspection_and_download_payload_preserve_audio_identity(tmp_path: Path) -> None:
+    import json
+    from openmedia.models import MediaKind
+    from openmedia.workers import _json_value, decode_inspect_result, download_payload
+
+    metadata = MediaMetadata(
+        platform="youtube", canonical_url="https://music.youtube.com/watch?v=abcDEF12345",
+        media_id="abcDEF12345", media_kind="audio", duration_seconds=42,
+    )
+    option = FormatOption(
+        option_id=0, adapter="yt_dlp", source_format_id="140", media_type="audio",
+        extension="m4a", mime_type="audio/mp4",
+        transport_ref={"url": "https://media.example.invalid/audio"},
+    )
+    result = InspectResult(metadata, (option,))
+    decoded = decode_inspect_result(json.loads(json.dumps(_json_value(result))))
+    assert decoded == result
+    assert decoded.metadata.media_kind is MediaKind.AUDIO
+    request = DownloadInput(
+        request_id="0123456789abcdef0123456789abcdef", metadata=decoded.metadata,
+        option=decoded.options[0], work_directory=tmp_path, deadline=100,
+        output_limit=50_000_000, workspace_limit=128 * 1024 * 1024,
+    )
+    payload = json.loads(json.dumps(download_payload(request)))
+    assert MediaMetadata(**payload["metadata"]) == metadata
+    assert payload["metadata"]["canonical_url"] == metadata.canonical_url
+    assert payload["option"]["media_type"] == "audio"

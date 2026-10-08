@@ -65,3 +65,16 @@ def test_source_errors_expose_only_normalized_category() -> None:
     error = SourceAdapterError(ErrorCategory.RATE_LIMITED, stage="inspection", retry_after=5)
     assert str(error) == "rate_limited during inspection"
     assert error.retry_after == 5
+
+
+@pytest.mark.parametrize(("category", "stage"), [
+    ("music_collection", "input"), ("no_native_audio", "inspection"),
+])
+def test_music_error_envelope_reconstruction(category: str, stage: str) -> None:
+    error = SourceAdapterError(category, stage=stage)
+    assert error.category is ErrorCategory(category)
+    assert error.stage == stage
+    assert str(error) == f"{category} during {stage}"
+    assert ErrorCategory.UNSUPPORTED_COLLECTION.value == "unsupported_collection"
+    assert ErrorCategory.NO_FORMATS.value == "no_formats"
+    assert ErrorCategory.FORMAT_UNAVAILABLE.value == "format_unavailable"

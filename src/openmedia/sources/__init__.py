@@ -206,6 +206,8 @@ class Operation(StrEnum):
 
 
 class ErrorCategory(StrEnum):
+    MUSIC_COLLECTION = "music_collection"  # Input-stage single-track refusal.
+    NO_NATIVE_AUDIO = "no_native_audio"  # Inspection-stage native audio absence.
     UNSUPPORTED_URL = "unsupported_url"
     UNSUPPORTED_COLLECTION = "unsupported_collection"
     UNAVAILABLE = "unavailable"

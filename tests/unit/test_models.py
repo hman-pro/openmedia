@@ -172,3 +172,43 @@ def test_download_request_status_prefix_is_kept_out_of_repr() -> None:
     assert "Secret caption title" not in repr(request)
     assert "status_prefix" not in repr(request)
     assert "work_directory" not in repr(request)
+
+
+@pytest.mark.parametrize("duration", [None, 0, 123.5])
+def test_audio_metadata_preserves_optional_values(duration: float | None) -> None:
+    from openmedia.models import MediaKind
+
+    metadata = MediaMetadata(
+        platform="youtube", canonical_url="https://music.youtube.com/watch?v=abcDEF12345",
+        media_id="abcDEF12345", media_kind="audio", duration_seconds=duration,
+    )
+    assert metadata.media_kind is MediaKind.AUDIO
+    assert metadata.media_count == 1
+    assert metadata.duration_seconds == duration
+    assert metadata.title_or_caption is None
+    assert metadata.creator is None
+    assert metadata.thumbnail_url is None
+
+
+def test_audio_metadata_retains_supplied_text_and_artwork() -> None:
+    metadata = MediaMetadata(
+        platform="youtube", canonical_url="https://music.youtube.com/watch?v=abcDEF12345",
+        media_id="abcDEF12345", media_kind="audio", title_or_caption="Track",
+        creator="Artist", thumbnail_url="https://example.invalid/art.jpg", duration_seconds=42,
+    )
+    assert (metadata.title_or_caption, metadata.creator, metadata.duration_seconds) == ("Track", "Artist", 42)
+    assert metadata.thumbnail_url == "https://example.invalid/art.jpg"
+
+
+@pytest.mark.parametrize(("changes", "message"), [
+    ({"duration_seconds": -1}, "nonnegative"),
+    ({"media_count": 2}, "multiple"),
+    ({"media_count": 0}, "at least one"),
+    ({"title_or_caption": " "}, "absent"),
+])
+def test_audio_metadata_rejects_invalid_single_item(changes: dict[str, object], message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        MediaMetadata(
+            platform="youtube", canonical_url="https://music.youtube.com/watch?v=abcDEF12345",
+            media_id="abcDEF12345", media_kind="audio", **changes,
+        )
