@@ -24,6 +24,18 @@ Spec-kit drives this repo. Read before writing code:
 `.specify/feature.json` holds one repo-global `feature_directory`. Switching features
 rewrites it for every session in this checkout.
 
+## YouTube Music (005)
+
+Read `specs/005-youtube-music-download/tasks.md` and its contracts when changing music
+recognition, audio ranking, card status, failures or refresh. Music watch routes retain
+`music.youtube.com` identity and AUDIO through workers/refresh; only native audio options
+are ranked and one is automatically sent as a document. Context never expands or truncates
+a track. Collection-only links are `music_collection`; missing native audio is
+`no_native_audio`. Music uses `Audio only — downloading…`, including when multiple
+upstream audio versions exist. All inherited anonymous-access, byte-preservation,
+deadline, limit, state and diagnostic constraints remain in force. Live/manual/container
+release checks are recorded separately in feature 005 validation.md.
+
 ## Working rhythm
 
 One branch per feature, one commit per phase.

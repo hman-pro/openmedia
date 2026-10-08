@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from openmedia.choices import choose
+from openmedia.models import MediaKind
 from openmedia.network import GuardedHTTPTransport, validate_owned_file
 from openmedia.sources import DownloadInput, InspectInput, SourceRouter, recognize_source_url
 
@@ -47,6 +49,8 @@ class LiveRateControl:
 def test_required_source_matrix(live_manifest: list[dict[str, object]], tmp_path: Path) -> None:
     expected_cases = {
         "youtube-video",
+        "youtube-music",
+        "youtube-music-context",
         "linkedin-video",
         "linkedin-image",
         "instagram-video",
@@ -56,7 +60,7 @@ def test_required_source_matrix(live_manifest: list[dict[str, object]], tmp_path
         "linkedin-hyphen-code",
     }
     by_case = {str(case["case_id"]): case for case in live_manifest}
-    assert expected_cases <= by_case.keys(), "live manifest must cover the five FR-002 categories and both 004 LinkedIn link forms"
+    assert expected_cases <= by_case.keys(), "live manifest must cover source categories, both LinkedIn link forms and plain/context music"
     router = SourceRouter()
     transport = GuardedHTTPTransport()
     rate = LiveRateControl()
@@ -82,7 +86,17 @@ def test_required_source_matrix(live_manifest: list[dict[str, object]], tmp_path
         assert inspected.metadata.media_kind == str(case["expected_type"])
         selectable = [option for option in inspected.options if option.availability == "selectable"]
         assert selectable, f"{case_id} exposed no selectable native option"
-        option = min(selectable, key=lambda item: item.size_bytes if item.size_bytes is not None else 50_000_000)
+        if case_id.startswith("youtube-music"):
+            assert inspected.metadata.media_kind is MediaKind.AUDIO
+            assert inspected.metadata.platform == "youtube"
+            assert inspected.metadata.canonical_url == route.canonical_url
+            assert route.canonical_url.startswith("https://music.youtube.com/watch?v=")
+            choices = choose(inspected.options, media_kind=MediaKind.AUDIO, max_file_bytes=50_000_000)
+            assert choices.automatic and len(choices.options) == 1 and not choices.missing
+            option = choices.options[0]
+            assert option.media_type == "audio" and "+" not in option.source_format_id
+        else:
+            option = min(selectable, key=lambda item: item.size_bytes if item.size_bytes is not None else 50_000_000)
         downloaded = router.download(
             DownloadInput(
                 request_id=f"{index + 1:032x}",
@@ -99,6 +113,9 @@ def test_required_source_matrix(live_manifest: list[dict[str, object]], tmp_path
         assert downloaded.media_id == inspected.metadata.media_id
         assert downloaded.source_format_id == option.source_format_id
         assert downloaded.extension == option.extension
-        validate_owned_file(downloaded.path, work, max_bytes=50_000_000)
+        assert downloaded.media_type == option.media_type
+        actual = validate_owned_file(downloaded.path, work, max_bytes=50_000_000)
+        assert actual == downloaded.actual_bytes
+        print(f"{case_id}: identity={downloaded.media_id} format={downloaded.source_format_id} bytes={actual}")
         downloaded.path.unlink()
 

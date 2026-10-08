@@ -44,3 +44,10 @@ choose(options: Sequence[FormatOption], *, media_kind: MediaKind, max_file_bytes
 | Silent source (video-only avc1, no audio) | only `silent`, `automatic=true` |
 | Image | one image option, `automatic=true` |
 | Unknown sizes only | unknown-size candidates used; known-size candidates preferred when present |
+
+## YouTube Music extension (amended by 005)
+
+For `media_kind=audio`, rank only native audio using the unchanged audio size/bitrate/tie
+policy. Return automatic option ID 0 and no missing entries, or no options with only
+`audio: not_offered/too_large`; ignored video never determines the audio failure. Ordinary
+video/image policy remains unchanged. See [005 data model](../../005-youtube-music-download/data-model.md).

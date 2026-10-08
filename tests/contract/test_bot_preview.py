@@ -431,3 +431,16 @@ async def test_update_status_after_fallback_edits_the_new_text_message(fake_bot,
     assert edits[0].parameters["message_id"] == 99
     assert edits[0].parameters["text"] == "Video — sending…"
     assert len(fake_transport.calls_to("sendMessage")) == 1
+
+
+def test_music_help_start_and_input_guidance_match_single_track_scope() -> None:
+    from openmedia.bot import HELP_TEXT, START_TEXT, ONE_LINK_GUIDANCE, DESCRIPTION_TEXT, SHORT_DESCRIPTION_TEXT
+    for text in (HELP_TEXT, START_TEXT, ONE_LINK_GUIDANCE, DESCRIPTION_TEXT, SHORT_DESCRIPTION_TEXT):
+        assert "YouTube Music" in text
+        assert "LinkedIn" in text and "Instagram" in text
+    assert "YouTube Music track" in HELP_TEXT
+    assert "sent straight away" in HELP_TEXT
+    assert "Video (no sound)" in HELP_TEXT and "Pictures" in HELP_TEXT
+    assert "50 MB" in HELP_TEXT and "15 minutes" in HELP_TEXT
+    assert len(DESCRIPTION_TEXT) <= 512 and len(SHORT_DESCRIPTION_TEXT) <= 120
+    assert "MP3" not in HELP_TEXT

@@ -29,19 +29,19 @@ from openmedia.sources import (
 
 
 PRIVATE_CHAT_GUIDANCE = "Please send the link in a private chat with this bot."
-ONE_LINK_GUIDANCE = "Send exactly one supported public YouTube, LinkedIn, or Instagram link."
+ONE_LINK_GUIDANCE = "Send exactly one supported public YouTube, YouTube Music, LinkedIn, or Instagram link."
 # Both texts are fixed by 003 contracts/telegram-bot.md "Help text"; the limits in HELP_TEXT
 # must match MAX_HOSTED_FILE_BYTES and SELECTION_SECONDS.
 START_TEXT = (
-    "Send me one public YouTube, LinkedIn, or Instagram link and I'll send the file back. "
+    "Send me one public YouTube, YouTube Music, LinkedIn, or Instagram link and I'll send the file back. "
     "Details: /help"
 )
 HELP_TEXT = (
     "Send one public link and I'll send the media back unchanged.\n"
     "\n"
     "How to use:\n"
-    "1. Paste one link here: a YouTube video, LinkedIn post, or Instagram post.\n"
-    "2. For videos, tap Video, Video (no sound), or Audio only. Pictures are sent straight away.\n"
+    "1. Paste one link here: a YouTube video, YouTube Music track, LinkedIn post, or Instagram post.\n"
+    "2. For videos, tap Video, Video (no sound), or Audio only. Pictures and YouTube Music tracks are sent straight away.\n"
     "3. Wait for the file. Big videos can take a few minutes.\n"
     "\n"
     "Good to know:\n"
@@ -52,10 +52,10 @@ HELP_TEXT = (
 )
 # Bot profile texts, shown before the first /start; Telegram caps them at 512 and 120 characters.
 DESCRIPTION_TEXT = (
-    "Send one public YouTube, LinkedIn, or Instagram link and get the media file back, "
+    "Send one public YouTube, YouTube Music, LinkedIn, or Instagram link and get the media file back, "
     "unchanged. Files up to 50 MB. Tap Start, then paste a link."
 )
-SHORT_DESCRIPTION_TEXT = "Public YouTube, LinkedIn, and Instagram media, sent back unchanged."
+SHORT_DESCRIPTION_TEXT = "Public YouTube, YouTube Music, LinkedIn, and Instagram media, sent back unchanged."
 
 
 async def publish_profile(bot: Any) -> None:

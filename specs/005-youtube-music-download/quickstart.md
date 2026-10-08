@@ -1,7 +1,8 @@
 # Quickstart Validation: YouTube Music Downloads
 
-This is the implementation validation guide. The feature is currently planned; new
-acceptance cases must be implemented before these checks can establish support.
+This is the implementation validation guide. Controlled acceptance is implemented and
+recorded in validation.md; live source, manual Telegram and container release checks remain
+separate requirements.
 
 ## Prerequisites and setup
 

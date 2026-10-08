@@ -127,3 +127,13 @@ transport rejects local/private destinations, and file results cannot escape the
 request directory. These are application-boundary checks, not a claim that same-UID
 subprocesses provide a hostile-code sandbox. Failing a guard is a defect to fix, not a
 reason to disable the check.
+
+## YouTube Music extension (amended by 005)
+
+Music uses the existing YouTube adapter/rate bucket. Trusted music watch routes produce
+AUDIO with the canonical music URL preserved through workers and exact-format refresh.
+Only supported native audio-only options are emitted, with size exclusions retained and
+no video/merge options. `music_collection` is an input-stage collection refusal and
+`no_native_audio` is an inspection-stage absent-native-audio failure. Protocol limits,
+anonymous access, fixed deadlines, byte preservation and guarded transport are unchanged.
+See [005 adapter contract](../../005-youtube-music-download/contracts/source-adapters.md).

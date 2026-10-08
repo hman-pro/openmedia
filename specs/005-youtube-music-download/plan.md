@@ -1,6 +1,6 @@
 # Implementation Plan: YouTube Music Downloads
 
-**Branch**: `main` (actual checkout; setup reports feature key `005-youtube-music-download`) | **Date**: 2026-10-08 | **Spec**: [spec.md](spec.md)
+**Branch**: `005-youtube-music-download` | **Date**: 2026-10-08 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/005-youtube-music-download/spec.md`
 
@@ -71,13 +71,16 @@ specs/005-youtube-music-download/
 ├── data-model.md
 ├── quickstart.md
 ├── checklists/requirements.md
+├── tasks.md
+├── validation.md
 └── contracts/
     ├── music-links.md
     ├── source-adapters.md
     └── telegram-bot.md
 ```
 
-`tasks.md` is produced by the next `$speckit-tasks` phase.
+`tasks.md` records implementation progress; `validation.md` records controlled evidence
+and remaining release checks.
 
 ### Source Code (repository root)
 

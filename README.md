@@ -2,9 +2,9 @@
 
 # OpenMedia
 
-**Send a link. Tap one plain choice. Get the original file, byte for byte.**
+**Send a link. Get the original file, byte for byte.**
 
-A self-hosted Telegram bot for public YouTube, LinkedIn, and Instagram media. It picks the
+A self-hosted Telegram bot for public YouTube, YouTube Music, LinkedIn, and Instagram media. It picks the
 best native version the source offers for each choice and delivers it without re-encoding.
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
@@ -74,8 +74,17 @@ download-and-send stage has 10 minutes to finish.
 | Source | Accepted links | Media | Live verification |
 |---|---|---|---|
 | YouTube | `youtube.com/watch?v=…`, `youtu.be/…`, `youtube.com/shorts/…` | Single video | Feasibility pass; full live suite pending |
+| YouTube Music | `music.youtube.com/watch?v=…` with optional listening/sharing context | One complete native audio track, sent automatically as a document | Controlled checks pass; live verification pending |
 | LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Video and image pass live through Telegram, including `lnkd.in` short links; full live suite pending |
 | Instagram | `instagram.com/p/…`, `instagram.com/reel/…` | Video or single image | Video passes live through the product transport; single image pending |
+
+YouTube Music picks one best eligible native audio-only version, with no picker. Album
+and playlist-only music links are refused; a track link with listening context still requests
+only the complete identified track. Native formats such as M4A/WebM are preserved; MP3,
+inline playback, subscriptions, conversion and tag rewriting are not promised. Music uses
+the same artwork/title/duration card and shows `Audio only — downloading…`. Missing native
+audio asks for another public track, while size/source/send failures retain their meanings.
+See [feature 005 validation](specs/005-youtube-music-download/validation.md) for evidence.
 
 **Out of scope:** playlists, live streams, carousels and multi-item posts, stories, private
 or login-gated content, and any source not listed above. The bot explains each rejection, for
@@ -86,9 +95,9 @@ Sources change without notice, so a category counts as supported only after it p
 
 ## Project status
 
-OpenMedia is **pre-release**. The planned features are implemented, and 623 controlled tests
-cover them with the network disabled. The release gates that need the real world are still
-open:
+OpenMedia is **pre-release**. The planned features are implemented, and the controlled tests
+cover them with the network disabled. YouTube Music live/manual/container acceptance
+remains pending. The release gates that need the real world are still open:
 
 - [ ] Full live source suite, run through the product's own transport
 - [ ] Constrained read-only container run with a real bot token (currently on hold)

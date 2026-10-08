@@ -61,6 +61,22 @@
       "url": "https://www.linkedin.com/posts/REPLACE_ME-lwx-/",
       "expected_identity": "REPLACE_ME",
       "expected_type": "video"
+    },
+    {
+      "case_id": "youtube-music",
+      "platform": "youtube",
+      "media_type": "audio",
+      "url": "https://music.youtube.com/watch?v=REPLACE_ME",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "audio"
+    },
+    {
+      "case_id": "youtube-music-context",
+      "platform": "youtube",
+      "media_type": "audio",
+      "url": "https://music.youtube.com/watch?v=REPLACE_ME&list=REPLACE_PLAYLIST&index=2&si=REPLACE_SHARE&t=42",
+      "expected_identity": "REPLACE_ME",
+      "expected_type": "audio"
     }
   ]
 }

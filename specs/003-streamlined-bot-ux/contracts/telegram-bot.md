@@ -83,7 +83,7 @@ and never retrying an ambiguous upload apply to both methods.
 and limits. The 50 MB cap and the 15-minute expiry in `/help` must match
 `MAX_HOSTED_FILE_BYTES` and `SELECTION_SECONDS`.
 
-`/start`: "Send me one public YouTube, LinkedIn, or Instagram link and I'll send the file back.
+`/start`: "Send me one public YouTube, YouTube Music, LinkedIn, or Instagram link and I'll send the file back.
 Details: /help"
 
 `/help`:
@@ -92,8 +92,8 @@ Details: /help"
 Send one public link and I'll send the media back unchanged.
 
 How to use:
-1. Paste one link here: a YouTube video, LinkedIn post, or Instagram post.
-2. For videos, tap Video, Video (no sound), or Audio only. Pictures are sent straight away.
+1. Paste one link here: a YouTube video, YouTube Music track, LinkedIn post, or Instagram post.
+2. For videos, tap Video, Video (no sound), or Audio only. Pictures and YouTube Music tracks are sent straight away.
 3. Wait for the file. Big videos can take a few minutes.
 
 Good to know:
@@ -110,11 +110,11 @@ with `setMyDescription` / `setMyShortDescription` only when Telegram's copy diff
 as a background task. A failure is logged by exception type only and never blocks polling.
 
 Description (≤512 characters, shown in an empty chat before `/start`): "Send one public
-YouTube, LinkedIn, or Instagram link and get the media file back, unchanged. Files up to
+YouTube, YouTube Music, LinkedIn, or Instagram link and get the media file back, unchanged. Files up to
 50 MB. Tap Start, then paste a link."
 
 Short description (≤120 characters, shown on the profile and when shared): "Public YouTube,
-LinkedIn, and Instagram media, sent back unchanged."
+YouTube Music, LinkedIn, and Instagram media, sent back unchanged."
 
 ## Amendments to 001 artifacts
 
@@ -126,3 +126,12 @@ Applied during implementation, each marked "(amended by 003)":
 3. `data-model.md`: `options` holds the ≤3 policy-kept options; new request fields per
    003 data model.
 4. `specs/002-file-logging/data-model.md`: add `choices` and `automatic` keys.
+
+## YouTube Music extension (amended by 005)
+
+YouTube Music single tracks use automatic native document delivery with no picker, even
+when multiple audio versions were ranked. The first status is `Audio only — downloading…`
+(rather than the ordinary single-video wording), followed by sending/sent. Existing artwork,
+missing-metadata fallbacks and one status surface remain. Collection and no-native-audio
+messages follow the [005 Telegram contract](../../005-youtube-music-download/contracts/telegram-bot.md).
+All source-byte, anonymous-access, deadline, cap, isolation and diagnostic rules remain.

@@ -180,3 +180,70 @@ establish YouTube Music support or live, Telegram, or deployment readiness.
 - T021–T027 complete. Dependencies, worker serialization, deadlines, access rules and
   runtime limits unchanged. Phase 6 documentation/live/manual/container checks remain
   unchecked; controlled success does not establish live availability or release readiness.
+
+
+## Phase 6 — Documentation and controlled release checks
+
+- Date: 2026-10-08; branch: `005-youtube-music-download`.
+- Requirements checklist: 16 checked / 0 unchecked. Python/Docker ignores verified;
+  dependency/runtime pins unchanged. No extension configuration exists at pre/post checks.
+- T028: start/help/input/profile guidance names YouTube Music single tracks with automatic
+  delivery while preserving ordinary video/picture guidance, 50 MB and 15-minute limits.
+  Profile lengths remain within Telegram limits; no MP3/playlist/subscription/inline promise.
+- T029: README, CLAUDE.md and affected 001/003 contracts describe AUDIO ranking, music
+  canonical identity/refresh, card-status exception and both music errors, preserving all
+  architecture/security constraints. Plan/quickstart status now reflects implementation
+  and outstanding external evidence rather than the earlier planning stage.
+- T030: sanitized live manifest template includes youtube-music and youtube-music-context.
+  Opt-in suite asserts AUDIO/music canonical identity, uses production audio choice ranking,
+  and verifies exact native format, media type and byte count. Existing source cases and
+  live marker remain; no controlled test contacts an external source.
+- T031: `uv run --locked pytest tests/unit tests/contract tests/integration --tb=short`:
+  PASS; 767 passed, 20 existing Telegram deprecation warnings in 5.84s.
+- `uv build`: PASS; built `dist/openmedia-0.1.0.tar.gz` and
+  `dist/openmedia-0.1.0-py3-none-any.whl`. Initial sandbox uv cache denial was resolved
+  by approved escalation. Build artifacts remain ignored.
+
+### Controlled requirement coverage
+
+| Requirement | Evidence |
+| --- | --- |
+| FR-001 | Music host/route, normalization, one-link and malformed-ID tests in test_links.py |
+| FR-002 | Context/offset grammar, extraction canonical URL and whole-track music flow |
+| FR-003 | Existing guarded anonymous adapter path reused; pinned extractor options and transport regression checks |
+| FR-004 | test_choices.py audio pool/ranking/size/tie checks and automatic claim acceptance |
+| FR-005 | Generated native audio delivered byte-for-byte; probe-only download with merge/conversion/tag-writing forbidden |
+| FR-006 | Artwork/metadata card, missing metadata, automatic progress and existing failure-surface checks |
+| FR-007 | Collection classification and handler refusal with zero source work |
+| FR-008 | No-audio/oversize/malformed/identity/source/deadline/format/send failure matrix |
+| FR-009 | Injected deadline/reserve accounting, capacity/duplicates/shutdown/cleanup and guarded byte-cap checks |
+| FR-010 | Exact music refresh plus ordinary YouTube/LinkedIn/Instagram controlled regression suite |
+| FR-011 | Diagnostic-on/off accepted failures and pre-admission refusals, console/token/cookie privacy assertions |
+
+SC-001/SC-002 are covered by automatic one-document/no-tap ranking and exact native-byte
+acceptance; SC-003 by plain/context/offset and collection zero-work checks; SC-004 by the
+failure/deadline/cleanup matrix; SC-005 by ordinary-source regressions. These are controlled
+checks, not real-source availability or measured Telegram timing evidence.
+
+### Open external release checks
+
+- T032 OPEN: OPENMEDIA_LIVE_MANIFEST is unset; no operator-supplied public manifest was
+  available. `uv run --locked pytest -m live tests/live/test_sources.py` collected one test
+  and skipped it in 0.01s. No plain/context sample identity, format, byte count or anonymous
+  availability can be reported. No regional live evidence was collected (development
+  timezone Europe/Helsinki; source region unverified). Pinned yt-dlp is 2026.8.19;
+  Python 3.13.16 / python-telegram-bot 22.8 / instaloader 4.15.3 remain unchanged.
+- T033 OPEN: no operator private-chat acceptance or received-document byte comparison
+  was supplied. scripts/dev.sh and a real Telegram session were not launched for manual
+  acceptance; no credentials were read or logged. Controlled fake-transport evidence
+  does not complete this task.
+- T034 OPEN: `docker build --tag openmedia:local .` failed before building because the
+  Docker daemon socket `/Users/homan/.docker/run/docker.sock` does not exist. Docker CLI
+  is installed, but no daemon was available. Bounded-storage startup and health checks
+  with runtime-injected credentials therefore could not run. Constitution review confirms
+  no new service/dependency/state/access exception, but container deployment verification
+  remains required before release.
+
+T028–T031 are complete. T032–T034 remain unchecked; Phase 6 and release readiness are
+incomplete until passing live/manual/container evidence is recorded. Unrelated root AGENTS.md
+and the pre-existing tracked Python cache modification remain outside the feature commit.

@@ -90,3 +90,12 @@ credentials. Busy responses preserve any pending selection and its original expi
 Reference: [Telegram Bot API](https://core.telegram.org/bots/api). The compact payload and
 attachment behavior are based on documented Telegram constraints; presentation details are
 OpenMedia design choices. See `runtime.md` for resource values and `../data-model.md` for races.
+
+## YouTube Music extension (amended by 005)
+
+Public music watch links request one complete native audio track, including listening
+context; album/playlist-only addresses are refused with single-track guidance. Music
+uses a track card and automatic document delivery without selection buttons. Native
+bytes/tags remain unchanged. Error guidance distinguishes `music_collection` and
+`no_native_audio` without suggesting video fallback. Existing private-chat, limits,
+deadline, isolation and diagnostic rules apply. See [005 Telegram contract](../../005-youtube-music-download/contracts/telegram-bot.md).
