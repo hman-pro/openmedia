@@ -28,11 +28,11 @@ async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_pat
         for key in ("title", "uploader", "duration", "thumbnail"):
             info.pop(key, None)
     url = "https://music.youtube.com/watch?v=fixtureYT01"
-    source = tmp_path / "source.webm"
+    source = tmp_path / "source.m4a"
     ffmpeg = shutil.which("ffmpeg")
     assert ffmpeg is not None, "FFmpeg is required to generate the synthetic source fixture"
     subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-f", "lavfi", "-i",
-        "sine=frequency=440:duration=1", "-c:a", "libopus", "-vn", str(source)], check=True)
+        "sine=frequency=440:duration=1", "-c:a", "aac", "-vn", str(source)], check=True)
     source_bytes = source.read_bytes()
     cards, statuses, uploaded, selected = [], [], [], []
     registry = RequestRegistry(monotonic=lambda: 10)
@@ -58,7 +58,7 @@ async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_pat
 
     class Transport:
         def download(self, url, destination, **kwargs):
-            assert url == "https://media.example.invalid/high-audio"
+            assert url == "https://media.example.invalid/audio"
             Path(destination).write_bytes(source_bytes)
             return len(source_bytes)
 
@@ -92,7 +92,8 @@ async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_pat
     request = await workflow.submit(user_id=7, chat_id=77, text=url + context, chat_type="private")
     assert request.state is RequestState.COMPLETED
     assert request.preview_expires_at is None
-    assert [(o.option_id, o.source_format_id) for o in selected] == [(0, "251")]
+    assert [(o.option_id, o.source_format_id) for o in selected] == [(0, "140")]
+    assert selected[0].extension == "m4a"
     assert uploaded == [source_bytes]
     assert statuses == ["checking", "downloading", "sending", "completed"]
     assert len(cards) == 1

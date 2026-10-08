@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft
+**Status**: Implemented — controlled acceptance passed; user confirmed phone playback; external release validation pending
 
 **Input**: User description: "Let's support the youtube music (download music by a shared link)"
 
@@ -33,8 +33,9 @@ that one native audio file arrives without a selection tap.
    a card with available artwork, title, and duration, and sends exactly one audio file
    automatically, with no video or format-selection buttons.
 2. **Given** several native audio versions, **When** the link is processed, **Then** the
-   highest-quality version within the delivery limit is sent using feature 003's existing
-   audio ranking; equal-ranked versions follow its existing deterministic tie-breaks.
+   bot prefers eligible native AAC in M4A/MP4 for phone playback, then applies feature 003's
+   audio ranking within that group. If no preferred option is eligible, it ranks the remaining
+   native audio formats. Equal-ranked versions use the existing deterministic tie-breaks.
 3. **Given** missing artwork or duration, **When** the track is available, **Then** the
    existing card fallback is used and audio delivery still succeeds.
 4. **Given** a completed download, **When** the audio is sent, **Then** it arrives as a file
@@ -124,7 +125,9 @@ verify that each ends with a plain explanation and no unintended media delivery.
 - **FR-003**: Music requests MUST use anonymous access only. They MUST NOT require source
   accounts, subscriptions, supplied cookies, or stored source credentials.
 - **FR-004**: The bot MUST automatically select one highest-quality native audio-only version
-  that fits the existing delivery limit, using feature 003's audio ranking and tie-breaks.
+  that fits the existing delivery limit, preferring native AAC in M4A/MP4 for phone playback.
+  Apply feature 003's audio ranking and tie-breaks within the preferred group; if none is
+  eligible, apply that ranking to all native audio options.
   It MUST NOT offer video, silent video, or a format picker for music requests.
 - **FR-005**: Audio MUST be delivered as a file in its original source format with unchanged
   bytes. The bot MUST NOT convert formats, re-encode, split audio from a combined video file,

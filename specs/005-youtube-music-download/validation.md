@@ -247,3 +247,91 @@ checks, not real-source availability or measured Telegram timing evidence.
 T028–T031 are complete. T032–T034 remain unchecked; Phase 6 and release readiness are
 incomplete until passing live/manual/container evidence is recorded. Unrelated root AGENTS.md
 and the pre-existing tracked Python cache modification remain outside the feature commit.
+
+
+## Phase 7 — Convergence implementation
+
+- Date: 2026-10-08; branch: `005-youtube-music-download`.
+- Requirements checklist: 16 checked / 0 unchecked, left unchanged. Python and Docker
+  ignore files verified against the current setup; no missing critical patterns found.
+  No `.specify/extensions.yml` exists at pre/post checks, so no hooks were dispatched.
+- T035: three test-first malformed-row cases failed with NO_NATIVE_AUDIO before the
+  fix. Music format lists containing any non-mapping row now raise
+  INVALID_SOURCE_RESPONSE. Empty, video-only and unsupported-native results retain
+  NO_NATIVE_AUDIO; nonmusic malformed-row filtering remains unchanged. Mixed malformed
+  and mapping rows are rejected as malformed rather than silently filtered.
+- T039: event-gated inspection, download and send callbacks never raise TimeoutError
+  themselves. A controlled monotonic clock and scheduler drive real asyncio timeout
+  cancellation without sleeps. Tests observe CancelledError inside stalled callbacks,
+  failure categories/stages, owned-file cleanup, capacity release, and unknown/no-resend
+  behavior for interrupted upload. Inspection status consumes seven seconds; processing
+  status consumes thirteen and download consumes two hundred before stalled sending.
+  The effective deadlines stay at created_at + 60 - 5 and claim_time + 600 - 5;
+  sending does not receive a new processing budget. Failure notification's separate
+  five-second guard is also accounted for.
+- Mutation validation: temporarily removing the inspection guard failed all three new
+  cases; removing the processing guard failed download/send cases; resetting the send
+  deadline failed the send case. Production source restored after each validation;
+  no coordinator repair was required.
+- Affected suites: `uv run --locked pytest tests/contract/test_ytdlp.py
+  tests/integration/test_failure_cleanup.py --tb=short`: PASS, 72 passed in 1.39s.
+- Full controlled validation: `uv run --locked pytest tests/unit tests/contract
+  tests/integration --tb=short`: PASS, 777 passed, 20 existing Telegram deprecation
+  warnings in 5.99s. Commands used a writable temporary UV_CACHE_DIR.
+- `uv build`: PASS; source distribution and wheel built, ignored under dist/.
+- T036/T032 OPEN: OPENMEDIA_LIVE_MANIFEST is unset. The opt-in live command collected
+  one test and skipped it in 0.01s; no anonymous availability, format/bytes or region
+  evidence is claimed. Operator manifest path requested; no manifest supplied during
+  this invocation. Pinned versions remain those recorded in Phase 6.
+- T037/T033 OPEN: no authorized operator test chat or manual acceptance evidence
+  supplied. scripts/dev.sh and Telegram delivery were not launched; no credentials read.
+- T038/T034 OPEN: `docker build --tag openmedia:local .` failed before building because
+  `/Users/homan/.docker/run/docker.sock` does not exist. Container startup/health checks
+  cannot run without a daemon and authorized runtime credentials. Constitution alignment
+  remains unchanged: native bytes, anonymous access, bounded memory, existing deadlines,
+  and one container; release readiness remains unclaimed.
+- T035 and T039 complete; T032–T034 and T036–T038 remain unchecked. No phase-boundary
+  commit made while external validation remains incomplete. Existing convergence task
+  additions, root AGENTS.md and tracked Python cache modification were preserved.
+
+
+## Phone playback follow-up — T040
+
+- User reported successful music download with WebM unplayable on their phone. Supplied
+  diagnostic trace records confirmed delivery of 4,034,743 bytes in 5.47 seconds; it does
+  not include source format/codec or the full external acceptance matrix.
+- Root cause: bitrate-first audio selection chose WebM/Opus over available AAC/M4A.
+  Music AUDIO selection now first ranks eligible native AAC in M4A/MP4, then falls back
+  to all native audio if none is eligible. Size/bitrate/tie rules remain within each group;
+  unknown-size preferred AAC remains subject to the guarded download byte cap. Ordinary
+  YouTube video/audio selection is unchanged. No conversion or metadata rewriting added.
+- Test-first compatibility checkpoint: 3 failed / 4 passed before the selection change.
+  Tests cover M4A and MP4 AAC preference, unknown size, oversized/excluded AAC fallback,
+  and refusal to infer compatibility from an extension with Opus or absent codec.
+- Plain/context/offset full-flow tests now generate AAC/M4A source bytes and assert native
+  format 140, .m4a extension, one automatic document and exact delivered byte equality.
+  Real adapter download still permits ffprobe only and forbids merge/conversion/tag rewrite.
+- Specification, plan, data model, research, choice/adapter contracts, quickstart, README
+  and CLAUDE.md amended to reflect the user-requested compatibility preference.
+- `uv run --locked pytest tests/unit tests/contract tests/integration --tb=short`:
+  PASS, 784 passed, 20 existing warnings in 5.50s (writable temporary UV_CACHE_DIR).
+- T040 complete. Restart the running bot to load this code before retrying the track.
+  On-phone playback of the new M4A selection is not yet verified. Existing full external
+  release checks stay open; the user report is positive delivery evidence only.
+
+
+## User acceptance update — 2026-10-08
+
+- User confirmed "awesome, working now" after the AAC/M4A preference change, then
+  asked to finalize the specification. This records successful real-user download and
+  phone playback for the tested track, superseding the earlier playback-unverified note.
+- Phone OS, track/context URL, selected codec/format details and received-file hash were
+  not supplied. No claim of separate iOS and Android device testing is made.
+- Feature specification status updated from Draft to Implemented with external release
+  validation pending. Controlled acceptance remains 784 passing tests. Implementation
+  and the reported phone-playback issue are complete.
+- T032/T036 remain open for the specified plain/context live-manifest evidence.
+  T033/T037 remain open for the remaining manual acceptance matrix (context/collection/
+  ordinary YouTube, card progress and byte comparison where available). T034/T038
+  remain open for container build/startup/health verification. User playback confirmation
+  is accepted as partial manual evidence, without marking unperformed checks complete.

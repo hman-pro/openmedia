@@ -54,7 +54,8 @@ def choose(options: Sequence[FormatOption], *, media_kind: MediaKind | str, max_
     """Return the kept choices; never raises for empty or all-excluded input."""
     if media_kind == MediaKind.AUDIO:
         audio = [option for option in options if option.media_type == "audio"]
-        picked = _pick_audio(audio, max_file_bytes)
+        compatible = [option for option in audio if _mobile_audio(option)]
+        picked = _pick_audio(compatible, max_file_bytes) or _pick_audio(audio, max_file_bytes)
         return _result([picked], {}) if picked is not None else _result(
             [], {ChoiceKind.AUDIO: TOO_LARGE if audio else NOT_OFFERED})
 
@@ -140,6 +141,12 @@ def _pick_video(of_kind: Sequence[FormatOption], kind: ChoiceKind, max_file_byte
             _shorter_side(option) is None, -(_shorter_side(option) or 0), codec_rank[id(option)], *_tie_key(option)))
     return _best(candidates, lambda option: (
         _shorter_side(option), codec_rank[id(option)], *_tie_key(option)))
+
+
+def _mobile_audio(option: FormatOption) -> bool:
+    """Prefer native AAC in an MP4-family container for music downloads."""
+    reference = option.transport_ref if isinstance(option.transport_ref, Mapping) else {}
+    return option.extension in {"m4a", "mp4"} and codec_family(str(reference.get("acodec") or "")) == "aac"
 
 
 def _pick_audio(of_kind: Sequence[FormatOption], max_file_bytes: int) -> FormatOption | None:

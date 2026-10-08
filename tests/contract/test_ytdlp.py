@@ -367,6 +367,9 @@ def test_music_adapter_passes_canonical_route_and_shared_youtube_rate_bucket(tmp
     ({"formats": []}, ErrorCategory.NO_NATIVE_AUDIO),
     ({"formats": None}, ErrorCategory.NO_NATIVE_AUDIO),
     ({"formats": {"bad": "shape"}}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+    ({"formats": [None]}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+    ({"formats": ["malformed"]}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+    ({"formats": [None, {"vcodec": "none"}]}, ErrorCategory.INVALID_SOURCE_RESPONSE),
     ({"live_status": "is_upcoming"}, ErrorCategory.UNSUPPORTED_COLLECTION),
     ({"live_status": "post_live"}, ErrorCategory.UNSUPPORTED_COLLECTION),
     ({"id": "wrongID1234", "formats": []}, ErrorCategory.INVALID_SOURCE_RESPONSE),
@@ -409,3 +412,20 @@ def test_music_adapter_does_not_relabel_source_errors(tmp_path, monkeypatch, cat
             request_id="a" * 32, work_directory=tmp_path, deadline=100),
             transport=SimpleNamespace(), rate_control=SimpleNamespace(acquire=lambda *args, **kwargs: None))
     assert caught.value.category is category
+
+
+@pytest.mark.parametrize("formats", [[], [{"protocol": "m3u8", "format_id": "x", "url": "https://cdn.invalid/audio", "vcodec": "none", "acodec": "aac", "ext": "m4a"}]])
+def test_valid_music_without_supported_native_audio_remains_no_audio(formats):
+    info = load("youtube-music.json")
+    info["formats"] = formats
+    with pytest.raises(SourceAdapterError) as caught:
+        normalize_info(info, max_file_bytes=50_000_000, source_route=music_route())
+    assert caught.value.category is ErrorCategory.NO_NATIVE_AUDIO
+
+
+@pytest.mark.parametrize("row", [None, "malformed"])
+def test_nonmusic_malformed_format_rows_keep_existing_filtering(row):
+    info = load("youtube-video.json")
+    expected = normalize_info(info, max_file_bytes=50_000_000)
+    info["formats"].append(row)
+    assert normalize_info(info, max_file_bytes=50_000_000) == expected

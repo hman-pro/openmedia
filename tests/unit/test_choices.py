@@ -582,3 +582,20 @@ def test_empty_music_choices_only_explain_audio(options, reason: str) -> None:
     assert not choices.automatic
     assert not choices.options
     assert dict(choices.missing) == {load().ChoiceKind.AUDIO: reason}
+
+
+@pytest.mark.parametrize(("preferred", "expected"), [
+    (audio(0, "aac", bitrate=128, size=3 * MB), "aac"),
+    (audio(0, "aac", extension="mp4", bitrate=128, size=3 * MB), "aac"),
+    (audio(0, "aac", bitrate=128), "aac"),
+    (audio(0, "aac", bitrate=128, size=LIMIT + 1, excluded=True), "opus"),
+    (audio(0, "aac", bitrate=128, size=LIMIT + 1), "opus"),
+    (audio(0, "aac", acodec="opus", bitrate=128, size=3 * MB), "opus"),
+    (audio(0, "aac", acodec="", bitrate=128, size=3 * MB), "opus"),
+])
+def test_music_prefers_native_aac_mp4_container_when_eligible(preferred, expected):
+    opus = audio(1, "opus", extension="webm", acodec="opus", bitrate=160, size=4 * MB)
+    result = load().choose([preferred, opus], media_kind="audio", max_file_bytes=LIMIT)
+    assert result.options[0].source_format_id == expected
+    assert result.options[0].option_id == 0
+    assert result.automatic and not result.missing

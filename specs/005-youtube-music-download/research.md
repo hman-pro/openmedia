@@ -66,12 +66,16 @@ option to ID 0, and expose only the audio missing reason on empty results.
 
 **Rationale**: Existing audio selection prefers a known-size pool over unknown sizes,
 then ranks higher bitrate, exact size ahead of estimated on ties, and lower normalized ID.
-This is the feature 003 policy and must remain unchanged. Native supported extensions remain
+This is the feature 003 policy and remains unchanged within each selection group.
+Following reported phone playback failure on 2026-10-08, music first ranks native AAC
+in M4A/MP4 and falls back to all native audio only if no preferred option is eligible.
+This compatibility preference applies to AUDIO intent only; ordinary YouTube keeps its policy. Native supported extensions remain
 m4a, webm, opus, and mp4 when genuinely audio-only. No source conversion is performed.
 Empty-audio classification must not be affected by ignored video size or codecs.
 
 **Alternatives considered**: MP3 conversion and extracting audio from combined files violate
-byte preservation. A new ranking policy would diverge from the spec's explicit reuse.
+byte preservation. The original bitrate-only policy selected WebM/Opus on the reported phone; the amended
+compatibility preference selects an existing AAC stream without conversion.
 Filtering only after presenting choices leaves misleading missing-video text and unnecessary
 merge option generation.
 

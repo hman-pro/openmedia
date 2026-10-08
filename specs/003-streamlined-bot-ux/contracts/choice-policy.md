@@ -47,7 +47,8 @@ choose(options: Sequence[FormatOption], *, media_kind: MediaKind, max_file_bytes
 
 ## YouTube Music extension (amended by 005)
 
-For `media_kind=audio`, rank only native audio using the unchanged audio size/bitrate/tie
-policy. Return automatic option ID 0 and no missing entries, or no options with only
+For `media_kind=audio`, prefer eligible native AAC in M4A/MP4, falling back to all native
+audio if no preferred option is eligible. Apply the existing audio size/bitrate/tie policy
+within each group. Return automatic option ID 0 and no missing entries, or no options with only
 `audio: not_offered/too_large`; ignored video never determines the audio failure. Ordinary
 video/image policy remains unchanged. See [005 data model](../../005-youtube-music-download/data-model.md).

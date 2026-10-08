@@ -29,8 +29,9 @@ rewrites it for every session in this checkout.
 Read `specs/005-youtube-music-download/tasks.md` and its contracts when changing music
 recognition, audio ranking, card status, failures or refresh. Music watch routes retain
 `music.youtube.com` identity and AUDIO through workers/refresh; only native audio options
-are ranked and one is automatically sent as a document. Context never expands or truncates
-a track. Collection-only links are `music_collection`; missing native audio is
+are ranked and one is automatically sent as a document. Music prefers eligible native
+AAC in M4A/MP4, then falls back to all native audio; ordinary YouTube ranking is unchanged.
+Context never expands or truncates a track. Collection-only links are `music_collection`; missing native audio is
 `no_native_audio`. Music uses `Audio only — downloading…`, including when multiple
 upstream audio versions exist. All inherited anonymous-access, byte-preservation,
 deadline, limit, state and diagnostic constraints remain in force. Live/manual/container

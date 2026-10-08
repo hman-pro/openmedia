@@ -188,3 +188,25 @@ release validation. Preserve dependency pins and existing unrelated changes thro
 - Controlled tests use sanitized fixtures, fake Telegram transport, and injected clocks.
 - New tests must check observable behavior or failure boundaries, not mirror implementation.
 - Plans and tasks do not establish live success; record real-source and deployment limits honestly.
+
+
+## Phase 7: Convergence
+
+Assessment of the present implementation found one failure-classification defect, three
+remaining external release checks, and a deadline-validation gap. Existing task markers
+are preserved. The external-check tasks below close the already-open T032–T034 rather
+than substitute controlled checks for release evidence; unavailable checks remain open.
+
+- [X] T035 Correct structurally malformed music format entries in `src/openmedia/sources/ytdlp.py` so non-mapping rows such as `formats=[None]` or `formats=["malformed"]` produce `INVALID_SOURCE_RESPONSE` rather than `NO_NATIVE_AUDIO`; add test-first regression cases in `tests/contract/test_ytdlp.py`, retain no-audio classification for valid empty/video-only/unsupported-native results, preserve nonmusic behavior, and record affected-suite validation in `specs/005-youtube-music-download/validation.md` per FR-008 and T021 (partial).
+- [ ] T036 Complete the outstanding T032 live validation using an operator-supplied credential-free public manifest outside version control and `tests/live/test_sources.py`; record passing plain/context track identity, selected native format, byte counts, date/region, pinned versions and anonymous availability in `specs/005-youtube-music-download/validation.md`, mark T032 only after passing evidence exists, and leave both tasks open if samples or the manifest remain unavailable per T032 and plan: controlled/live validation boundary (partial).
+- [ ] T037 Complete the outstanding T033 private-chat acceptance through `scripts/dev.sh` with authorized runtime credentials and an operator test chat; record plain/context whole-track document delivery, card progress/completion, collection refusal, ordinary-YouTube regression and received-byte comparison where available in `specs/005-youtube-music-download/validation.md`, mark T033 only after actual evidence exists, and leave both tasks open when credentials/chat/manual evidence are unavailable per T033, US1/AC1–AC4, US2/AC1–AC4 and US3/AC1–AC4 (partial).
+- [ ] T038 Complete the outstanding T034 deployment validation when a Docker daemon and authorized runtime credentials are available: build `Dockerfile` as `openmedia:local`, run README bounded-storage/read-only startup and health checks, record outcomes and constitution alignment in `specs/005-youtube-music-download/validation.md`, mark T034 only after passing evidence exists, and retain the release-readiness limitation while prerequisites or required external checks remain incomplete per T034, plan: single-container deployment and Constitution V (partial).
+- [X] T039 Add deterministic music deadline-enforcement tests in `tests/integration/test_failure_cleanup.py` using injected clocks/scheduling and event-gated checking, downloading and sending callbacks that do not raise `TimeoutError` themselves; exercise cancellation from the workflow timeout, prove the shared processing deadline includes elapsed work and the existing reap reserve, and assert cleanup/capacity release plus unknown/no-resend behavior for interrupted sending; ensure the tests detect removed or reset deadline guards, repair production code only if a test exposes a defect, and record results in `specs/005-youtube-music-download/validation.md` per T023, FR-009 and SC-004 (partial).
+
+
+## Phone playback follow-up
+
+- [X] T040 Prefer eligible native AAC in M4A/MP4 for music automatic selection, fall back
+  to existing native audio ranking when none is eligible, preserve ordinary YouTube policy
+  and byte-identical delivery, update contracts/specification, and validate ranking,
+  size/exclusion/codec cases plus plain/context/offset M4A delivery.

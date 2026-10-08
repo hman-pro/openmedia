@@ -28,7 +28,7 @@ clocks. It must not connect to a source or wait on wall-clock sleeps. See the th
 | Same track with list/si/index/radio/t context | Same whole item, no other item inspected |
 | Extractor reports ordinary YouTube canonical URL | Music canonical URL and AUDIO survive serialization and refresh |
 | Metadata/artwork missing | Existing text/card fallback; successful file still delivered |
-| Several known/unknown sizes and ties | Existing 003 ranking unchanged and deterministic |
+| Several known/unknown sizes and ties | Prefer eligible native AAC/M4A/MP4; existing 003 ranking within each group, native fallback if none eligible |
 | Video-only or absent native audio | no_native_audio; no video or conversion |
 | All audio oversized, video fits | too_large; no video fallback |
 | Unknown-size download exceeds cap | Stopped, no send, existing cleanup and explanation |

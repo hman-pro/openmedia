@@ -346,3 +346,111 @@ def test_music_unknown_size_source_output_is_stopped_at_guarded_byte_cap(tmp_pat
             rate_control=SimpleNamespace(acquire=lambda *args, **kwargs: None))
     assert not (tmp_path / "selected.m4a").exists()
     assert script.urls == ["https://cdn.invalid/audio"]
+
+
+@pytest.mark.parametrize("stage", ["checking", "downloading", "sending"])
+async def test_music_workflow_deadline_cancels_stalled_callbacks(tmp_path, monkeypatch, stage):
+    import asyncio
+    from unittest.mock import AsyncMock
+    from openmedia.models import FormatOption, MediaMetadata
+    from openmedia.sources import DownloadResult, InspectResult
+
+    # Keep asyncio's actual cancellation/TimeoutError conversion, but schedule expiry
+    # from a controlled monotonic clock instead of waiting for wall-clock time.
+    now = [10.0]
+    active = []
+    budgets = []
+    real_timeout = asyncio.timeout
+
+    class ScheduledTimeout:
+        def __init__(self, delay):
+            self.deadline = now[0] + delay
+            self.guard = real_timeout(None)
+            budgets.append(delay)
+
+        async def __aenter__(self):
+            await self.guard.__aenter__()
+            active.append(self)
+            return self
+
+        async def __aexit__(self, *args):
+            active.remove(self)
+            return await self.guard.__aexit__(*args)
+
+    monkeypatch.setattr("openmedia.coordinator.asyncio.timeout", ScheduledTimeout)
+    registry = RequestRegistry(monotonic=lambda: now[0])
+    url = "https://music.youtube.com/watch?v=abcDEF12345"
+    metadata = MediaMetadata("youtube", url, "abcDEF12345", media_kind="audio")
+    option = FormatOption(0, "yt_dlp", "140", "audio", "m4a", "audio/mp4")
+    path = tmp_path / "selected.m4a"
+    observed, cancelled, uploads = [], [], []
+
+    async def stall(here, expected_deadline):
+        assert len(active) == 1, "workflow must guard the stalled operation"
+        assert active[0].deadline == expected_deadline
+        now[0] = expected_deadline
+        active[0].guard.reschedule(asyncio.get_running_loop().time())
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.append(here)
+            raise
+
+    async def status(request, here):
+        if here == "checking":
+            observed.append(request)
+            now[0] += 7  # Checking status consumes the inspection budget.
+        elif here == "downloading":
+            assert request.processing_deadline == 620
+            now[0] += 13  # Status consumes the shared processing budget.
+
+    async def inspect(request):
+        path.write_bytes(b"inspection scratch")
+        if stage == "checking":
+            await stall("checking", 65)  # created 10 + 60 - 5 reserve.
+        now[0] = 20
+        return InspectResult(metadata, (option,))
+
+    async def download(request, selected):
+        path.write_bytes(b"partial")
+        if stage == "downloading":
+            await stall("downloading", 615)
+        now[0] += 200  # Download time must not reset the send deadline.
+        return DownloadResult(path, 7, metadata.media_id, "140", "audio", "m4a", "audio/mp4")
+
+    async def deliver(request, result):
+        uploads.append(result.path.read_bytes())
+        assert now[0] == 233
+        await stall("sending", 615)
+
+    async def cleanup(request):
+        path.unlink(missing_ok=True)
+
+    notify = AsyncMock()
+    workflow = MediaWorkflow(registry, inspect=inspect, publish_preview=AsyncMock(return_value=55),
+        download=download, deliver=deliver, status=status, cleanup=cleanup,
+        notify_failure=notify, max_file_bytes=50_000_000)
+    if stage == "checking":
+        with pytest.raises(TimeoutError):
+            await workflow.submit(user_id=7, chat_id=77, text=url, chat_type="private")
+    else:
+        await workflow.submit(user_id=7, chat_id=77, text=url, chat_type="private")
+    request = observed[0]
+    assert cancelled == [stage]
+    assert budgets == ([55, 5] if stage == "checking" else [55, 595, 5])
+    assert request.delivery_result.error_category == "timeout"
+    assert request.delivery_result.failed_stage == stage
+    assert request.delivery_result.status == ("unknown" if stage == "sending" else "failed")
+    assert registry.terminal(request.request_id).state is RequestState.FAILED
+    assert registry.active_work_count == registry.pending_count == 0
+    assert not path.exists()
+    assert notify.await_count == 1
+    assert len(uploads) == (1 if stage == "sending" else 0)
+    if stage == "sending":
+        assert "Check this chat" in request.delivery_result.next_step
+        # A replay cannot claim the terminal request and resend the uncertain file.
+        from openmedia.coordinator import WorkflowBusy
+        with pytest.raises(WorkflowBusy):
+            await workflow.select(request_id=request.request_id, user_id=7, chat_id=77,
+                preview_message_id=55, option_id=0)
+        assert len(uploads) == 1

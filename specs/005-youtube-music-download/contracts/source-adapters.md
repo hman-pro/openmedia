@@ -23,7 +23,9 @@ candidates excluded by output size remain available for policy diagnosis.
 ## Selection
 
 `choose(options, *, media_kind, max_file_bytes)` keeps its signature and accepts AUDIO.
-Use existing audio ranking and return one automatic ID-0 choice or the audio-only missing
+Prefer native AAC in M4A/MP4 when that group has an eligible option; otherwise fall back
+to all native audio formats. Use existing size/bitrate/tie ranking within each group.
+Return one automatic ID-0 choice or the audio-only missing
 map described in data-model.md. Missing video choices must never appear on a music card.
 Map empty audio `too_large` to TOO_LARGE, and audio `not_offered` to NO_NATIVE_AUDIO.
 Other media kinds and their failure classification remain unchanged.

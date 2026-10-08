@@ -7,7 +7,9 @@
 ## Summary
 
 Accept public single-track YouTube Music watch links and automatically deliver the best
-eligible native audio file. Reuse the existing YouTube adapter and audio policy. Preserve
+eligible native audio file, preferring AAC in M4A/MP4 for phone playback. Reuse the
+existing YouTube adapter and audio ranking within the preferred group, falling back to
+all native audio when no preferred option is eligible. Preserve
 music-host canonical identity through inspection and refresh; add an audio media kind so
 selection considers audio alone and the current automatic-claim path sends it without taps.
 Do not change ordinary YouTube video routing or introduce new services or dependencies.

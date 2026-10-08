@@ -39,12 +39,15 @@ inspection output remain unchanged.
 
 ## ChoiceSet (existing entity, new branch)
 
-For AUDIO, rank only audio options using `_pick_audio`. A success returns one option with
+For AUDIO, first use `_pick_audio` on native AAC options in M4A/MP4 containers. If that
+group has no eligible choice, use `_pick_audio` on all native audio options. A success returns one option with
 `option_id=0`, `automatic=True`, and an empty missing map. Empty results have
 `automatic=False` and only `ChoiceKind.AUDIO` mapped to `not_offered` or `too_large`.
 `too_large` requires actual supported audio candidates blocked by the size policy, not merely
 an excluded video. If none exists, use `not_offered`. Preserve known-size preference and
-quality/tie rules documented in research R4, including unknown-size fallback behavior.
+quality/tie rules documented in research R4 within each group, including unknown-size
+fallback behavior. An unknown-size preferred AAC option can outrank known-size WebM;
+download byte limits still apply.
 
 ## DownloadRequest and lifecycle (existing)
 

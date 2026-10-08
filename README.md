@@ -78,7 +78,8 @@ download-and-send stage has 10 minutes to finish.
 | LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Video and image pass live through Telegram, including `lnkd.in` short links; full live suite pending |
 | Instagram | `instagram.com/p/…`, `instagram.com/reel/…` | Video or single image | Video passes live through the product transport; single image pending |
 
-YouTube Music picks one best eligible native audio-only version, with no picker. Album
+YouTube Music prefers native AAC in M4A/MP4 for phone playback, with no picker. If none
+is eligible, it falls back to the best eligible native audio format. Album
 and playlist-only music links are refused; a track link with listening context still requests
 only the complete identified track. Native formats such as M4A/WebM are preserved; MP3,
 inline playback, subscriptions, conversion and tag rewriting are not promised. Music uses
