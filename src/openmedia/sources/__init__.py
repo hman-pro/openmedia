@@ -143,11 +143,22 @@ def recognize_source_url(url: str) -> SourceRoute:
         raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
 
     if host == "music.youtube.com":
-        values = parse_qs(parts.query, keep_blank_values=True).get("v", [])
-        if parts.path != "/watch" or len(values) != 1 or not _YOUTUBE_ID.fullmatch(values[0]):
-            raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
-        media_id = values[0]
-        return SourceRoute("youtube", media_id, f"https://music.youtube.com/watch?v={media_id}", "audio")
+        query = parse_qs(parts.query, keep_blank_values=True)
+        values = query.get("v", [])
+        if parts.path == "/watch":
+            # A malformed v always takes precedence over playlist context.
+            if len(values) > 1 or (values and not _YOUTUBE_ID.fullmatch(values[0])):
+                raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
+            if not values:
+                category = ErrorCategory.MUSIC_COLLECTION if "list" in query else ErrorCategory.UNSUPPORTED_URL
+                raise SourceAdapterError(category, stage="input")
+            media_id = values[0]
+            return SourceRoute("youtube", media_id, f"https://music.youtube.com/watch?v={media_id}", "audio")
+        if parts.path == "/playlist" or (
+            len(segments) == 2 and segments[0] == "browse" and segments[1].startswith("MPREb_")
+        ):
+            raise SourceAdapterError(ErrorCategory.MUSIC_COLLECTION, stage="input")
+        raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
 
     if host in {"youtu.be", "youtube.com", "www.youtube.com", "m.youtube.com"}:
         media_id: str | None = None

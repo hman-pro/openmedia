@@ -267,3 +267,22 @@ async def test_profile_failure_is_logged_and_swallowed(caplog) -> None:
     bot = SimpleNamespace(get_my_description=AsyncMock(side_effect=NetworkError("down")))
     await _publish_profile(bot)
     assert "bot profile not updated (NetworkError)" in caplog.text
+
+
+@pytest.mark.parametrize("path", ["/playlist?list=PLexample", "/watch?list=PLexample", "/browse/MPREb_album"])
+async def test_music_collection_refusal_performs_no_source_work(path: str) -> None:
+    from unittest.mock import AsyncMock
+    from openmedia.bot import BotHandlers
+    from openmedia.coordinator import MediaWorkflow, RequestRegistry
+
+    inspect, download, deliver, status = AsyncMock(), AsyncMock(), AsyncMock(), AsyncMock()
+    workflow = MediaWorkflow(RequestRegistry(monotonic=lambda: 10), inspect=inspect,
+        publish_preview=AsyncMock(), download=download, deliver=deliver, status=status,
+        max_file_bytes=50_000_000)
+    reply = AsyncMock()
+    await BotHandlers(workflow)._submit(private_update("https://music.youtube.com" + path, reply), None)
+    reply.assert_awaited_once_with("Only one track is supported. Send a YouTube Music track link.")
+    inspect.assert_not_awaited()
+    download.assert_not_awaited()
+    deliver.assert_not_awaited()
+    status.assert_not_awaited()

@@ -76,6 +76,8 @@ def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
     error = ErrorCategory(category)
     if error is ErrorCategory.UNSUPPORTED_URL:
         return "Send one supported public media link."
+    if error is ErrorCategory.MUSIC_COLLECTION:
+        return "Only one track is supported. Send a YouTube Music track link."
     if error is ErrorCategory.UNSUPPORTED_COLLECTION:
         return "Only one finished media item is supported. Send a single-item link."
     if error is ErrorCategory.UNAVAILABLE:

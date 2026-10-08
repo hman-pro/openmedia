@@ -20,8 +20,9 @@ from openmedia.sources.ytdlp import YtDlpAdapter, normalize_info
 LIMIT = 50_000_000
 
 
+@pytest.mark.parametrize("context", ["", "&list=PLexample&index=2&radio=1&si=share", "&t=42"])
 @pytest.mark.parametrize("missing_metadata", [False, True])
-async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_path: Path, missing_metadata: bool, monkeypatch) -> None:
+async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_path: Path, missing_metadata: bool, monkeypatch, context: str) -> None:
     info = json.loads((Path(__file__).parents[1] / "fixtures/ytdlp/youtube-music.json").read_text())
     if missing_metadata:
         for key in ("title", "uploader", "duration", "thumbnail"):
@@ -88,7 +89,7 @@ async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_pat
 
     workflow = MediaWorkflow(registry, inspect=inspect, publish_preview=preview,
         download=download, deliver=deliver, status=status, max_file_bytes=LIMIT)
-    request = await workflow.submit(user_id=7, chat_id=77, text=url, chat_type="private")
+    request = await workflow.submit(user_id=7, chat_id=77, text=url + context, chat_type="private")
     assert request.state is RequestState.COMPLETED
     assert request.preview_expires_at is None
     assert [(o.option_id, o.source_format_id) for o in selected] == [(0, "251")]
@@ -124,3 +125,23 @@ async def test_runtime_music_card_starts_with_accurate_download_status(tmp_path,
     assert rendered.keyboard is None
     assert "Audio only — downloading…" in rendered.text
     assert "only version available" not in rendered.text
+
+
+async def test_ordinary_youtube_keeps_video_choices_in_music_feature(tmp_path) -> None:
+    from unittest.mock import AsyncMock
+    from openmedia.choices import kind_of
+
+    info = json.loads((Path(__file__).parents[1] / "fixtures/ytdlp/youtube-music.json").read_text())
+    url = "https://www.youtube.com/watch?v=fixtureYT01"
+    result = normalize_info(info, max_file_bytes=LIMIT, source_route=recognize_source_url(url))
+    inspect = AsyncMock(return_value=result)
+    preview = AsyncMock(return_value=55)
+    download, deliver = AsyncMock(), AsyncMock()
+    workflow = MediaWorkflow(RequestRegistry(monotonic=lambda: 10), inspect=inspect,
+        publish_preview=preview, download=download, deliver=deliver, status=AsyncMock(), max_file_bytes=LIMIT)
+    request = await workflow.submit(user_id=7, chat_id=77, text=url, chat_type="private")
+    assert request.state is RequestState.AWAITING_SELECTION
+    assert [kind_of(o).value for o in request.options] == ["video", "silent", "audio"]
+    assert build_card(request.request_id, result.metadata, preview.call_args.args[2]).keyboard is not None
+    download.assert_not_awaited()
+    deliver.assert_not_awaited()

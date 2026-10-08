@@ -235,3 +235,60 @@ def test_image_with_a_valid_prefix_but_undecodable_content_is_rejected(tmp_path,
 
     assert caught.value.category is ErrorCategory.INVALID_SOURCE_RESPONSE
     assert inspections == [] and list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("changed", [None, "missing", "audio", "video"])
+def test_music_refresh_retains_intent_deadline_and_exact_native_format(tmp_path, monkeypatch, changed):
+    import json
+    import yt_dlp
+    from openmedia.models import MediaKind
+    from openmedia.sources import InspectInput
+    from openmedia.sources.ytdlp import normalize_info
+    from openmedia.sources import recognize_source_url
+
+    sources = tmp_path / "sources"; sources.mkdir()
+    work = tmp_path / "work"; work.mkdir()
+    _, audio, _, _ = make_sources(sources, "mp4")
+    body = audio.read_bytes()
+    url = "https://music.youtube.com/watch?v=fixtureYT01"
+    info = json.loads((Path(__file__).parents[1] / "fixtures/ytdlp/youtube-music.json").read_text())
+    original = normalize_info(info, max_file_bytes=1_000_000, source_route=recognize_source_url(url))
+    selected = next(o for o in original.options if o.source_format_id == "140")
+    inspected = []
+    def extract(self, requested_url, download):
+        inspected.append(requested_url)
+        updated = json.loads(json.dumps(info))
+        updated["formats"][2]["url"] = "https://cdn.invalid/new-audio"
+        if changed is not None:
+            updated["formats"][2]["format_id"] = "different-audio"
+            if changed == "missing":
+                updated["formats"] = [updated["formats"][4]]
+            elif changed == "video":
+                updated["formats"] = [updated["formats"][0], updated["formats"][4]]
+        return updated
+    monkeypatch.setattr(yt_dlp.YoutubeDL, "extract_info", extract)
+    script = Script(monkeypatch, work, [(403, b"expired"), (200, body)])
+    adapter = YtDlpAdapter()
+    actual_inspect = adapter.inspect
+    def inspect(request, **kwargs):
+        assert isinstance(request, InspectInput)
+        assert request.deadline == 100
+        result = actual_inspect(request, **kwargs)
+        assert result.metadata.media_kind is MediaKind.AUDIO
+        assert result.metadata.canonical_url == url
+        return result
+    monkeypatch.setattr(adapter, "inspect", inspect)
+    monkeypatch.setattr("openmedia.network.time.monotonic", lambda: 10)
+    request = DownloadInput("a" * 32, original.metadata, selected, work, 100, 1_000_000, 4_000_000)
+    router = SourceRouter(ytdlp=adapter)
+    if changed is None:
+        result = router.download(request, transport=script.transport, rate_control=RATE)
+        assert result.path.read_bytes() == body
+        assert result.source_format_id == "140" and result.media_type == "audio"
+        assert script.urls == [selected.transport_ref["url"], "https://cdn.invalid/new-audio"]
+    else:
+        with pytest.raises(SourceAdapterError) as caught:
+            router.download(request, transport=script.transport, rate_control=RATE)
+        assert caught.value.category is ErrorCategory.FORMAT_UNAVAILABLE
+        assert script.urls == [selected.transport_ref["url"]]
+    assert inspected == [url]

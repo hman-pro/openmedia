@@ -340,7 +340,8 @@ def test_music_checks_identity_and_finished_item_before_audio(change, category) 
     assert caught.value.category is category
 
 
-def test_music_adapter_passes_canonical_route_and_shared_youtube_rate_bucket(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("context", ["", "&list=PLexample&index=2&radio=1&si=share&t=42"])
+def test_music_adapter_passes_canonical_route_and_shared_youtube_rate_bucket(tmp_path, monkeypatch, context) -> None:
     from openmedia.sources import InspectInput
     from openmedia.sources.ytdlp import YtDlpAdapter
     import yt_dlp
@@ -353,7 +354,7 @@ def test_music_adapter_passes_canonical_route_and_shared_youtube_rate_bucket(tmp
     class Rate:
         def acquire(self, platform, request_class, *, deadline):
             calls.append((platform, request_class, deadline))
-    request = InspectInput(source_url=music_route().canonical_url,
+    request = InspectInput(source_url=music_route().canonical_url + context,
         request_id="0123456789abcdef0123456789abcdef", work_directory=tmp_path, deadline=100)
     from types import SimpleNamespace
     result = YtDlpAdapter().inspect(request, transport=SimpleNamespace(), rate_control=Rate())

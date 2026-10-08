@@ -95,3 +95,40 @@ establish YouTube Music support or live, Telegram, or deployment readiness.
 - T006–T014 complete. This is controlled plain-track MVP evidence, not live source evidence.
   Collection/context acceptance, full music failure wording/lifecycle and release checks
   remain in Phases 4–6; release support is not claimed.
+
+
+## Phase 4 — US2: Listening context and exact refresh
+
+- Date: 2026-10-08; branch: `005-youtube-music-download`.
+- Requirements checklist: 16 checked / 0 unchecked. Existing Python/Docker ignores
+  remain sufficient; no extension configuration exists at pre/post checks.
+- T015/T018: listening list/index/radio/si/t parameters are stripped from valid watch
+  routes; repeated/blank/malformed v takes precedence over collection classification.
+  Playlist, watch-list-only and MPREb_ album targets produce `music_collection`;
+  artist/search/home/other browse targets remain unsupported. Ordinary YouTube list
+  links retain `unsupported_collection`.
+- T016: real router, yt-dlp inspection normalization, guarded transport download and
+  media validation cover expired native audio URLs. Refresh uses the retained music
+  canonical URL, preserves AUDIO and the original deadline, and downloads only format
+  140. Generated AAC/M4A bytes remain identical. Missing/changed format cases (including
+  remaining video and another audio version) stop with `format_unavailable` before a
+  second media request. No router/refresh implementation repair was needed.
+- T017/T019: exact refusal text is `Only one track is supported. Send a YouTube Music
+  track link.` Handler tests assert zero inspection/download/delivery/status work for
+  playlist-only, watch-list-only and album links. Existing pre-admission logging remains
+  unchanged; privacy regressions are covered by the full controlled suite.
+- Test-first checkpoint: 8 failed / 129 passed before implementation in link, bot-error
+  and refresh suites. Failures were the missing collection category and refusal text;
+  context stripping and exact refresh already passed.
+- Adapter extraction assertions now cover a context input and prove only the canonical
+  music URL reaches extraction, with the same YouTube metadata rate bucket.
+- T020: plain/context/offset variants submitted separately pass with full and absent
+  metadata, one unchanged complete native audio document per request, no keyboard/taps,
+  no conversion or tag rewriting. An ordinary YouTube submission still exposes video,
+  silent video and audio choices and waits for selection without downloading.
+- Affected link/bot-error/adapter/refresh/music-flow checks: 171 passed in 1.71s before
+  adding the explicit ordinary-YouTube flow regression.
+- `uv run --locked pytest tests/unit tests/contract tests/integration --tb=short`:
+  PASS; 726 passed, 20 existing Telegram deprecation warnings in 5.76s.
+- T015–T020 complete. Dependency/runtime pins, deadlines, limits and worker protocol
+  unchanged. Phases 5–6 remain open; no live source or release readiness claim.

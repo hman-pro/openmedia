@@ -238,3 +238,37 @@ def test_music_counts_toward_one_link_limit_and_ordinary_youtube_stays_video() -
     links = supported_urls_in_text("music.youtube.com/watch?v=abcDEF12345 https://youtu.be/abcDEF12345")
     assert len(links) == 2
     assert recognize_source_url(links[1]).route_kind == "video"
+
+
+@pytest.mark.parametrize("context", ["list=PLexample", "list=PLexample&index=2&radio=1&si=share&t=42", "t=42", "si=share"])
+def test_music_listening_context_names_one_complete_track(context: str) -> None:
+    route = recognize_source_url(f"https://music.youtube.com/watch?v=abcDEF12345&{context}")
+    assert route == SourceRoute("youtube", "abcDEF12345", "https://music.youtube.com/watch?v=abcDEF12345", "audio")
+
+
+@pytest.mark.parametrize(("path", "category"), [
+    ("/playlist?list=PLexample", ErrorCategory.MUSIC_COLLECTION),
+    ("/playlist", ErrorCategory.MUSIC_COLLECTION),
+    ("/playlist?v=abcDEF12345", ErrorCategory.MUSIC_COLLECTION),
+    ("/watch?list=PLexample", ErrorCategory.MUSIC_COLLECTION),
+    ("/browse/MPREb_album", ErrorCategory.MUSIC_COLLECTION),
+    ("/browse/artist", ErrorCategory.UNSUPPORTED_URL),
+    ("/search?q=track", ErrorCategory.UNSUPPORTED_URL),
+    ("/artist/artist", ErrorCategory.UNSUPPORTED_URL),
+    ("/", ErrorCategory.UNSUPPORTED_URL),
+    ("/watch?v=&list=PLexample", ErrorCategory.UNSUPPORTED_URL),
+    ("/watch?v=bad&list=PLexample", ErrorCategory.UNSUPPORTED_URL),
+    ("/watch?v=abcDEF12345&v=abcDEF12345&list=PLexample", ErrorCategory.UNSUPPORTED_URL),
+    ("/watch?v=abcDEF12345&v=otherID1234&list=PLexample", ErrorCategory.UNSUPPORTED_URL),
+    ("/watch?v=&v=&list=PLexample", ErrorCategory.UNSUPPORTED_URL),
+])
+def test_music_collection_and_malformed_precedence(path: str, category: ErrorCategory) -> None:
+    with pytest.raises(SourceAdapterError) as caught:
+        recognize_source_url("https://music.youtube.com" + path)
+    assert caught.value.category is category
+
+
+def test_ordinary_youtube_list_remains_unsupported_collection() -> None:
+    with pytest.raises(SourceAdapterError) as caught:
+        recognize_source_url("https://www.youtube.com/watch?v=abcDEF12345&list=PLexample")
+    assert caught.value.category is ErrorCategory.UNSUPPORTED_COLLECTION
