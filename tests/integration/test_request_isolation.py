@@ -92,3 +92,64 @@ async def test_parent_instagram_cooldown_survives_worker_events() -> None:
         {"platform": "instagram", "request_class": "metadata", "deadline": 150}
     )
     assert denied["allowed"] is False
+
+
+async def test_music_concurrent_users_busy_duplicate_callbacks_and_restart(tmp_path):
+    from unittest.mock import AsyncMock
+    import pytest
+    from openmedia.coordinator import MediaWorkflow, WorkflowBusy
+    from openmedia.models import DeliveryResult
+    from openmedia.sources import DownloadResult, InspectResult
+
+    registry = RequestRegistry(monotonic=lambda: 10)
+    url = "https://music.youtube.com/watch?v=abcDEF12345"
+    metadata = MediaMetadata("youtube", url, "abcDEF12345", media_kind="audio")
+    option = FormatOption(0, "yt_dlp", "140", "audio", "m4a", "audio/mp4")
+    arrived = [asyncio.Event(), asyncio.Event()]
+    release = asyncio.Event()
+    requests = {}
+    downloads = []
+    async def download(item, selected):
+        requests[item.user_id] = item
+        downloads.append((item.request_id, item.user_id, selected.source_format_id))
+        arrived[item.user_id - 1].set()
+        await release.wait()
+        path = tmp_path / f"{item.request_id}.m4a"
+        path.write_bytes(bytes([item.user_id]))
+        return DownloadResult(path, 1, item.media_id, selected.source_format_id, "audio", "m4a", "audio/mp4")
+    delivered = []
+    async def deliver(item, result):
+        delivered.append((item.user_id, result.path.read_bytes()))
+        return DeliveryResult(status="confirmed", message_id=100 + item.user_id, actual_bytes=1)
+    workflow = MediaWorkflow(registry, inspect=AsyncMock(return_value=InspectResult(metadata, (option,))),
+        publish_preview=AsyncMock(return_value=55), download=download, deliver=deliver,
+        status=AsyncMock(), max_file_bytes=50_000_000)
+    first = asyncio.create_task(workflow.submit(user_id=1, chat_id=10, text=url, chat_type="private"))
+    await arrived[0].wait()
+    with pytest.raises(WorkflowBusy) as busy:
+        await workflow.submit(user_id=1, chat_id=10, text=url, chat_type="private")
+    assert busy.value.outcome is AdmissionOutcome.USER_BUSY
+    second = asyncio.create_task(workflow.submit(user_id=2, chat_id=20, text=url, chat_type="private"))
+    await arrived[1].wait()
+    with pytest.raises(WorkflowBusy) as global_busy:
+        await workflow.submit(user_id=3, chat_id=30, text=url, chat_type="private")
+    assert global_busy.value.outcome is AdmissionOutcome.WORK_BUSY
+    for user in (1, 2):
+        with pytest.raises(WorkflowBusy):
+            await workflow.select(request_id=requests[user].request_id, user_id=user,
+                chat_id=user * 10, preview_message_id=55, option_id=0)
+    wrong_user = await registry.claim_selection(requests[1].request_id, user_id=2,
+        chat_id=20, preview_message_id=55, option_id=0)
+    assert wrong_user.outcome is not SelectionOutcome.ACCEPTED
+    release.set()
+    completed = await asyncio.gather(first, second)
+    assert len(downloads) == 2 and len({item[0] for item in downloads}) == 2
+    assert sorted(delivered) == [(1, b"\x01"), (2, b"\x02")]
+    assert all(item.state is RequestState.COMPLETED for item in completed)
+    for item in completed:
+        assert (await registry.claim_selection(item.request_id, user_id=item.user_id,
+            chat_id=item.chat_id, preview_message_id=55, option_id=0)).outcome is not SelectionOutcome.ACCEPTED
+        restarted = RequestRegistry(monotonic=lambda: 10)
+        assert (await restarted.claim_selection(item.request_id, user_id=item.user_id,
+            chat_id=item.chat_id, preview_message_id=55, option_id=0)).outcome is SelectionOutcome.NOT_FOUND
+    assert registry.active_work_count == 0

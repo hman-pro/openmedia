@@ -286,3 +286,86 @@ async def test_music_collection_refusal_performs_no_source_work(path: str) -> No
     download.assert_not_awaited()
     deliver.assert_not_awaited()
     status.assert_not_awaited()
+
+
+@pytest.mark.parametrize(("category", "stage", "expected"), [
+    ("no_native_audio", "checking", "The source has no downloadable native audio-only option. Send another public track link."),
+    ("too_large", "checking", "None of the available choices fits"),
+    ("unavailable", "checking", "can't be opened without logging in"),
+    ("rate_limited", "checking", "source is busy"),
+    ("timeout", "checking", "checking stage timed out"),
+    ("timeout", "downloading", "downloading stage timed out"),
+    ("format_unavailable", "downloading", "selected native format changed"),
+    ("internal", "sending", "sending stage failed"),
+])
+def test_music_failure_guidance_retains_stage_and_retry(category, stage, expected) -> None:
+    text = failure_message(category, stage=stage)
+    assert expected in text
+    assert "Choose a video" not in text
+    assert any(word in text.lower() for word in ("send", "submit", "retry"))
+
+
+@pytest.mark.parametrize("oversize", [False, True])
+async def test_empty_music_choices_end_with_audio_reason_and_no_card(oversize) -> None:
+    from unittest.mock import AsyncMock
+    from openmedia.coordinator import MediaWorkflow, RequestRegistry
+    from openmedia.models import FormatOption, MediaMetadata
+    from openmedia.sources import InspectResult
+    url = "https://music.youtube.com/watch?v=abcDEF12345"
+    option = (FormatOption(0, "yt_dlp", "140", "audio", "m4a", "audio/mp4",
+        size_bytes=50_000_001, size_kind="exact", availability="excluded", unavailable_reason="too large")
+        if oversize else FormatOption(0, "yt_dlp", "18", "video", "mp4", "video/mp4", includes_audio=True))
+    registry = RequestRegistry(monotonic=lambda: 10)
+    preview, download, deliver, notify = AsyncMock(), AsyncMock(), AsyncMock(), AsyncMock()
+    workflow = MediaWorkflow(registry, inspect=AsyncMock(return_value=InspectResult(
+        MediaMetadata("youtube", url, "abcDEF12345", media_kind="audio"), (option,))),
+        publish_preview=preview, download=download, deliver=deliver, status=AsyncMock(),
+        notify_failure=notify, max_file_bytes=50_000_000)
+    with pytest.raises(SourceAdapterError) as caught:
+        await workflow.submit(user_id=7, chat_id=7, text=url, chat_type="private")
+    expected = "too_large" if oversize else "no_native_audio"
+    assert caught.value.category.value == expected
+    result = notify.call_args.args[1]
+    assert result.failed_stage == "checking" and result.error_category == expected
+    assert "video" not in result.next_step.lower()
+    preview.assert_not_awaited(); download.assert_not_awaited(); deliver.assert_not_awaited()
+    assert registry.active_work_count == 0
+
+
+@pytest.mark.parametrize(("stage", "category", "unknown"), [
+    ("checking", "no_native_audio", False), ("downloading", "format_unavailable", False),
+    ("sending", "internal", False), ("sending", "timeout", True),
+])
+async def test_music_failure_finishes_existing_status_surface(tmp_path, stage, category, unknown) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from openmedia.__main__ import RuntimeCallbacks
+    from openmedia.config import Settings
+    from openmedia.coordinator import RequestRegistry
+    from openmedia.models import DeliveryResult, FormatOption, MediaMetadata
+
+    url = "https://music.youtube.com/watch?v=abcDEF12345"
+    request = RequestRegistry(monotonic=lambda: 10).new_request(user_id=7, chat_id=77,
+        source_url=url, platform="youtube", media_id="abcDEF12345")
+    request.status_message_id = 55
+    if stage != "checking":
+        request.metadata = MediaMetadata("youtube", url, "abcDEF12345", media_kind="audio")
+        request.options = (FormatOption(0, "yt_dlp", "140", "audio", "m4a", "audio/mp4"),)
+        request.selected_option_id = 0
+        request.status_prefix = "Track\n0:42"
+        request.status_is_caption = True
+    bot = SimpleNamespace(edit_message_text=AsyncMock(), edit_message_caption=AsyncMock(), send_message=AsyncMock())
+    callbacks = RuntimeCallbacks(Settings.from_env({"TELEGRAM_BOT_TOKEN": "123456789:offline",
+        "OPENMEDIA_WORK_ROOT": str(tmp_path)}), SimpleNamespace(bot=bot))
+    result = DeliveryResult(status="unknown" if unknown else "failed", error_category=category,
+        failed_stage=stage, next_step="Check this chat before submitting the link again." if unknown
+        else failure_message(category, stage=stage))
+    await callbacks.notify_failure(request, result)
+    edit = bot.edit_message_text if stage == "checking" else bot.edit_message_caption
+    edit.assert_awaited_once()
+    bot.send_message.assert_not_awaited()
+    text = edit.call_args.kwargs["text" if stage == "checking" else "caption"]
+    assert "video" not in text.lower()
+    assert "Check this chat before sending the link again." in text if unknown else result.next_step in text
+    if stage != "checking":
+        assert text.startswith("Track\n0:42\n")

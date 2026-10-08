@@ -220,6 +220,8 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int, source_route
     )
 
     formats_value = info.get("formats")
+    if music and formats_value is not None and not isinstance(formats_value, list):
+        raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
     if not isinstance(formats_value, list):
         raise SourceAdapterError(ErrorCategory.NO_NATIVE_AUDIO if music else ErrorCategory.NO_FORMATS, stage="inspection")
     candidates = [

@@ -748,3 +748,47 @@ async def test_a_resolved_short_link_records_the_query_free_resolved_url(trace: 
     text = "\n".join(json.dumps(entry) for entry in entries)
     assert "rcm=" not in text
     assert "utm_" not in text
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_music_failures_and_collection_refusals_respect_diagnostic_privacy(tmp_path, capsys, enabled):
+    from openmedia.sources import ErrorCategory, SourceAdapterError
+
+    directory = tmp_path / "music-logs"
+    stop = diagnostics.configure_diagnostics(Settings(telegram_bot_token=TOKEN,
+        diagnostic_log=enabled, diagnostic_log_dir=directory))
+    console = logging.StreamHandler()
+    logging.getLogger().addHandler(console)
+    url = "https://music.youtube.com/watch?v=abcDEF12345"
+    album = "https://music.youtube.com/browse/MPREb_album"
+    cookie = "anonymous-cookie-private-value"
+    error = SourceAdapterError(ErrorCategory.NO_NATIVE_AUDIO, stage="inspection", detail=cookie)
+    error.worker_output = f"native audio absent token={TOKEN}"
+    registry = RequestRegistry(monotonic=lambda: 10)
+    try:
+        workflow = workflow_for(registry, tmp_path, inspect=AsyncMock(side_effect=error))
+        with pytest.raises(SourceAdapterError):
+            await workflow.submit(user_id=42, chat_id=4200, text=url, chat_type="private")
+        update = await send_refused(refused_update(album, (album,)))
+        assert update.effective_message.reply_text.await_count == 1
+    finally:
+        stop()
+        logging.getLogger().removeHandler(console)
+    files = list(directory.glob("*.log"))
+    text = "".join(path.read_text() for path in files)
+    assert TOKEN not in text and cookie not in text
+    output = capsys.readouterr()
+    for secret in (url, album, "4200", str(REFUSED_USER), TOKEN, cookie):
+        assert secret not in output.out + output.err
+    if enabled:
+        entries = [json.loads(line) for line in text.splitlines()]
+        received = next(e for e in entries if e["stage"] == "received")
+        assert received["source_url"] == url
+        assert (received["user_id"], received["chat_id"]) == (42, 4200)
+        failure = next(e for e in entries if e["stage"] == "inspection_finished")
+        assert failure["error_category"] == "no_native_audio"
+        assert failure["request_id"] == received["request_id"]
+        [refused] = refused_entries(entries)
+        assert refused["reason"] == "music_collection" and refused["links"] == [album]
+    else:
+        assert not directory.exists()

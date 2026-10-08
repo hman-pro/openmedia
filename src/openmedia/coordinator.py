@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, AsyncIterator
 
-from openmedia.choices import ChoiceSet, choose
+from openmedia.choices import ChoiceKind, ChoiceSet, choose
 from openmedia.diagnostics import event
 from openmedia.models import (
     DeliveryResult,
@@ -676,12 +676,15 @@ class MediaWorkflow:
                 if not choice_set.options:
                     from openmedia.sources import ErrorCategory, SourceAdapterError
 
-                    category = (
-                        ErrorCategory.TOO_LARGE
-                        if "too_large" in choice_set.missing.values()
-                        or _image_too_large(result, self.max_file_bytes)
-                        else ErrorCategory.NO_FORMATS
-                    )
+                    if result.metadata.media_kind == MediaKind.AUDIO:
+                        category = (ErrorCategory.TOO_LARGE
+                            if choice_set.missing.get(ChoiceKind.AUDIO) == "too_large"
+                            else ErrorCategory.NO_NATIVE_AUDIO)
+                    else:
+                        category = (ErrorCategory.TOO_LARGE
+                            if "too_large" in choice_set.missing.values()
+                            or _image_too_large(result, self.max_file_bytes)
+                            else ErrorCategory.NO_FORMATS)
                     raise SourceAdapterError(category, stage="checking")
                 # A resolved short link records the query-free post address it now points at.
                 resolution = ({"resolution": "resolved", "resolved_url": request.source_url}

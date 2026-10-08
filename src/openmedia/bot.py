@@ -87,6 +87,8 @@ def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
             "That content can't be opened without logging in. It may be private, removed, "
             "or shared only with the author's followers or connections. Send another public link."
         )
+    if error is ErrorCategory.NO_NATIVE_AUDIO:
+        return "The source has no downloadable native audio-only option. Send another public track link."
     if error is ErrorCategory.NO_FORMATS:
         return "There is no downloadable native option. Send another public link."
     if error is ErrorCategory.FORMAT_UNAVAILABLE:

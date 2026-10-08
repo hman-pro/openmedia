@@ -132,3 +132,51 @@ establish YouTube Music support or live, Telegram, or deployment readiness.
   PASS; 726 passed, 20 existing Telegram deprecation warnings in 5.76s.
 - T015–T020 complete. Dependency/runtime pins, deadlines, limits and worker protocol
   unchanged. Phases 5–6 remain open; no live source or release readiness claim.
+
+
+## Phase 5 — US3: Music failures, isolation and privacy
+
+- Date: 2026-10-08; branch: `005-youtube-music-download`.
+- Requirements checklist remains 16 checked / 0 unchecked. All 61 foundation checks
+  passed before story implementation. Existing Python/Docker ignores remain sufficient;
+  no extension configuration exists at pre/post checks.
+- T021: controlled adapter failures cover empty/absent audio, video-only source, all
+  audio oversized despite fitting video, malformed format-list shape, wrong identity,
+  live/upcoming/post-live and unavailable/rate-limited/timeout source errors. Retained
+  excluded audio options explain size failures without offering or falling back to video.
+- Test-first adapter/message checkpoint: 3 failed / 93 passed. The intended failures
+  exposed malformed formats labeled as no audio, absent dedicated no-audio wording,
+  and empty AUDIO choices labeled as generic no-formats. All three were corrected.
+- T022/T025: `no_native_audio` now maps to the exact contract message asking for another
+  public track link. Stage-specific size, source-busy/unavailable/timeout, changed format
+  and failed-send guidance remains. Runtime notification tests edit existing checking
+  text or track caption with explanation/next step; uncertain send retains check-chat
+  guidance and never sends another status message when the edit succeeds.
+- T023: injected-clock/failure tests cover inspection/download/send timeout, cancellation
+  at all three stages, storage exhaustion, unknown-size overflow and failed/uncertain send.
+  Assertions preserve 60-second inspection / 600-second processing accounting with the
+  existing five-second reap reserve (55/595 active budgets), release capacity, remove
+  partial files and prevent repeat delivery. Shutdown actually cancels an event-gated
+  music download through ManagedApplication.stop and removes the owned partial file.
+- Unknown-size limit evidence includes the real native adapter and guarded transport:
+  a 101-byte scripted source under a 100-byte configured cap raises ResponseTooLarge
+  and leaves no selected file. The workflow test separately injects the existing worker
+  `too_large` envelope and proves zero uploads and cleanup. Hosted cap remains 50,000,000.
+- T024: empty AUDIO choices classify using only the audio missing reason: too_large
+  remains TOO_LARGE; absent audio becomes NO_NATIVE_AUDIO. Nonmusic classification
+  remains unchanged. Malformed non-null format-list shapes retain INVALID_SOURCE_RESPONSE.
+- T026: event-gated concurrent music requests for the same track use independent IDs
+  and bytes. Same-user/global busy admission, active and terminal duplicate callbacks,
+  wrong-user callbacks and restart invalidation cannot add downloads or deliveries.
+  Diagnostic-on/off accepted failure and collection-refusal tests prove links/Telegram
+  IDs occur only in enabled diagnostics; tokens and cookie detail appear in neither
+  diagnostics nor console. No source access or credential rules were widened.
+- Test fixtures corrected during development to read delivery outcomes from the request
+  rather than bounded terminal tombstones, model overflow at the worker boundary, and
+  use the caption status surface and established uncertain-send wording.
+- Cleanup/isolation/diagnostic suites: 74 passed in 1.28s before final card/byte-cap checks.
+- T027: `uv run --locked pytest tests/unit tests/contract tests/integration --tb=short`:
+  PASS; 766 passed, 20 existing Telegram deprecation warnings in 5.50s.
+- T021–T027 complete. Dependencies, worker serialization, deadlines, access rules and
+  runtime limits unchanged. Phase 6 documentation/live/manual/container checks remain
+  unchecked; controlled success does not establish live availability or release readiness.

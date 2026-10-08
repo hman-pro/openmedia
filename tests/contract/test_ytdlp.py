@@ -361,3 +361,51 @@ def test_music_adapter_passes_canonical_route_and_shared_youtube_rate_bucket(tmp
     assert calls == [("youtube", "metadata", 100), (music_route().canonical_url, False)]
     assert result.metadata.media_kind == "audio"
     assert all(o.media_type == "audio" for o in result.options)
+
+
+@pytest.mark.parametrize(("change", "category"), [
+    ({"formats": []}, ErrorCategory.NO_NATIVE_AUDIO),
+    ({"formats": None}, ErrorCategory.NO_NATIVE_AUDIO),
+    ({"formats": {"bad": "shape"}}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+    ({"live_status": "is_upcoming"}, ErrorCategory.UNSUPPORTED_COLLECTION),
+    ({"live_status": "post_live"}, ErrorCategory.UNSUPPORTED_COLLECTION),
+    ({"id": "wrongID1234", "formats": []}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+    ({"extractor_key": "LinkedIn", "formats": []}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+])
+def test_music_failure_meanings_survive_audio_intent(change, category) -> None:
+    info = load("youtube-music.json"); info.update(change)
+    with pytest.raises(SourceAdapterError) as caught:
+        normalize_info(info, max_file_bytes=50_000_000, source_route=music_route())
+    assert caught.value.category is category
+
+
+def test_music_video_only_is_no_audio_and_fitting_video_does_not_hide_oversize_audio() -> None:
+    from openmedia.choices import choose, ChoiceKind
+    info = load("youtube-music.json")
+    info["formats"] = [f for f in info["formats"] if f["vcodec"] != "none"]
+    with pytest.raises(SourceAdapterError) as caught:
+        normalize_info(info, max_file_bytes=50_000_000, source_route=music_route())
+    assert caught.value.category is ErrorCategory.NO_NATIVE_AUDIO
+    info = load("youtube-music.json")
+    for item in info["formats"]:
+        if item["vcodec"] == "none":
+            item["filesize"] = 50_000_001
+    result = normalize_info(info, max_file_bytes=50_000_000, source_route=music_route())
+    assert all(o.media_type == "audio" and o.availability == "excluded" for o in result.options)
+    assert dict(choose(result.options, media_kind="audio", max_file_bytes=50_000_000).missing) == {ChoiceKind.AUDIO: "too_large"}
+
+
+@pytest.mark.parametrize("category", [ErrorCategory.UNAVAILABLE, ErrorCategory.RATE_LIMITED, ErrorCategory.TIMEOUT])
+def test_music_adapter_does_not_relabel_source_errors(tmp_path, monkeypatch, category) -> None:
+    import yt_dlp
+    from types import SimpleNamespace
+    from openmedia.sources import InspectInput
+    from openmedia.sources.ytdlp import YtDlpAdapter
+    def unavailable(*args, **kwargs):
+        raise SourceAdapterError(category, stage="inspection")
+    monkeypatch.setattr(yt_dlp.YoutubeDL, "extract_info", unavailable)
+    with pytest.raises(SourceAdapterError) as caught:
+        YtDlpAdapter().inspect(InspectInput(source_url=music_route().canonical_url,
+            request_id="a" * 32, work_directory=tmp_path, deadline=100),
+            transport=SimpleNamespace(), rate_control=SimpleNamespace(acquire=lambda *args, **kwargs: None))
+    assert caught.value.category is category
