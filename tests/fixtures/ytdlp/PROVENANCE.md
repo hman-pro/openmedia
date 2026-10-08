@@ -11,3 +11,10 @@ extractor returned for a credential-free public `ugcPost` video during the 2026-
 probe: two progressive MP4 renditions whose `vcodec`, `acodec`, dimensions, and sizes are all
 null (unknown, not absent), distinguished only by `tbr`. The slug, title, and URLs are
 invented; the null fields and bitrates are as observed.
+
+## youtube-music.json
+
+Synthetic mixed audio/video inspection sample derived from youtube-video.json,
+with invented artwork and a second native audio format for ranking. All hosts and
+metadata are sanitized placeholders. This is controlled test data, not a live capture
+or evidence of anonymous YouTube Music availability.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from openmedia.models import FormatOption, MediaMetadata, MediaType
+from openmedia.models import MediaKind, FormatOption, MediaMetadata, MediaType
 
 
 # Fixed user-facing text (research R9, contracts/telegram-bot.md). Kinds are the plain string
@@ -84,6 +84,7 @@ def status_text(
     stage: str,
     *,
     automatic: bool = False,
+    media_kind: MediaKind | str | None = None,
     next_step: str | None = None,
     unknown: bool = False,
 ) -> str:
@@ -94,7 +95,7 @@ def status_text(
         # A next step only exists for a failure, whose stage may be `downloading` or `sending`.
         return f"{label} — {stage} failed. {next_step}"
     if stage == "downloading":
-        return f"{label} — only version available, downloading…" if automatic else f"{label} — downloading…"
+        return f"{label} — only version available, downloading…" if automatic and media_kind != MediaKind.AUDIO else f"{label} — downloading…"
     if stage == "sending":
         return f"{label} — sending…"
     if stage == "completed":

@@ -556,3 +556,29 @@ def test_input_is_not_mutated() -> None:
     run(choices, options)
     assert options == snapshot
     assert [option.option_id for option in options] == list(range(len(options)))
+
+
+@pytest.mark.parametrize(("options", "expected"), [
+    ([audio(7, "low", size=10, bitrate=128), audio(9, "high", size=20, bitrate=160)], "high"),
+    ([audio(7, "known", size=10, bitrate=128), audio(9, "unknown", bitrate=256)], "known"),
+    ([audio(7, "low", bitrate=128), audio(9, "high", bitrate=160)], "high"),
+    ([audio(7, "estimated", size=10, size_kind="estimated", bitrate=128), audio(9, "exact", size=10, bitrate=128)], "exact"),
+    ([audio(7, "first", size=10, bitrate=128), audio(9, "second", size=10, bitrate=128)], "first"),
+])
+def test_music_selects_one_ranked_native_audio(options, expected: str) -> None:
+    choices = load().choose([video(1, "video", size=10), *options], media_kind="audio", max_file_bytes=LIMIT)
+    assert choices.automatic
+    assert not choices.missing
+    assert [(o.option_id, o.source_format_id) for o in choices.options] == [(0, expected)]
+
+
+@pytest.mark.parametrize(("options", "reason"), [
+    ([], "not_offered"), ([video(0, "big-video", size=LIMIT+1, excluded=True)], "not_offered"),
+    ([audio(0, "big-audio", size=LIMIT+1, excluded=True)], "too_large"),
+    ([audio(0, "big-audio", size=LIMIT+1), audio(1, "unknown")], "too_large"),
+])
+def test_empty_music_choices_only_explain_audio(options, reason: str) -> None:
+    choices = load().choose(options, media_kind="audio", max_file_bytes=LIMIT)
+    assert not choices.automatic
+    assert not choices.options
+    assert dict(choices.missing) == {load().ChoiceKind.AUDIO: reason}

@@ -1,0 +1,126 @@
+"""Controlled plain-track acceptance; synthetic source bytes, no live-source claim."""
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from openmedia.bot import build_card
+from openmedia.coordinator import MediaWorkflow, RequestRegistry
+from openmedia.delivery import deliver_media
+from openmedia.models import RequestState
+from openmedia.presentation import status_text
+from openmedia.sources import DownloadInput, recognize_source_url
+from openmedia.sources.ytdlp import YtDlpAdapter, normalize_info
+
+LIMIT = 50_000_000
+
+
+@pytest.mark.parametrize("missing_metadata", [False, True])
+async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_path: Path, missing_metadata: bool, monkeypatch) -> None:
+    info = json.loads((Path(__file__).parents[1] / "fixtures/ytdlp/youtube-music.json").read_text())
+    if missing_metadata:
+        for key in ("title", "uploader", "duration", "thumbnail"):
+            info.pop(key, None)
+    url = "https://music.youtube.com/watch?v=fixtureYT01"
+    source = tmp_path / "source.webm"
+    ffmpeg = shutil.which("ffmpeg")
+    assert ffmpeg is not None, "FFmpeg is required to generate the synthetic source fixture"
+    subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+        "sine=frequency=440:duration=1", "-c:a", "libopus", "-vn", str(source)], check=True)
+    source_bytes = source.read_bytes()
+    cards, statuses, uploaded, selected = [], [], [], []
+    registry = RequestRegistry(monotonic=lambda: 10)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("music must not merge or convert source bytes")
+    monkeypatch.setattr("openmedia.sources.ytdlp.merge_streams", forbidden)
+
+    async def inspect(request):
+        assert request.platform == "youtube"
+        return normalize_info(info, max_file_bytes=LIMIT, source_route=recognize_source_url(request.source_url))
+
+    async def preview(request, result, choices):
+        rendered = build_card(request.request_id, result.metadata, choices)
+        assert rendered.keyboard is None
+        assert choices.automatic and not choices.missing
+        cards.append((result.metadata, rendered))
+        return 55
+
+    class Rate:
+        def acquire(self, platform, request_class, *, deadline):
+            assert platform == "youtube"
+
+    class Transport:
+        def download(self, url, destination, **kwargs):
+            assert url == "https://media.example.invalid/high-audio"
+            Path(destination).write_bytes(source_bytes)
+            return len(source_bytes)
+
+    original_run = subprocess.run
+    def probe_only(command, *args, **kwargs):
+        assert Path(command[0]).name == "ffprobe", "download must not convert or rewrite tags"
+        return original_run(command, *args, **kwargs)
+    monkeypatch.setattr("openmedia.sources.ytdlp.subprocess.run", probe_only)
+
+    async def download(request, option):
+        selected.append(option)
+        return YtDlpAdapter().download(DownloadInput(
+            request_id=request.request_id, metadata=request.metadata, option=option,
+            work_directory=tmp_path, deadline=100, output_limit=LIMIT,
+            workspace_limit=128 * 1024 * 1024), transport=Transport(), rate_control=Rate())
+
+    async def send_document(**kwargs):
+        uploaded.append(kwargs["document"].read())
+        return SimpleNamespace(message_id=99, document=object())
+
+    async def deliver(request, result):
+        return await deliver_media(SimpleNamespace(send_document=send_document), request=request,
+            downloaded=result, owned_directory=tmp_path, max_file_bytes=LIMIT,
+            deadline=100, monotonic=lambda: 10)
+
+    async def status(request, stage):
+        statuses.append(stage)
+
+    workflow = MediaWorkflow(registry, inspect=inspect, publish_preview=preview,
+        download=download, deliver=deliver, status=status, max_file_bytes=LIMIT)
+    request = await workflow.submit(user_id=7, chat_id=77, text=url, chat_type="private")
+    assert request.state is RequestState.COMPLETED
+    assert request.preview_expires_at is None
+    assert [(o.option_id, o.source_format_id) for o in selected] == [(0, "251")]
+    assert uploaded == [source_bytes]
+    assert statuses == ["checking", "downloading", "sending", "completed"]
+    assert len(cards) == 1
+    if missing_metadata:
+        assert cards[0][0].title_or_caption is None
+        assert cards[0][0].duration_seconds is None
+    assert status_text("Audio only", "downloading", automatic=True, media_kind="audio") == "Audio only — downloading…"
+    assert status_text("Audio only", "sending") == "Audio only — sending…"
+    assert status_text("Audio only", "completed") == "Audio only — sent."
+
+
+async def test_runtime_music_card_starts_with_accurate_download_status(tmp_path, monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+    import openmedia.__main__ as runtime
+    from openmedia.choices import choose
+    from openmedia.config import Settings
+
+    url = "https://music.youtube.com/watch?v=fixtureYT01"
+    info = json.loads((Path(__file__).parents[1] / "fixtures/ytdlp/youtube-music.json").read_text())
+    result = normalize_info(info, max_file_bytes=LIMIT, source_route=recognize_source_url(url))
+    request = RequestRegistry(monotonic=lambda: 10).new_request(
+        user_id=7, chat_id=77, source_url=url, platform="youtube", media_id="fixtureYT01")
+    request.status_message_id = 1
+    send = AsyncMock(return_value=(55, False))
+    monkeypatch.setattr(runtime, "send_card", send)
+    callbacks = runtime.RuntimeCallbacks(Settings.from_env({"TELEGRAM_BOT_TOKEN": "123456789:offline",
+        "OPENMEDIA_WORK_ROOT": str(tmp_path)}), SimpleNamespace(bot=object()))
+    await callbacks.preview(request, result, choose(result.options, media_kind="audio", max_file_bytes=LIMIT))
+    rendered = send.call_args.kwargs["rendered"]
+    assert rendered.keyboard is None
+    assert "Audio only — downloading…" in rendered.text
+    assert "only version available" not in rendered.text

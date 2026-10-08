@@ -203,3 +203,38 @@ def test_short_link_counts_as_a_link_so_two_links_get_one_link_guidance() -> Non
     with pytest.raises(InputError) as caught:
         parse_link_message(text, chat_type="private")
     assert str(caught.value) == ONE_LINK_GUIDANCE
+
+
+@pytest.mark.parametrize("raw", [
+    "https://music.youtube.com/watch?v=abcDEF12345",
+    "http://music.youtube.com/watch?v=abcDEF12345",
+    "music.youtube.com/watch?v=abcDEF12345",
+])
+def test_plain_music_link_retains_audio_intent(raw: str) -> None:
+    normalized = normalize_supported_link(raw)
+    assert normalized is not None
+    route = recognize_source_url(normalized)
+    assert route == SourceRoute("youtube", "abcDEF12345",
+        "https://music.youtube.com/watch?v=abcDEF12345", "audio")
+    assert recognize_source_url(route.canonical_url) == route
+    assert supported_urls_in_text(f"Track {raw}") == (normalized,)
+
+
+@pytest.mark.parametrize("url", [
+    "https://music.youtube.com/watch?v=", "https://music.youtube.com/watch?v=bad",
+    "https://music.youtube.com/watch?v=abcDEF12345&v=abcDEF12345",
+    "https://music.youtube.com/watch?v=abcDEF12345&v=",
+    "https://music.youtube.com/watch?v=abcDEF12345#fragment",
+    "https://user:password@music.youtube.com/watch?v=abcDEF12345",
+    "https://music.youtube.com.evil.invalid/watch?v=abcDEF12345",
+])
+def test_plain_music_link_refuses_invalid_identity(url: str) -> None:
+    with pytest.raises(SourceAdapterError) as caught:
+        recognize_source_url(url)
+    assert caught.value.category is ErrorCategory.UNSUPPORTED_URL
+
+
+def test_music_counts_toward_one_link_limit_and_ordinary_youtube_stays_video() -> None:
+    links = supported_urls_in_text("music.youtube.com/watch?v=abcDEF12345 https://youtu.be/abcDEF12345")
+    assert len(links) == 2
+    assert recognize_source_url(links[1]).route_kind == "video"

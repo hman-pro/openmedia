@@ -52,6 +52,12 @@ def kind_of(option: FormatOption) -> ChoiceKind:
 
 def choose(options: Sequence[FormatOption], *, media_kind: MediaKind | str, max_file_bytes: int) -> ChoiceSet:
     """Return the kept choices; never raises for empty or all-excluded input."""
+    if media_kind == MediaKind.AUDIO:
+        audio = [option for option in options if option.media_type == "audio"]
+        picked = _pick_audio(audio, max_file_bytes)
+        return _result([picked], {}) if picked is not None else _result(
+            [], {ChoiceKind.AUDIO: TOO_LARGE if audio else NOT_OFFERED})
+
     if media_kind == MediaKind.IMAGE:
         images = [option for option in options if option.media_type == "image" and _selectable(option)]
         fitting = _size_filter(images, max_file_bytes)

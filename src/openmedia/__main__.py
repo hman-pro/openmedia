@@ -391,7 +391,7 @@ class RuntimeCallbacks:
             raise RuntimeError("the card needs the request's Checking link… message")
         # A single video choice starts downloading without a tap, so its card is published
         # already carrying that first status line (contracts/telegram-bot.md "Automatic delivery").
-        first_status = (status_text(choice_label(kind_of(choice_set.options[0])), "downloading", automatic=True)
+        first_status = (status_text(choice_label(kind_of(choice_set.options[0])), "downloading", automatic=True, media_kind=result.metadata.media_kind)
             if choice_set.automatic else None)
         rendered = build_card(request.request_id, result.metadata, choice_set, first_status)
         message_id, is_caption = await send_card(self.application.bot, chat_id=request.chat_id,
@@ -472,7 +472,7 @@ class RuntimeCallbacks:
             and kind_of(request.option(request.selected_option_id)) != ChoiceKind.IMAGE)
         if automatic and stage == "downloading":
             return  # the card was published with this line; editing again changes nothing
-        await update_status(self.application.bot, request, status_text(label, stage, automatic=automatic))
+        await update_status(self.application.bot, request, status_text(label, stage, automatic=automatic, media_kind=request.metadata.media_kind if request.metadata else None))
 
     @staticmethod
     def _selected_label(request: DownloadRequest) -> str | None:

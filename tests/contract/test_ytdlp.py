@@ -308,3 +308,55 @@ def test_hyphen_code_picture_post_is_unavailable_and_falls_back_to_image(tmp_pat
         transport=PageTransport(PICTURE_POST_PAGE), rate_control=_library_rate())
     assert [request.source_url for request in image.requests] == [HYPHEN_CODE_POST]
     assert result.options[0].adapter == "linkedin_image"
+
+
+def music_route():
+    from openmedia.sources import SourceRoute
+    return SourceRoute("youtube", "fixtureYT01", "https://music.youtube.com/watch?v=fixtureYT01", "audio")
+
+
+def test_music_normalization_keeps_trusted_identity_and_only_native_audio() -> None:
+    from openmedia.models import MediaKind
+    result = normalize_info(load("youtube-music.json"), max_file_bytes=600, source_route=music_route())
+    assert result.metadata.media_kind is MediaKind.AUDIO
+    assert result.metadata.canonical_url == music_route().canonical_url
+    assert {o.source_format_id for o in result.options} == {"140", "251"}
+    assert all(o.media_type is MediaType.AUDIO for o in result.options)
+    assert next(o for o in result.options if o.source_format_id == "251").availability is Availability.EXCLUDED
+    assert normalize_info(load("youtube-music.json"), max_file_bytes=50_000_000).metadata.media_kind == "video"
+
+
+@pytest.mark.parametrize(("change", "category"), [
+    ({"id": "wrongID1234"}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+    ({"extractor_key": "Instagram"}, ErrorCategory.INVALID_SOURCE_RESPONSE),
+    ({"entries": [{}]}, ErrorCategory.UNSUPPORTED_COLLECTION),
+    ({"live_status": "is_live"}, ErrorCategory.UNSUPPORTED_COLLECTION),
+    ({"formats": []}, ErrorCategory.NO_NATIVE_AUDIO),
+])
+def test_music_checks_identity_and_finished_item_before_audio(change, category) -> None:
+    info = load("youtube-music.json"); info.update(change)
+    with pytest.raises(SourceAdapterError) as caught:
+        normalize_info(info, max_file_bytes=50_000_000, source_route=music_route())
+    assert caught.value.category is category
+
+
+def test_music_adapter_passes_canonical_route_and_shared_youtube_rate_bucket(tmp_path, monkeypatch) -> None:
+    from openmedia.sources import InspectInput
+    from openmedia.sources.ytdlp import YtDlpAdapter
+    import yt_dlp
+
+    calls = []
+    def extract(self, url, download):
+        calls.append((url, download))
+        return load("youtube-music.json")
+    monkeypatch.setattr(yt_dlp.YoutubeDL, "extract_info", extract)
+    class Rate:
+        def acquire(self, platform, request_class, *, deadline):
+            calls.append((platform, request_class, deadline))
+    request = InspectInput(source_url=music_route().canonical_url,
+        request_id="0123456789abcdef0123456789abcdef", work_directory=tmp_path, deadline=100)
+    from types import SimpleNamespace
+    result = YtDlpAdapter().inspect(request, transport=SimpleNamespace(), rate_control=Rate())
+    assert calls == [("youtube", "metadata", 100), (music_route().canonical_url, False)]
+    assert result.metadata.media_kind == "audio"
+    assert all(o.media_type == "audio" for o in result.options)

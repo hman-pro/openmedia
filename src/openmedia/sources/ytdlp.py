@@ -28,6 +28,7 @@ from openmedia.sources import (
     InspectResult,
     RateController,
     SourceAdapterError,
+    SourceRoute,
     codec_family,
     recognize_source_url,
 )
@@ -179,7 +180,7 @@ def _range_bytes(item: Mapping[str, Any]) -> int | None:
     return int(size) if isinstance(size, int) and not isinstance(size, bool) and size > 0 else None
 
 
-def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectResult:
+def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int, source_route: SourceRoute | None = None) -> InspectResult:
     """Convert one yt-dlp inspection result into immutable server-bound choices."""
     if max_file_bytes <= 0:
         raise ValueError("max_file_bytes must be positive")
@@ -201,6 +202,11 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
     canonical_url = _text(info.get("webpage_url") or info.get("original_url"))
     if platform is None or media_id is None or canonical_url is None:
         raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
+    if source_route is not None and (platform != source_route.platform or media_id != source_route.media_id):
+        raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
+    music = source_route is not None and source_route.platform == "youtube" and source_route.route_kind == "audio"
+    if music:
+        canonical_url = source_route.canonical_url
     duration = _positive_number(info.get("duration"))
     metadata = MediaMetadata(
         platform=platform,
@@ -210,12 +216,12 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
         creator=_text(info.get("uploader") or info.get("channel") or info.get("creator")),
         duration_seconds=float(duration) if duration is not None else None,
         thumbnail_url=_text(info.get("thumbnail")),
-        media_kind=MediaKind.VIDEO,
+        media_kind=MediaKind.AUDIO if music else MediaKind.VIDEO,
     )
 
     formats_value = info.get("formats")
     if not isinstance(formats_value, list):
-        raise SourceAdapterError(ErrorCategory.NO_FORMATS, stage="inspection")
+        raise SourceAdapterError(ErrorCategory.NO_NATIVE_AUDIO if music else ErrorCategory.NO_FORMATS, stage="inspection")
     candidates = [
         item
         for item in formats_value
@@ -250,6 +256,8 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
         audio_codec = str(item["acodec"]).lower() if item.get("acodec") else None
         has_video = video_codec != "none"
         has_audio = audio_codec != "none"
+        if music and (has_video or not has_audio or audio_codec is None):
+            continue
         if not has_video and not has_audio:
             continue
         if has_video and not has_audio:
@@ -327,7 +335,7 @@ def normalize_info(info: Mapping[str, Any], *, max_file_bytes: int) -> InspectRe
                 )
             )
     if not options:
-        raise SourceAdapterError(ErrorCategory.NO_FORMATS, stage="inspection")
+        raise SourceAdapterError(ErrorCategory.NO_NATIVE_AUDIO if music else ErrorCategory.NO_FORMATS, stage="inspection")
     ordered = sort_options(options)
     rebound = tuple(replace(option, option_id=index) for index, option in enumerate(ordered))
     return InspectResult(metadata=metadata, options=rebound)
@@ -556,14 +564,14 @@ class YtDlpAdapter:
             with client.bound(), yt_dlp.YoutubeDL(options) as extractor:
                 extractor.add_info_extractor(_linkedin_post_extractor()())
                 extractor.urlopen = client.ytdlp
-                info = extractor.extract_info(request.source_url, download=False)
+                info = extractor.extract_info(route.canonical_url if route.route_kind == "audio" else request.source_url, download=False)
         except SourceAdapterError:
             raise
         except Exception as exc:
             raise SourceAdapterError(ErrorCategory.UNAVAILABLE, stage="inspection") from exc
         if not isinstance(info, Mapping):
             raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
-        result = normalize_info(info, max_file_bytes=min(self.max_file_bytes, request.output_limit))
+        result = normalize_info(info, max_file_bytes=min(self.max_file_bytes, request.output_limit), source_route=route)
         if result.metadata.platform != route.platform or result.metadata.media_id != route.media_id:
             raise SourceAdapterError(ErrorCategory.INVALID_SOURCE_RESPONSE, stage="inspection")
         return result

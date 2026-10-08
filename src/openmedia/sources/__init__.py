@@ -35,6 +35,7 @@ SUPPORTED_HOSTS = frozenset(
         "youtube.com",
         "www.youtube.com",
         "m.youtube.com",
+        "music.youtube.com",
         "youtu.be",
         "instagram.com",
         "www.instagram.com",
@@ -45,7 +46,7 @@ SUPPORTED_HOSTS = frozenset(
 )
 _SCHEME = re.compile(r"https?://", re.IGNORECASE)
 _BARE_SUPPORTED_HOST = re.compile(
-    r"^(?:www\.|m\.)?(?:youtube\.com|youtu\.be|instagram\.com|linkedin\.com|lnkd\.in)(?:/|$)",
+    r"^(?:music\.youtube\.com(?:/|$)|(?:www\.|m\.)?(?:youtube\.com|youtu\.be|instagram\.com|linkedin\.com|lnkd\.in)(?:/|$))",
     re.IGNORECASE,
 )
 
@@ -140,6 +141,13 @@ def recognize_source_url(url: str) -> SourceRoute:
             code = segments[1]
             return SourceRoute("linkedin", code, f"https://lnkd.in/p/{code}", "short_link")
         raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
+
+    if host == "music.youtube.com":
+        values = parse_qs(parts.query, keep_blank_values=True).get("v", [])
+        if parts.path != "/watch" or len(values) != 1 or not _YOUTUBE_ID.fullmatch(values[0]):
+            raise SourceAdapterError(ErrorCategory.UNSUPPORTED_URL, stage="input")
+        media_id = values[0]
+        return SourceRoute("youtube", media_id, f"https://music.youtube.com/watch?v={media_id}", "audio")
 
     if host in {"youtu.be", "youtube.com", "www.youtube.com", "m.youtube.com"}:
         media_id: str | None = None
