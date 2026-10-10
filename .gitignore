@@ -39,6 +39,7 @@ venv/
 build/
 dist/
 *.egg-info/
+.specify/**
 # uv.lock stays tracked: T002 pins the exact resolved dependency set.
 
 # Test and lint caches
@@ -61,3 +62,4 @@ htmlcov/
 .DS_Store
 Thumbs.db
 CLAUDE.md
+AGENTS.md

@@ -30,7 +30,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     OPENMEDIA_WORK_DIR=/tmp/openmedia
 
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md THIRD_PARTY_NOTICES.md ./
+COPY pyproject.toml uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY src ./src
 
 # `yt-dlp[default]` installs the pinned yt-dlp-ejs wheel from uv.lock. The application also

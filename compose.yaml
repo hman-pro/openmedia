@@ -1,0 +1,26 @@
+services:
+  openmedia:
+    build: .
+    image: openmedia:local
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      OPENMEDIA_WORK_DIR: /tmp/openmedia
+      OPENMEDIA_DIAGNOSTIC_LOG: "0"
+    read_only: true
+    cpus: 2
+    mem_limit: 2g
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=536870912,mode=1777
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
