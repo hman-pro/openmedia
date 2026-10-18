@@ -7,14 +7,17 @@ file writing, artifact cleanup, and media validation are the production code pat
 from __future__ import annotations
 
 import io
+import json
 import subprocess
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from openmedia.models import FormatOption, MediaMetadata
+from openmedia.delivery import deliver_media
+from openmedia.models import DownloadRequest, FormatOption, MediaMetadata
 from openmedia.network import GuardedHTTPTransport
 from openmedia.sources import (
     DownloadInput,
@@ -26,7 +29,9 @@ from openmedia.sources import (
 from openmedia.sources.instagram import InstagramImageAdapter
 from openmedia.sources.linkedin import LinkedInImageAdapter
 from openmedia.sources.ytdlp import YtDlpAdapter
+from openmedia.workers import _json_value, decode_download_result
 
+from tests.contract.test_delivery_errors import Bot
 from tests.integration.test_merge import make_sources, tool
 
 
@@ -89,6 +94,75 @@ def merged_option(prefix: str = "old", **reference: str) -> FormatOption:
 def single_option(name: str = "old") -> FormatOption:
     return FormatOption(0, "yt_dlp", "18", "video", "mp4", "video/mp4", width=32, height=32,
         includes_audio=False, transport_ref={"url": f"https://cdn.invalid/{name}", "vcodec": "avc1", "acodec": "none"})
+
+
+@pytest.mark.parametrize("original_title", ["Original title", None], ids=["original-title", "missing-title"])
+@pytest.mark.parametrize("expired", [True, False], ids=["expired-url", "valid-url"])
+async def test_delivery_keeps_original_title_and_worker_schema_across_source_refresh(
+    tmp_path, monkeypatch, original_title, expired
+):
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    work = tmp_path / "work"
+    work.mkdir()
+    video, _, _, _ = make_sources(sources, "mp4")
+    body = video.read_bytes()
+    metadata = replace(YOUTUBE, title_or_caption=original_title)
+    refreshed_metadata = replace(metadata, title_or_caption="New upstream title")
+    selected = single_option()
+    responses = [(403, b"expired"), (200, body)] if expired else [(200, body)]
+    script = Script(monkeypatch, work, responses)
+    adapter = YtDlpAdapter()
+    inspections = refreshing(monkeypatch, adapter, refreshed_metadata, single_option("new"))
+    monkeypatch.setattr("openmedia.network.time.monotonic", lambda: 10)
+    download = DownloadInput("a" * 32, metadata, selected, work, 100, 1_000_000, 4_000_000)
+
+    downloaded = SourceRouter(ytdlp=adapter).download(
+        download, transport=script.transport, rate_control=RATE
+    )
+
+    # Exercise the existing worker result boundary: refresh needs no returned title/metadata.
+    wire_result = json.loads(json.dumps(_json_value(downloaded)))
+    assert set(wire_result) == {
+        "path", "actual_bytes", "media_id", "source_format_id", "media_type",
+        "extension", "mime_type", "width", "height", "duration_seconds",
+    }
+    downloaded = decode_download_result(wire_result)
+    assert (
+        downloaded.media_id, downloaded.source_format_id, downloaded.media_type,
+        downloaded.extension, downloaded.mime_type,
+    ) == (metadata.media_id, selected.source_format_id, "video", "mp4", "video/mp4")
+    assert downloaded.actual_bytes == len(body)
+    assert downloaded.path == work / "selected.mp4"
+    request = DownloadRequest(
+        request_id=download.request_id, user_id=1, chat_id=2,
+        source_url=metadata.canonical_url, platform=metadata.platform,
+        media_id=metadata.media_id, state="sending", metadata=metadata,
+        options=(selected,), selected_option_id=selected.option_id, work_directory=work,
+    )
+    bot = Bot(77)
+
+    delivery = await deliver_media(
+        bot, request=request, downloaded=downloaded, owned_directory=work,
+        max_file_bytes=1_000_000, deadline=100, monotonic=lambda: 10,
+    )
+
+    assert delivery.status == "confirmed" and delivery.actual_bytes == len(body)
+    assert [method for method, _ in bot.calls] == ["send_video"]
+    labels = bot.calls[0][1]
+    assert labels["caption"] == (original_title or "Untitled media")
+    assert labels["filename"] == ("Original title.mp4" if original_title else "Untitled media.mp4")
+    assert labels["parse_mode"] is None and "caption_entities" not in labels
+    assert request.metadata is metadata and download.metadata is metadata
+    assert request.option(selected.option_id) is selected
+    assert bot.bytes == [body] and downloaded.path.read_bytes() == body
+    assert sorted(path.name for path in work.iterdir()) == ["selected.mp4"]
+    assert inspections == ([True] if expired else [])
+    assert script.urls == (
+        ["https://cdn.invalid/old", "https://cdn.invalid/new"] if expired
+        else ["https://cdn.invalid/old"]
+    )
+    assert script.responses == [] and script.error_bodies_read == 0
 
 
 @pytest.mark.parametrize("expired_status", [403, 410])

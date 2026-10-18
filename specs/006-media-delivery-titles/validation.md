@@ -167,3 +167,72 @@ was necessary for T010. US2 normalization, filename safety, Unicode/byte limits,
 and final release gates remain separate unfinished tasks; these results establish
 the short safe-title MVP only. No live source, Telegram, push, or deployment
 operation was performed.
+
+## Phase 4 — US2
+
+T011 reviewed: normalization/fallback/unsafe runs/reserved names/independent stem tests added, quoting data model. Unit run: 48 expected assertion failures, 14 passed, no infrastructure errors. Boundary shortening remains T015.
+
+T012 reviewed: both send methods, imperfect metadata and frozen retries plus inherited errors/byte counts. Contract run: 42 passed, 12 expected normalization/sanitization assertion failures; infrastructure subset 38 passed.
+
+T013 reviewed: original/missing title across expired/direct source URLs, production worker JSON boundary and real delivery. Refresh module 21 passed. These assertions pass existing intended retention behavior; no forced red checkpoint. No title-only inspection or schema fields added.
+
+T014 reviewed: whitespace-before-control cleanup, Unicode preservation, display-empty fallback and independent safe stems implemented. Helper + delivery errors + download/music/isolation/refresh: 184 passed, 30 PTB deprecation warnings. No shortening until T015.
+
+T015 worker checkpoint before source edits: 14 expected shortening assertion failures, 66 passed. Implemented regex iterator whole-grapheme prefix shortening with independent caption/stem budgets, extension/ellipsis byte reservations and final prefix trim. Coordinator reviewed source/tests and reran `uv run --locked pytest tests/unit/test_media_titles.py -q`: 80 passed in 0.03s. `git diff --check` passed. Cases cover all requested ASCII/Unicode/239–241-byte/oversized cluster/independent stem boundaries. Worker closed after coordinator verification; broader regression gate follows as T016.
+
+## T016 — US2 controlled acceptance (2026-10-19 local)
+
+Executed at `2026-10-18T22:45:17Z` (Europe/Helsinki local date 2026-10-19).
+Targeted command (exit 0):
+
+```text
+uv run --locked pytest tests/unit/test_media_titles.py tests/contract/test_delivery_errors.py tests/integration/test_refresh.py tests/integration/test_download_flow.py tests/integration/test_youtube_music_flow.py tests/integration/test_request_isolation.py
+collected 202 items
+202 passed, 30 warnings in 1.64s
+```
+
+Module totals: helper 80, delivery errors 54, refresh 21, download flow 29,
+YouTube Music flow 8, request isolation 10. All 30 warnings are the existing
+python-telegram-bot `retry_after` deprecation warning exercised by retry cases.
+
+Acceptance review confirmed:
+
+- Missing, blank, whitespace/control/surrogate-only and invisible-only helper
+  inputs use `Untitled media`. Both final send methods cover absent metadata,
+  missing/display-empty titles, normalized whitespace, unsafe names, reserved
+  basenames and literal Unicode/markup, with unchanged local names and bytes.
+- Caption and filename stem limits are independent. The 63/64/65-point cases,
+  CJK, decomposed accents, flags, modifiers and joined emoji retain whole
+  graphemes without NFC/NFKC rewriting. Filename cases cover 239/240/241 complete
+  UTF-8 bytes, 64 four-byte characters, extension/ellipsis reservations,
+  oversize first clusters, and final stem trimming. Sanitization uses the full
+  normalized source title before shortening.
+- Four injected-clock retry cases cover video/document and original/missing
+  title. Replacing request metadata during RetryAfter leaves both attempts'
+  labels fixed, including the fallback; exact upload bytes and send counts pass.
+- Four refresh/direct cases retain original title or fallback even when refresh
+  supplies a different title. Real worker JSON serialization/decoding preserves
+  the existing result field set, identity, exact selected format, owned path and
+  bytes. Only an expired URL triggers the single inspection; valid URLs trigger
+  no inspection and no title-only source request occurs.
+- All US1 supported-source/media, music, preview-policy and overlapping-request
+  regressions pass. Inherited definite rejection, deadline, ambiguous-send
+  no-resend, invalid-output, changed-format/size and cleanup checks pass.
+
+Full controlled phase gate (exit 0):
+
+```text
+uv run --locked pytest
+collected 909 items / 3 deselected / 906 selected
+906 passed, 3 deselected, 32 warnings in 5.78s
+```
+
+The full gate's warnings comprise 30 delivery-error and 2 runtime instances of
+the same existing PTB deprecation warning. Live tests remained deselected.
+`git diff --exit-code HEAD -- src/openmedia/models.py src/openmedia/workers.py src/openmedia/sources/__init__.py`
+and the corresponding staged-diff check both exited 0: all three files remain
+unchanged, with no schema expansion. `git diff --check` passed.
+No title/delivery defect was exposed, so T016 required no runtime source fix.
+No live source, Telegram, commit, push or deployment operation was performed.
+Packaging/container, configured startup and real-client acceptance remain
+separate release checks.

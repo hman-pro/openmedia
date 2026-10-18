@@ -7,7 +7,7 @@ import pytest
 from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, TimedOut
 
 from openmedia.delivery import deliver_media
-from openmedia.models import DownloadRequest, FormatOption
+from openmedia.models import DownloadRequest, FormatOption, MediaMetadata
 from openmedia.sources import DownloadResult
 
 # Each kind maps to the Telegram method that must carry it (contracts/telegram-bot.md
@@ -28,6 +28,8 @@ def selected_request(
     width: int | None = 640,
     height: int | None = 360,
     measured: dict | None = None,
+    title: str | None = None,
+    include_metadata: bool = False,
 ) -> tuple[DownloadRequest, DownloadResult]:
     shape = KINDS[kind]
     dims = {"width": width, "height": height} if shape["media_type"] == "video" else {}
@@ -50,6 +52,13 @@ def selected_request(
         selected_option_id=0,
         work_directory=tmp_path,
     )
+    if include_metadata or title is not None:
+        request.metadata = MediaMetadata(
+            platform=request.platform,
+            canonical_url=request.source_url,
+            media_id=request.media_id,
+            title_or_caption=title,
+        )
     path = tmp_path / f"selected.{shape['extension']}"
     path.write_bytes(b"fixture-native-bytes")
     result = DownloadResult(
@@ -99,6 +108,8 @@ async def deliver(bot: Bot, tmp_path: Path, kind: str = "video", **kwargs):
         width=kwargs.get("width", 640),
         height=kwargs.get("height", 360),
         measured=kwargs.get("measured"),
+        title=kwargs.get("title"),
+        include_metadata=kwargs.get("include_metadata", False),
     )
     return await deliver_media(
         bot,
@@ -188,11 +199,13 @@ async def test_send_video_confirmed_whatever_message_type_telegram_returns(carri
 )
 async def test_definite_rejections_are_failed(kind, error, category, tmp_path: Path) -> None:
     bot = Bot(error)
-    result = await deliver(bot, tmp_path, kind)
+    result = await deliver(bot, tmp_path, kind, title="[Source] _title_")
     assert result.status == "failed"
     assert result.error_category == category
     assert len(bot.calls) == 1
     assert bot.calls[0][0] == METHOD[kind]
+    assert bot.calls[0][1]["caption"] == "[Source] _title_"
+    assert bot.bytes == [b"fixture-native-bytes"]
 
 
 @pytest.mark.parametrize("kind", ["video", "silent", "audio"])
@@ -227,12 +240,14 @@ async def test_retry_after_past_deadline_is_not_retried(kind, tmp_path: Path) ->
 @pytest.mark.parametrize("error", [NetworkError("connection lost after upload"), TimedOut("timed out")])
 async def test_ambiguous_network_outcome_is_unknown_and_never_retried(kind, error, tmp_path: Path) -> None:
     bot = Bot(error, 99)
-    result = await deliver(bot, tmp_path, kind)
+    result = await deliver(bot, tmp_path, kind, title="[Source] _title_")
     assert result.status == "unknown"
     assert result.error_category == "ambiguous_upload"
     assert "check" in result.next_step.lower()
     assert len(bot.calls) == 1
     assert bot.calls[0][0] == METHOD[kind]
+    assert bot.calls[0][1]["caption"] == "[Source] _title_"
+    assert bot.bytes == [b"fixture-native-bytes"]
 
 
 async def test_changed_format_or_size_is_rejected_before_send(tmp_path: Path) -> None:
@@ -251,3 +266,104 @@ async def test_changed_format_or_size_is_rejected_before_send(tmp_path: Path) ->
     assert delivery.status == "failed"
     assert delivery.error_category == "format_changed"
     assert bot.calls == []
+
+
+@pytest.mark.parametrize("kind", ["video", "audio"])
+@pytest.mark.parametrize(
+    ("title", "include_metadata", "caption", "stem"),
+    [
+        pytest.param(None, False, "Untitled media", "Untitled media", id="absent-metadata"),
+        pytest.param(None, True, "Untitled media", "Untitled media", id="missing-title"),
+        pytest.param("\x00\u200b\u202e", True, "Untitled media", "Untitled media", id="display-empty"),
+        pytest.param("  A\tB\nC\x00  ", True, "A B C", "A B C", id="whitespace-controls"),
+        pytest.param("A/B:*?C", True, "A/B:*?C", "A_B_C", id="unsafe-runs"),
+        pytest.param(".. / ..", True, ".. / ..", "Untitled media", id="unusable-stem"),
+        pytest.param("CON.txt", True, "CON.txt", "_CON.txt", id="reserved-basename"),
+        pytest.param("[雪] _été_ <b>🌿</b>", True, "[雪] _été_ <b>🌿</b>", "[雪] _été_ _b_🌿_b_", id="literal-unicode-markup"),
+    ],
+)
+async def test_imperfect_titles_are_upload_labels_only(
+    kind, title, include_metadata, caption, stem, tmp_path: Path,
+) -> None:
+    bot = Bot(77, carrier="video" if kind == "video" else "document")
+    result = await deliver(bot, tmp_path, kind, title=title, include_metadata=include_metadata)
+    assert result.status == "confirmed"
+    assert result.actual_bytes == len(b"fixture-native-bytes")
+    assert [method for method, _ in bot.calls] == [METHOD[kind]]
+    assert bot.bytes == [b"fixture-native-bytes"]
+    extension = KINDS[kind]["extension"]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [f"selected.{extension}"]
+    assert (tmp_path / f"selected.{extension}").read_bytes() == b"fixture-native-bytes"
+    kwargs = bot.calls[0][1]
+    assert kwargs["caption"] == caption
+    assert kwargs["filename"] == f"{stem}.{extension}"
+    assert "parse_mode" in kwargs and kwargs["parse_mode"] is None
+    assert not kwargs.get("caption_entities")
+
+
+@pytest.mark.parametrize("kind", ["video", "audio"])
+@pytest.mark.parametrize("title", [None, "Original title"])
+async def test_retry_after_freezes_original_labels_even_if_metadata_changes(
+    kind, title, tmp_path: Path,
+) -> None:
+    request, downloaded = selected_request(tmp_path, kind, title=title)
+    now = [0.0]
+    waits = []
+
+    async def advance_and_replace_metadata(seconds: float) -> None:
+        waits.append(seconds)
+        now[0] += seconds
+        request.metadata = MediaMetadata(
+            platform=request.platform,
+            canonical_url=request.source_url,
+            media_id=request.media_id,
+            title_or_caption="Replacement title",
+        )
+
+    bot = Bot(RetryAfter(2), 88)
+    result = await deliver_media(
+        bot,
+        request=request,
+        downloaded=downloaded,
+        owned_directory=tmp_path,
+        max_file_bytes=50_000_000,
+        deadline=100,
+        monotonic=lambda: now[0],
+        sleep=advance_and_replace_metadata,
+    )
+    assert result.status == "confirmed"
+    assert result.message_id == 88
+    assert result.actual_bytes == len(b"fixture-native-bytes")
+    assert waits == [2]
+    assert [method for method, _ in bot.calls] == [METHOD[kind], METHOD[kind]]
+    assert bot.bytes == [b"fixture-native-bytes", b"fixture-native-bytes"]
+    expected = title if title is not None else "Untitled media"
+    for _, kwargs in bot.calls:
+        assert kwargs["caption"] == expected
+        assert kwargs["filename"] == f"{expected}.{KINDS[kind]['extension']}"
+        assert "parse_mode" in kwargs and kwargs["parse_mode"] is None
+        assert not kwargs.get("caption_entities")
+
+
+@pytest.mark.parametrize("kind", ["video", "audio"])
+@pytest.mark.parametrize("failure", ["timeout", "invalid_output"])
+async def test_title_labels_do_not_change_pre_upload_failures(kind, failure, tmp_path: Path) -> None:
+    request, downloaded = selected_request(tmp_path, kind, title="A/B\x00")
+    if failure == "invalid_output":
+        downloaded.path.unlink()
+    bot = Bot(99)
+    result = await deliver_media(
+        bot,
+        request=request,
+        downloaded=downloaded,
+        owned_directory=tmp_path,
+        max_file_bytes=50_000_000,
+        deadline=100,
+        monotonic=lambda: 100 if failure == "timeout" else 0,
+    )
+    assert result.status == "failed"
+    assert result.error_category == failure
+    assert result.failed_stage == "sending"
+    assert result.notification_sent is False
+    assert bot.calls == []
+    assert bot.bytes == []
