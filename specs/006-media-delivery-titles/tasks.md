@@ -32,7 +32,7 @@ Keep unavailable release checks unchecked and record their limitations.
 
 **Purpose**: Shared pure title contract; no adapter, worker, or request schema expansion.
 
-- [ ] T003 Define the pure helper interface and immutable label pair in `src/openmedia/media_titles.py`: accept `title: str | None` and a validated selected `extension: str`, return caption and filename, and define code-point limit 64, complete-filename UTF-8 byte limit 240, and fallback `Untitled media`; enforce the data-model constraint "Its values must not be added to diagnostic events or exception messages" without adding persistent state or logging.
+- [X] T003 Define the pure helper interface and immutable label pair in `src/openmedia/media_titles.py`: accept `title: str | None` and a validated selected `extension: str`, return caption and filename, and define code-point limit 64, complete-filename UTF-8 byte limit 240, and fallback `Untitled media`; enforce the data-model constraint "Its values must not be added to diagnostic events or exception messages" without adding persistent state or logging.
 
 **Checkpoint**: Helper API is importable and ready for story behavior. Both stories require this phase.
 

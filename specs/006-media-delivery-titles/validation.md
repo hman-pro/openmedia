@@ -98,3 +98,7 @@ corresponding tasks. Real Telegram caption, saved filename, and client behavior
 remain unverified unless separately and explicitly authorized.
 
 Phase 1 coordinator check: `uv run --locked pytest` passed: 784 passed, 3 deselected, 20 existing warnings (5.39s). `git diff --check` passed.
+
+## Phase 2 / T003 — Foundation
+
+Pure typed `derive_media_titles` API and frozen `DeliveryLabels` added, with values excluded from repr. Constants 64/240/fallback verified via Python 3.13 import, signature, immutability and repr assertions. Staged helper returns neutral labels pending T008. No logging/state or delivery changes. Coordinator reviewed source and `git diff --check` passed.
