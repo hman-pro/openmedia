@@ -41,6 +41,7 @@ runtime image.
 | mutagen | 1.48.1 | GPL-2.0-or-later | <https://github.com/quodlibet/mutagen/tree/release-1.48.1> |
 | pycryptodomex | 3.23.0 | BSD-2-Clause and public-domain components | <https://github.com/Legrandin/pycryptodome/tree/v3.23.0> |
 | python-telegram-bot | 22.8 | LGPL-3.0-only | <https://github.com/python-telegram-bot/python-telegram-bot/tree/v22.8> |
+| regex | 2026.8.31 | Apache-2.0 AND CNRI-Python | <https://pypi.org/project/regex/2026.8.31/>; retain installed `regex-2026.8.31.dist-info/licenses/LICENSE.txt` |
 | requests | 2.34.2 | Apache-2.0 | <https://github.com/psf/requests/tree/v2.34.2> |
 | typing-extensions | 4.16.0 | PSF-2.0 | <https://github.com/python/typing_extensions/tree/4.16.0> |
 | urllib3 | 2.8.0 | MIT | <https://github.com/urllib3/urllib3/tree/2.8.0> |
@@ -51,6 +52,11 @@ runtime image.
 The LGPL/GPL packages above remain separate programs or Python libraries installed unchanged.
 Their license texts and corresponding-source requirements must be preserved when the container
 is redistributed. Consult the licenses themselves for the complete terms.
+
+The regex distribution credits derivation from CPython 2.6 and 3.1's `re` module,
+copyright (c) 1998–2001 Secret Labs AB, under CNRI's Python 1.6 license. Its additions
+and alterations use Apache-2.0, with copyright 2020 Matthew Barnett. Preserve the
+installed license text and these attribution notices when redistributing regex.
 
 ## LinkedIn parser provenance
 
