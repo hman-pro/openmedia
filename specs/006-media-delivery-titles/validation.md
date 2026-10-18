@@ -102,3 +102,68 @@ Phase 1 coordinator check: `uv run --locked pytest` passed: 784 passed, 3 desele
 ## Phase 2 / T003 — Foundation
 
 Pure typed `derive_media_titles` API and frozen `DeliveryLabels` added, with values excluded from repr. Constants 64/240/fallback verified via Python 3.13 import, signature, immutability and repr assertions. Staged helper returns neutral labels pending T008. No logging/state or delivery changes. Coordinator reviewed source and `git diff --check` passed.
+
+## Phase 3 — US1
+
+T004 reviewed: helper test module quotes filename contract; `uv run --locked pytest tests/unit/test_media_titles.py -q` collected correctly, 4 expected assertion failures against staged fallback (source caption absent). Intended test-first checkpoint, not infrastructure failure.
+
+T006 reviewed: music tests preserve embedded-tag fixture bytes, single document and automatic path; explicit literal labels added. Music module: 3 expected caption assertion failures, 5 passed (0.43s); current caption is absent and filename media.m4a.
+
+T005 reviewed: 7 supported source/media final-upload cases and 3 preview policy checks added. Module run: 7 expected missing-caption assertion failures, 22 passed. Initial picture harness message-ID setup repaired before checkpoint; no remaining infrastructure errors. Method/hints/bytes/paths/state assertions precede intended failures.
+
+T007 reviewed: four overlapping video/document cases (same and different titles) exercise real PTB multipart serialization. 6 passed, 4 expected label assertion failures; lifecycle, paths, bytes and overlap assertions passed.
+
+T008 reviewed: ordinary source title and selected suffix derivation implemented with None fallback; unit tests 4 passed. Pure helper only; no file/content changes.
+
+T009 reviewed: labels derive once after validated identity/file boundary, passed to both sends with explicit parse_mode=None and no caption entities. Existing retry/error/hint logic retained. Helper, delivery errors, download flow, music flow and isolation modules: 81 passed, 18 existing warnings.
+
+## T010 — US1 controlled acceptance (2026-10-18)
+
+Command (exit 0):
+
+```text
+uv run --locked pytest tests/unit/test_media_titles.py tests/integration/test_download_flow.py tests/integration/test_youtube_music_flow.py tests/integration/test_request_isolation.py tests/contract/test_delivery_errors.py
+collected 81 items
+81 passed, 18 warnings in 0.50s
+```
+
+Module totals: helper 4, download flow 29, YouTube Music flow 8,
+request isolation 10, delivery errors 30. All 18 warnings are the existing
+python-telegram-bot `retry_after` deprecation warnings.
+
+Acceptance review confirmed:
+
+- Seven general source/media cases cover YouTube video, silent video and audio,
+  LinkedIn/Instagram video, and LinkedIn/Instagram pictures. Final uploads carry
+  each fixture's source title and selected extension, explicit `parse_mode=None`,
+  and no caption entities. Videos retain streaming and measured dimensions/duration;
+  audio and pictures remain documents. File paths and exact uploaded bytes are unchanged.
+- Titled music cases deliver one automatic document with the source track title
+  and native `.m4a` filename. Byte equality includes the synthetic embedded title
+  tag; no audio-player send, conversion, tag rewrite, or selection tap occurs.
+- Four overlapping video/document cases retain request-local titles for different
+  and identical source titles, separate owned paths, original bytes, and exactly
+  one confirmed delivery per request. These also verify actual PTB multipart names.
+- The three preview-policy cases retain the existing 200-character card policy
+  and preview fallback. Existing automatic/manual paths, card counts, status
+  sequence, and single media-send assertions pass without additional actions.
+- Existing definite rejection, deadline-bounded RetryAfter, ambiguous-network
+  no-resend, and changed-format/size rejection checks pass. Source review confirms
+  labels derive only after file/identity validation and once before the retry loop;
+  they remain upload metadata and do not rename or modify the local file.
+
+Full controlled phase gate (exit 0):
+
+```text
+uv run --locked pytest
+collected 805 items / 3 deselected / 802 selected
+802 passed, 3 deselected, 20 warnings in 5.56s
+```
+
+The full suite's 20 warnings are the existing 18 delivery-error and 2 runtime
+`retry_after` deprecation warnings. Live tests remained deselected.
+`git diff --check` passed. No US1 defect was exposed and no runtime source fix
+was necessary for T010. US2 normalization, filename safety, Unicode/byte limits,
+and final release gates remain separate unfinished tasks; these results establish
+the short safe-title MVP only. No live source, Telegram, push, or deployment
+operation was performed.

@@ -46,16 +46,16 @@ existing delivery method and hints, unchanged bytes, zero extra taps/messages, a
 
 ### Tests for User Story 1
 
-- [ ] T004 [P] [US1] Add short safe-title helper assertions in `tests/unit/test_media_titles.py` for caption and filename, identical titles with different extensions, and source text already containing a suffix; quote and verify the data-model filename constraint "Safe stem plus dot and selected extension; extension outside stem budget; at most 240 UTF-8 bytes for the complete filename, including any ellipsis; upload label only".
-- [ ] T005 [P] [US1] Extend `tests/integration/test_download_flow.py` with controlled YouTube, LinkedIn, Instagram, silent-video, audio, and picture cases asserting actual final media-call caption/filename, explicit `parse_mode=None`, no caption entities, preserved hints/methods/bytes, and unchanged preview-card policy.
-- [ ] T006 [P] [US1] Extend `tests/integration/test_youtube_music_flow.py` to assert source track title on the single automatically sent document and its filename, native extension/bytes, zero selection taps, and no audio-player mode switch or embedded-tag changes.
-- [ ] T007 [P] [US1] Extend `tests/integration/test_request_isolation.py` with concurrent differently titled requests and same-title requests; assert request-local labels and no local path collision or naming-based state sharing.
+- [X] T004 [P] [US1] Add short safe-title helper assertions in `tests/unit/test_media_titles.py` for caption and filename, identical titles with different extensions, and source text already containing a suffix; quote and verify the data-model filename constraint "Safe stem plus dot and selected extension; extension outside stem budget; at most 240 UTF-8 bytes for the complete filename, including any ellipsis; upload label only".
+- [X] T005 [P] [US1] Extend `tests/integration/test_download_flow.py` with controlled YouTube, LinkedIn, Instagram, silent-video, audio, and picture cases asserting actual final media-call caption/filename, explicit `parse_mode=None`, no caption entities, preserved hints/methods/bytes, and unchanged preview-card policy.
+- [X] T006 [P] [US1] Extend `tests/integration/test_youtube_music_flow.py` to assert source track title on the single automatically sent document and its filename, native extension/bytes, zero selection taps, and no audio-player mode switch or embedded-tag changes.
+- [X] T007 [P] [US1] Extend `tests/integration/test_request_isolation.py` with concurrent differently titled requests and same-title requests; assert request-local labels and no local path collision or naming-based state sharing.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Implement ordinary titled-item label derivation in `src/openmedia/media_titles.py` from the source title and selected extension, returning the immutable pair without touching local media paths or file contents; keep complex normalization/shortening behavior for T014–T015.
-- [ ] T009 [US1] Integrate `src/openmedia/delivery.py` with request.metadata.title_or_caption, tolerating absent metadata; derive labels after current identity/file validation and once before the retry loop, pass caption/filename and explicit `parse_mode=None` to both send methods, omit caption entities, and preserve streaming hints, opened file bytes, and all failure handling.
-- [ ] T010 [US1] Run T004–T007 controlled acceptance and existing delivery-error checks, fix failures in `src/openmedia/media_titles.py` or `src/openmedia/delivery.py`, and record outcomes in `specs/006-media-delivery-titles/validation.md` before the phase commit.
+- [X] T008 [US1] Implement ordinary titled-item label derivation in `src/openmedia/media_titles.py` from the source title and selected extension, returning the immutable pair without touching local media paths or file contents; keep complex normalization/shortening behavior for T014–T015.
+- [X] T009 [US1] Integrate `src/openmedia/delivery.py` with request.metadata.title_or_caption, tolerating absent metadata; derive labels after current identity/file validation and once before the retry loop, pass caption/filename and explicit `parse_mode=None` to both send methods, omit caption entities, and preserve streaming hints, opened file bytes, and all failure handling.
+- [X] T010 [US1] Run T004–T007 controlled acceptance and existing delivery-error checks, fix failures in `src/openmedia/media_titles.py` or `src/openmedia/delivery.py`, and record outcomes in `specs/006-media-delivery-titles/validation.md` before the phase commit.
 
 **Checkpoint**: US1 is independently demonstrable with titled safe-text fixtures. This is
 the MVP scope; release still requires US2's title hardening and final gates.

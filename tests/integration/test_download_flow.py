@@ -898,3 +898,164 @@ async def test_full_address_request_keeps_the_strict_identity_check_and_is_never
     assert harness.registry_calls == []
     assert len(harness.failures) == 1
     assert harness.failures[0].failed_stage == "checking"
+
+
+# --- 006 User Story 1: titles accompany the final native-media upload (T005) ----------
+
+from openmedia.presentation import card_text  # noqa: E402
+
+
+class TitledDeliveryHarness(Harness):
+    """Real delivery boundary with recorded API kwargs and an injected clock.
+
+    Recording before Telegram serialization distinguishes explicit ``parse_mode=None``
+    from an omitted kwarg: PTB intentionally removes None values from wire parameters.
+    """
+
+    def __init__(self, tmp_path: Path, result: InspectResult, clock: Any) -> None:
+        super().__init__(tmp_path, result)
+        self.registry.monotonic = clock
+        self.clock = clock
+        self.bot = RecordingBot()
+        self.preview_texts: list[str] = []
+
+    async def status(self, request, stage):
+        await super().status(request, stage)
+        if stage == "checking":
+            request.status_message_id = CHECKING_MESSAGE_ID
+
+    async def preview(self, request, result, choice_set):
+        self.preview_texts.append(card_text(result.metadata, choice_set))
+        return await super().preview(request, result, choice_set)
+
+    async def download(self, request, option):
+        downloaded = await super().download(request, option)
+        # Measured hints deliberately differ from the source listing so metadata labels
+        # cannot accidentally change which dimensions/duration the player receives.
+        if option.media_type is MediaType.VIDEO:
+            downloaded = dataclass_replace(downloaded, width=854, height=480, duration_seconds=7.4)
+        return downloaded
+
+    async def deliver(self, request, downloaded):
+        assert request.state is RequestState.SENDING
+        selected = request.options[request.selected_option_id]
+        self.delivered.append((selected, downloaded))
+        return await deliver_media(
+            self.bot,
+            request=request,
+            downloaded=downloaded,
+            owned_directory=self.tmp_path,
+            max_file_bytes=LIMIT,
+            deadline=request.processing_deadline,
+            duration_seconds=request.metadata.duration_seconds,
+            monotonic=self.clock,
+        )
+
+
+@pytest.mark.parametrize(
+    ("source", "choice", "expected_method", "extension", "format_id", "automatic", "has_card"),
+    [
+        ("youtube", ChoiceKind.VIDEO, "send_video", "mp4", "18", False, True),
+        ("youtube", ChoiceKind.SILENT, "send_video", "mp4", "137", False, True),
+        ("youtube", ChoiceKind.AUDIO, "send_document", "m4a", "140", False, True),
+        ("linkedin", ChoiceKind.VIDEO, "send_video", "mp4", "1", True, True),
+        ("instagram", ChoiceKind.VIDEO, "send_video", "mp4", "dash-1", True, True),
+        ("instagram-picture", ChoiceKind.IMAGE, "send_document", "jpg", None, True, False),
+        ("linkedin-picture", ChoiceKind.IMAGE, "send_document", "jpg", None, True, False),
+    ],
+    ids=["youtube-video", "youtube-silent-video", "youtube-audio", "linkedin-video",
+         "instagram-video", "instagram-picture", "linkedin-picture"],
+)
+async def test_source_title_is_on_the_final_media_call_without_changing_delivery(
+    tmp_path: Path, fake_clock: Any, source: str, choice: ChoiceKind,
+    expected_method: str, extension: str, format_id: str | None,
+    automatic: bool, has_card: bool,
+) -> None:
+    if source == "instagram-picture":
+        result = instagram_image_result()
+    elif source == "linkedin-picture":
+        result = linkedin_image_result()
+    else:
+        fixture = {
+            "youtube": "youtube-video.json",
+            "linkedin": "linkedin-video-progressive.json",
+            "instagram": "instagram-video.json",
+        }[source]
+        result = fixture_result(fixture)
+    title = f"{source} Summer walk"
+    result = dataclass_replace(
+        result, metadata=dataclass_replace(result.metadata, title_or_caption=title)
+    )
+    harness = TitledDeliveryHarness(tmp_path, result, fake_clock)
+    workflow = harness.workflow()
+    request = await workflow.submit(
+        user_id=61, chat_id=601, text=result.metadata.canonical_url, chat_type="private"
+    )
+    if not automatic:
+        assert request.state is RequestState.AWAITING_SELECTION
+        assert harness.downloads == []
+        selected = next(option for option in request.options if kind_of(option) is choice)
+        delivered = await workflow.select(
+            request_id=request.request_id, user_id=61, chat_id=601,
+            preview_message_id=CARD_MESSAGE_ID, option_id=selected.option_id,
+        )
+        assert delivered.status == "confirmed"
+    else:
+        # Automatic media require no callback or additional user action.
+        assert harness.registry_calls == ["publish_and_claim"]
+
+    assert len(harness.cards) == int(has_card)
+    if has_card:
+        assert harness.cards[0].automatic is automatic
+        assert harness.preview_texts[0].splitlines()[0] == title
+    else:
+        assert harness.preview_texts == []
+    assert harness.statuses == ["checking", "downloading", "sending", "completed"]
+    assert len(harness.downloads) == len(harness.delivered) == 1
+    selected, downloaded = harness.delivered[0]
+    assert kind_of(selected) is choice
+    if format_id is not None:
+        assert selected.source_format_id == downloaded.source_format_id == format_id
+    assert selected.extension == downloaded.extension == extension
+    assert downloaded.path == tmp_path / f"selected.{extension}"
+    assert downloaded.path.read_bytes() == b"exact-selected-bytes"
+    assert harness.bot.uploaded == [b"exact-selected-bytes"]
+    assert [method for method, _ in harness.bot.calls] == [expected_method]
+    _, sent = harness.bot.calls[0]
+    assert sent["chat_id"] == 601
+    if expected_method == "send_video":
+        assert sent["supports_streaming"] is True
+        assert (sent["width"], sent["height"], sent["duration"]) == (854, 480, 7)
+    else:
+        assert not {"supports_streaming", "width", "height", "duration"}.intersection(sent)
+    terminal = harness.registry.terminal(request.request_id)
+    assert terminal is not None and terminal.state is RequestState.COMPLETED
+    assert terminal.confirmed_message_id == 99
+    # These assertions target the final upload, independently of the preceding card.
+    assert sent.get("caption") == title
+    assert sent["filename"] == f"{title}.{extension}"
+    assert "parse_mode" in sent and sent["parse_mode"] is None
+    assert "caption_entities" not in sent
+
+
+@pytest.mark.parametrize(
+    ("title", "expected_preview"),
+    [("a" * 200, "a" * 200), ("b" * 201, "b" * 199 + "…"), (None, "Untitled video")],
+    ids=["exactly-200", "over-200", "existing-preview-fallback"],
+)
+async def test_delivery_title_policy_does_not_replace_the_preview_card_title_policy(
+    tmp_path: Path, fake_clock: Any, title: str | None, expected_preview: str,
+) -> None:
+    result = fixture_result("youtube-video.json")
+    result = dataclass_replace(
+        result, metadata=dataclass_replace(result.metadata, title_or_caption=title)
+    )
+    harness = Harness(tmp_path, result)
+    harness.registry.monotonic = fake_clock
+    request = await harness.workflow().submit(
+        user_id=62, chat_id=602, text=result.metadata.canonical_url, chat_type="private"
+    )
+    assert request.state is RequestState.AWAITING_SELECTION
+    assert len(harness.cards) == 1
+    assert harness.downloads == []
+    assert card_text(request.metadata, harness.cards[0]).splitlines()[0] == expected_preview

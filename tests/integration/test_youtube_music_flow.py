@@ -32,9 +32,10 @@ async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_pat
     ffmpeg = shutil.which("ffmpeg")
     assert ffmpeg is not None, "FFmpeg is required to generate the synthetic source fixture"
     subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-f", "lavfi", "-i",
-        "sine=frequency=440:duration=1", "-c:a", "aac", "-vn", str(source)], check=True)
+        "sine=frequency=440:duration=1", "-c:a", "aac", "-vn",
+        "-metadata", "title=Embedded source tag", str(source)], check=True)
     source_bytes = source.read_bytes()
-    cards, statuses, uploaded, selected = [], [], [], []
+    cards, statuses, uploaded, selected, document_calls = [], [], [], [], []
     registry = RequestRegistry(monotonic=lambda: 10)
 
     def forbidden(*args, **kwargs):
@@ -77,10 +78,15 @@ async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_pat
 
     async def send_document(**kwargs):
         uploaded.append(kwargs["document"].read())
+        document_calls.append(kwargs)
         return SimpleNamespace(message_id=99, document=object())
 
+    async def forbidden_audio_player(**kwargs):
+        raise AssertionError("music must remain a document, not an audio-player message")
+
     async def deliver(request, result):
-        return await deliver_media(SimpleNamespace(send_document=send_document), request=request,
+        bot = SimpleNamespace(send_document=send_document, send_audio=forbidden_audio_player)
+        return await deliver_media(bot, request=request,
             downloaded=result, owned_directory=tmp_path, max_file_bytes=LIMIT,
             deadline=100, monotonic=lambda: 10)
 
@@ -89,12 +95,25 @@ async def test_plain_track_automatically_delivers_one_unchanged_document(tmp_pat
 
     workflow = MediaWorkflow(registry, inspect=inspect, publish_preview=preview,
         download=download, deliver=deliver, status=status, max_file_bytes=LIMIT)
+
+    async def forbidden_selection(**kwargs):
+        raise AssertionError("music must finish automatically without a selection tap")
+
+    monkeypatch.setattr(workflow, "select", forbidden_selection)
     request = await workflow.submit(user_id=7, chat_id=77, text=url + context, chat_type="private")
     assert request.state is RequestState.COMPLETED
     assert request.preview_expires_at is None
     assert [(o.option_id, o.source_format_id) for o in selected] == [(0, "140")]
     assert selected[0].extension == "m4a"
+    # Byte equality also preserves the embedded title, independently of upload labels.
     assert uploaded == [source_bytes]
+    assert len(document_calls) == 1
+    if not missing_metadata:
+        call = document_calls[0]
+        assert call.get("caption") == info["title"]
+        assert call["filename"] == f"{info['title']}.m4a"
+        assert "parse_mode" in call and call["parse_mode"] is None
+        assert "caption_entities" not in call
     assert statuses == ["checking", "downloading", "sending", "completed"]
     assert len(cards) == 1
     if missing_metadata:

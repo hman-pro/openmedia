@@ -11,6 +11,7 @@ from typing import Any
 
 from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, TelegramError, TimedOut
 
+from openmedia.media_titles import DeliveryLabels, derive_media_titles
 from openmedia.models import DeliveryResult, DownloadRequest, FormatOption, MediaType
 from openmedia.network import FileBoundaryError, ResponseTooLarge, validate_owned_file
 from openmedia.sources import DownloadResult
@@ -32,6 +33,7 @@ async def _send(
     request: DownloadRequest,
     selected: FormatOption,
     downloaded: DownloadResult,
+    labels: DeliveryLabels,
     file: Any,
     duration_seconds: float | None,
     timeout: float,
@@ -39,7 +41,9 @@ async def _send(
     """``video``/``silent`` play inline via ``sendVideo``; audio and pictures stay documents."""
     common = {
         "chat_id": request.chat_id,
-        "filename": f"media.{selected.extension}",
+        "caption": labels.caption,
+        "filename": labels.filename,
+        "parse_mode": None,
         "read_timeout": timeout,
         "write_timeout": timeout,
     }
@@ -98,6 +102,11 @@ async def deliver_media(
     ):
         return _failure("failed", "format_changed", "Submit the link again to review current choices.")
 
+    labels = derive_media_titles(
+        request.metadata.title_or_caption if request.metadata else None,
+        selected.extension,
+    )
+
     while True:
         if monotonic() >= deadline:
             return _failure("failed", "timeout", "Retry with the link later.")
@@ -108,6 +117,7 @@ async def deliver_media(
                     request=request,
                     selected=selected,
                     downloaded=downloaded,
+                    labels=labels,
                     file=file,
                     duration_seconds=duration_seconds,
                     timeout=max(0.1, deadline - monotonic()),

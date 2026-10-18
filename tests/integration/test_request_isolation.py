@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
 
 from openmedia.coordinator import (
     AdmissionOutcome,
+    MediaWorkflow,
     ParentRateController,
     RequestRegistry,
     SelectionOutcome,
 )
+from openmedia.delivery import deliver_media
 from openmedia.models import FormatOption, MediaMetadata, RequestState
+from openmedia.sources import DownloadResult, InspectResult
 
 
 def request(registry: RequestRegistry, user: int, platform: str = "youtube"):
@@ -153,3 +160,131 @@ async def test_music_concurrent_users_busy_duplicate_callbacks_and_restart(tmp_p
         assert (await restarted.claim_selection(item.request_id, user_id=item.user_id,
             chat_id=item.chat_id, preview_message_id=55, option_id=0)).outcome is SelectionOutcome.NOT_FOUND
     assert registry.active_work_count == 0
+
+
+# Feature 006: exercise final serialized uploads, beyond preview metadata or labels
+# computed by the test. Both downloads and Bot API sends overlap without clock sleeps.
+@pytest.mark.parametrize(
+    "titles",
+    [("Summer walk", "Winter song"), ("Shared title", "Shared title")],
+    ids=["different-titles", "same-title"],
+)
+@pytest.mark.parametrize(
+    ("media_type", "extension", "mime_type", "method"),
+    [
+        ("video", "mp4", "video/mp4", "sendVideo"),
+        ("audio", "m4a", "audio/mp4", "sendDocument"),
+    ],
+    ids=["video", "audio-document"],
+)
+async def test_concurrent_delivery_titles_and_owned_files_remain_request_local(
+    tmp_path: Path, fake_bot, fake_transport, fake_clock, monkeypatch,
+    titles: tuple[str, str], media_type: str, extension: str, mime_type: str, method: str,
+) -> None:
+    registry = RequestRegistry(monotonic=fake_clock)
+    both_downloads = asyncio.Event()
+    both_uploads = asyncio.Event()
+    downloads = {}
+    uploads = {}
+    native_bytes = {1: b"first-native-media\x00\x01", 2: b"second-native-media\x00\xff"}
+    original_request = fake_transport.do_request
+
+    async def record_upload(url, method, request_data=None, **timeouts):
+        chat_id = int(request_data.parameters["chat_id"])
+        parts = list(request_data.multipart_data.values())
+        assert len(parts) == 1
+        filename, content, _content_type = parts[0]
+        uploaded_bytes = content.read() if hasattr(content, "read") else content
+        uploads[chat_id] = (url.rsplit("/", 1)[-1], dict(request_data.parameters), filename, uploaded_bytes)
+        if len(uploads) == 2:
+            both_uploads.set()
+        await both_uploads.wait()
+        fake_transport.queue_result(url.rsplit("/", 1)[-1], {
+            "message_id": 90 + chat_id,
+            "date": 0,
+            "chat": {"id": chat_id, "type": "private"},
+        })
+        return await original_request(url, method, request_data=request_data, **timeouts)
+
+    monkeypatch.setattr(fake_transport, "do_request", record_upload)
+
+    async def inspect(item):
+        return InspectResult(
+            MediaMetadata(
+                item.platform, item.source_url, item.media_id,
+                title_or_caption=titles[item.user_id - 1], media_kind=media_type,
+            ),
+            (FormatOption(
+                0, "fixture", "native", media_type, extension, mime_type,
+                includes_audio=True if media_type == "video" else None,
+            ),),
+        )
+
+    async def download(item, selected):
+        # Identical upstream titles must never become workspace or file identities.
+        directory = tmp_path / item.request_id
+        directory.mkdir()
+        item.work_directory = directory
+        path = directory / f"selected.{selected.extension}"
+        path.write_bytes(native_bytes[item.user_id])
+        downloads[item.user_id] = (item, path)
+        if len(downloads) == 2:
+            both_downloads.set()
+        await both_downloads.wait()
+        return DownloadResult(
+            path, path.stat().st_size, item.media_id, selected.source_format_id,
+            selected.media_type, selected.extension, selected.mime_type,
+        )
+
+    async def deliver(item, downloaded):
+        return await deliver_media(
+            fake_bot, request=item, downloaded=downloaded,
+            owned_directory=item.work_directory, max_file_bytes=50_000_000,
+            deadline=item.processing_deadline, monotonic=fake_clock,
+        )
+
+    workflow = MediaWorkflow(
+        registry, inspect=inspect, publish_preview=AsyncMock(return_value=55),
+        download=download, deliver=deliver, status=AsyncMock(), max_file_bytes=50_000_000,
+    )
+    completed = await asyncio.gather(*(
+        workflow.submit(
+            user_id=user, chat_id=user * 10,
+            text=f"https://www.youtube.com/watch?v={'abcDEF12345' if user == 1 else 'xyzABC98765'}",
+            chat_type="private",
+        )
+        for user in (1, 2)
+    ))
+
+    # Check infrastructure, independent lifecycle, and byte/path preservation before
+    # the new label assertions, so a red result identifies missing title integration.
+    assert both_downloads.is_set() and both_uploads.is_set()
+    assert len(downloads) == len(uploads) == 2
+    assert len({item.request_id for item in completed}) == 2
+    assert completed[0].metadata is not completed[1].metadata
+    assert all(item.state is RequestState.COMPLETED for item in completed)
+    assert registry.active_work_count == 0
+    assert not registry.active_request_by_user
+    assert len(fake_transport.calls_to(method)) == 2
+    assert {path for _, path in downloads.values()} == {
+        tmp_path / item.request_id / f"selected.{extension}" for item in completed
+    }
+    assert len({path.parent for _, path in downloads.values()}) == 2
+    for item in completed:
+        original, path = downloads[item.user_id]
+        assert original is item
+        assert item.work_directory == path.parent
+        assert list(path.parent.iterdir()) == [path]
+        assert path.read_bytes() == native_bytes[item.user_id]
+        sent_method, _parameters, _filename, uploaded_bytes = uploads[item.chat_id]
+        assert sent_method == method
+        assert uploaded_bytes == native_bytes[item.user_id]
+        assert item.delivery_result.actual_bytes == len(native_bytes[item.user_id])
+        terminal = registry.terminal(item.request_id)
+        assert terminal.state is RequestState.COMPLETED
+        assert terminal.confirmed_message_id == 90 + item.chat_id
+
+    for item in completed:
+        _method, parameters, filename, _bytes = uploads[item.chat_id]
+        title = titles[item.user_id - 1]
+        assert (parameters.get("caption"), filename) == (title, f"{title}.{extension}")

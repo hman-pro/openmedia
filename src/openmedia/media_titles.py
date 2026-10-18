@@ -23,10 +23,11 @@ class DeliveryLabels:
 def derive_media_titles(title: str | None, extension: str) -> DeliveryLabels:
     """Derive upload labels using an already validated selected extension.
 
-    This foundation supplies neutral labels; source-title derivation is added in
-    the titled-item implementation task. No source text is logged or persisted.
+    Ordinary source titles retain their text, including any existing suffix.
+    No source text is logged or persisted.
     """
+    display_title = title if title is not None else FALLBACK_TITLE
     return DeliveryLabels(
-        caption=FALLBACK_TITLE,
-        filename=f"{FALLBACK_TITLE}.{extension}",
+        caption=display_title,
+        filename=f"{display_title}.{extension}",
     )
