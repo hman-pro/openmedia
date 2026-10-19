@@ -54,8 +54,15 @@ Source: [regex 2026.8.31 documentation and metadata](https://pypi.org/project/re
 ## 4. Normalization and safe filenames
 
 **Decision**: Normalize Unicode whitespace to ASCII spaces before deleting controls;
-remove Cc, Cs, and non-display Cf characters except ZWJ/ZWNJ needed for visible text.
-Preserve variation selectors and combining marks. Display-empty input uses `Untitled media`.
+remove Cc, Cs, and non-display Cf characters except ZWJ/ZWNJ needed for visible text
+and tag characters inside complete emoji flag tag sequences. Preserve a black flag
+(U+1F3F4), followed by one or more tag-spec characters (U+E0020–U+E007E), terminated
+by CANCEL TAG (U+E007F), as an intact sequence. Remove stray tags, incomplete tag
+sequences, and other Cf controls; tags alone must still use the display-empty fallback.
+Preserve variation selectors and combining marks. Use the Unicode
+`Default_Ignorable_Code_Point` property only to determine whether retained text
+has visible content; preserve those characters alongside visible text. Display-empty
+input uses `Untitled media`.
 Create the filename stem from the full normalized title, independently of caption truncation.
 Replace runs of `<>:"/\|?*` with `_`; collapse whitespace and trim outer spaces/dots.
 Fallback for a stem consisting only of separators, dots, spaces, or invisible characters.

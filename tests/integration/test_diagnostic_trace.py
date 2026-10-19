@@ -7,6 +7,7 @@ import json
 import logging
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -15,6 +16,7 @@ import pytest
 from openmedia import diagnostics
 from openmedia.config import Settings
 from openmedia.coordinator import MediaWorkflow, RequestRegistry
+from openmedia.delivery import deliver_media
 from openmedia.models import DeliveryResult, FormatOption, MediaMetadata
 from openmedia.sources import DownloadResult, InspectResult
 from openmedia.workers import WorkerRemoteError
@@ -91,6 +93,60 @@ async def test_success_flow_records_every_stage(trace: Trace, tmp_path: Path) ->
     assert finished["bytes"] == 7
     selection = next(entry for entry in entries if entry["stage"] == "selection")
     assert selection["option_id"] == 0
+
+
+@pytest.mark.parametrize("media_type,extension,mime_type,method", [
+    ("video", "mp4", "video/mp4", "send_video"),
+    ("audio", "m4a", "audio/mp4", "send_document"),
+])
+async def test_delivery_titles_stay_out_of_diagnostics_and_console(
+    trace: Trace, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    media_type: str, extension: str, mime_type: str, method: str,
+) -> None:
+    """006 labels reach real delivery without expanding the inherited diagnostic schema."""
+    title = "PrivateTitleSentinel/A&B"
+    option = FormatOption(0, "fixture", "native", media_type, extension, mime_type,
+        includes_audio=True if media_type == "video" else None)
+    metadata = MediaMetadata("youtube", LINK, MEDIA_ID, title_or_caption=title)
+    path = tmp_path / f"selected.{extension}"
+    path.write_bytes(b"fixture")
+    downloaded = DownloadResult(path=path, actual_bytes=7, media_id=MEDIA_ID,
+        source_format_id="native", media_type=media_type, extension=extension, mime_type=mime_type)
+    bot = SimpleNamespace(send_video=AsyncMock(return_value=SimpleNamespace(message_id=9)),
+        send_document=AsyncMock(return_value=SimpleNamespace(message_id=9)))
+
+    async def deliver(request: Any, result: DownloadResult) -> DeliveryResult:
+        return await deliver_media(bot, request=request, downloaded=result,
+            owned_directory=tmp_path, max_file_bytes=MAX_FILE_BYTES,
+            deadline=100, monotonic=lambda: 0)
+
+    console = logging.StreamHandler()
+    logging.getLogger().addHandler(console)
+    try:
+        workflow = workflow_for(RequestRegistry(), tmp_path,
+            inspect=AsyncMock(return_value=InspectResult(metadata=metadata, options=(option,))),
+            download=AsyncMock(return_value=downloaded), deliver=deliver)
+        request = await submit(workflow)  # One choice follows the automatic delivery path.
+        entries = trace.entries()
+    finally:
+        logging.getLogger().removeHandler(console)
+
+    sent = getattr(bot, method)
+    sent.assert_awaited_once()
+    assert sent.await_args.kwargs["caption"] == title
+    assert sent.await_args.kwargs["filename"] == f"PrivateTitleSentinel_A&B.{extension}"
+    other = bot.send_document if method == "send_video" else bot.send_video
+    other.assert_not_awaited()
+    assert stages(entries, request.request_id) == ["received", "inspection_started",
+        "inspection_finished", "selection", "download_started", "download_finished", "send_started"]
+    allowed = {"ts", "level", "origin", "stage", "request_id", "platform", "elapsed_seconds",
+        "source_url", "chat_id", "user_id", "outcome", "options", "choices", "option_id",
+        "automatic", "bytes", "msg"}
+    for entry in entries:
+        assert set(entry) <= allowed, set(entry) - allowed
+    assert "PrivateTitleSentinel" not in json.dumps(entries)
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
 
 
 def fixture_workflow(registry: RequestRegistry, tmp_path: Path, fixture: str) -> MediaWorkflow:

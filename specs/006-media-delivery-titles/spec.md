@@ -1,10 +1,10 @@
 # Feature Specification: Media Delivery Titles
 
-**Feature Branch**: Not created by this invocation (no branch hook configured)
+**Feature Branch**: `006-media-delivery-titles`
 
 **Created**: 2026-10-18
 
-**Status**: Draft
+**Status**: Implemented; controlled acceptance verified; external release gates pending
 
 **Input**: User description: "I'd like to have a title of downloaded media on the sending media (as title) to the Telegram."
 
@@ -163,4 +163,7 @@ titles; inspect captions, filenames, and delivery outcomes.
 - Existing inspection and request handling supply the title association. The delivery
   title limit is 64 Unicode code points; complete filenames additionally have a
   240-byte UTF-8 limit for saving compatibility, including their selected extension.
-- This invocation creates specification artifacts only; runtime behavior is unchanged.
+- Runtime title labels are implemented. Controlled acceptance and remaining container,
+  configured startup/health, and real Telegram client checks are recorded separately in
+  [validation.md](validation.md#t020--requirements-reconciliation-and-external-acceptance-2026-10-19-local).
+  Pending external checks do not relax any requirement below.

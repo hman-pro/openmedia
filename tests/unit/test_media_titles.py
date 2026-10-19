@@ -15,6 +15,45 @@ import pytest
 from openmedia.media_titles import DeliveryLabels, derive_media_titles
 
 
+_RETAINED_DEFAULT_IGNORABLES = (
+    "\u034f", "\u115f", "\u1160", "\u17b4", "\u17b5", "\u3164", "\uffa0",
+)
+_INVISIBLE_TITLE_CASES = [
+    *_RETAINED_DEFAULT_IGNORABLES,
+    "".join(_RETAINED_DEFAULT_IGNORABLES) + "\u200c\u200d\ufe0f\U000e0100",
+]
+
+
+@pytest.mark.parametrize("title", _INVISIBLE_TITLE_CASES)
+def test_default_ignorable_only_title_uses_neutral_fallback(title: str) -> None:
+    labels = derive_media_titles(title, "mp4")
+
+    assert labels.caption == "Untitled media"
+    assert_filename_constraint(labels, "Untitled media", "mp4")
+
+
+@pytest.mark.parametrize("invisible", _INVISIBLE_TITLE_CASES)
+def test_default_ignorables_with_visible_text_are_preserved(invisible: str) -> None:
+    title = f"A{invisible}B"
+
+    labels = derive_media_titles(title, "mp4")
+
+    assert labels.caption == title
+    assert_filename_constraint(labels, title, "mp4")
+
+
+@pytest.mark.parametrize("invisible", _INVISIBLE_TITLE_CASES)
+def test_filename_separators_and_default_ignorables_use_fallback_stem(
+    invisible: str,
+) -> None:
+    title = f"./{invisible}\\_ ."
+
+    labels = derive_media_titles(title, "mp4")
+
+    assert labels.caption == title
+    assert_filename_constraint(labels, "Untitled media", "mp4")
+
+
 def assert_filename_constraint(labels: DeliveryLabels, stem: str, extension: str) -> None:
     """Verify the selected extension is appended outside the safe stem budget."""
     assert labels.filename == f"{stem}.{extension}"
@@ -277,3 +316,57 @@ def test_sanitization_runs_before_independent_caption_and_stem_shortening() -> N
 
     assert labels.caption == "Start" + "/" * 58 + "…"
     assert_filename_constraint(labels, "Start_end", "mp4")
+
+
+_TAG_FLAGS = [
+    "\U0001f3f4\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f",
+    "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f",
+    "\U0001f3f4\U000e0067\U000e0062\U000e0077\U000e006c\U000e0073\U000e007f",
+]
+
+
+@pytest.mark.parametrize("flag", _TAG_FLAGS, ids=["england", "scotland", "wales"])
+def test_complete_emoji_tag_flags_are_preserved(flag: str) -> None:
+    title = f"A\u202e{flag}\u200bB"
+
+    labels = derive_media_titles(title, "mp4")
+
+    assert labels.caption == f"A{flag}B"
+    assert_filename_constraint(labels, f"A{flag}B", "mp4")
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("\U000e0067\U000e0062\U000e007f", "Untitled media"),
+        ("A\U000e0067\U000e0062\U000e007fB", "AB"),
+        ("\U0001f3f4\U000e0067\U000e0062", "\U0001f3f4"),
+        ("\U0001f3f4\U000e007f", "\U0001f3f4"),
+        ("\U0001f3f4\U000e0067X\U000e007f", "\U0001f3f4X"),
+        ("😀\U000e0067\U000e007f", "😀"),
+    ],
+    ids=["tags-only", "stray-tags", "unterminated", "empty-spec", "interrupted", "other-base"],
+)
+def test_tags_outside_complete_flag_sequences_are_removed(
+    title: str, expected: str
+) -> None:
+    labels = derive_media_titles(title, "mp4")
+
+    assert labels.caption == expected
+    assert_filename_constraint(labels, expected, "mp4")
+
+
+@pytest.mark.parametrize("count", [9, 10, 70])
+def test_tag_flag_shortening_preserves_whole_sequence_at_both_budgets(
+    count: int,
+) -> None:
+    flag = _TAG_FLAGS[1]
+    title = flag * count
+    # Each flag has seven code points and 28 UTF-8 bytes. Nine fit the
+    # caption, but only eight plus the ellipsis fit a 240-byte filename.
+    expected_caption = title if count == 9 else flag * 9 + "…"
+
+    labels = derive_media_titles(title, "mp4")
+
+    assert labels.caption == expected_caption
+    assert_filename_constraint(labels, flag * 8 + "…", "mp4")

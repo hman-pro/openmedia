@@ -39,5 +39,9 @@ or modify bytes/tags. Media ID and selected-format validation precede upload. Re
 labels stay fixed on retries; source refresh retains original request title metadata.
 All original deadline, rate-limit, upload ambiguity, failure, privacy, and cleanup rules apply.
 
-Implementation should add cross-references to the older delivery contracts when this
-behavior ships; these design documents do not claim runtime changes are already present.
+This contract is implemented at the validated delivery boundary. Features
+[001](../../001-media-download/contracts/telegram-bot.md#media-delivery-titles-amended-by-006),
+[003](../../003-streamlined-bot-ux/contracts/telegram-bot.md#media-delivery-titles-amended-by-006), and
+[005](../../005-youtube-music-download/contracts/telegram-bot.md#media-delivery-titles-amended-by-006)
+link to these delivery-label rules. Controlled acceptance evidence and pending external
+release checks are recorded in [validation.md](../validation.md#t020--requirements-reconciliation-and-external-acceptance-2026-10-19-local).

@@ -88,10 +88,10 @@ no complete filename exceeds 240 UTF-8 bytes including ellipsis, dot, and extens
 
 **Purpose**: Complete privacy, compatibility, packaging, and release evidence.
 
-- [ ] T017 [P] Add or extend diagnostic regression assertions in `tests/integration/test_diagnostic_trace.py` so title labels do not introduce console output or new diagnostic payload fields, then record a review of `src/openmedia/media_titles.py` and `src/openmedia/delivery.py` for new state, storage, source requests, or credential-bearing errors in `specs/006-media-delivery-titles/validation.md`.
-- [ ] T018 [P] Add feature-006 delivery cross-references to `specs/001-media-download/contracts/telegram-bot.md`, `specs/003-streamlined-bot-ux/contracts/telegram-bot.md`, and `specs/005-youtube-music-download/contracts/telegram-bot.md`; align `specs/006-media-delivery-titles/quickstart.md` with implemented paths/commands and keep existing preview title rules explicit.
+- [X] T017 [P] Add or extend diagnostic regression assertions in `tests/integration/test_diagnostic_trace.py` so title labels do not introduce console output or new diagnostic payload fields, then record a review of `src/openmedia/media_titles.py` and `src/openmedia/delivery.py` for new state, storage, source requests, or credential-bearing errors in `specs/006-media-delivery-titles/validation.md`.
+- [X] T018 [P] Add feature-006 delivery cross-references to `specs/001-media-download/contracts/telegram-bot.md`, `specs/003-streamlined-bot-ux/contracts/telegram-bot.md`, and `specs/005-youtube-music-download/contracts/telegram-bot.md`; align `specs/006-media-delivery-titles/quickstart.md` with implemented paths/commands and keep existing preview title rules explicit.
 - [ ] T019 Execute focused and full controlled suites, `uv build`, Docker build/import and configured startup checks from `specs/006-media-delivery-titles/quickstart.md`; confirm locked dependency installation and required third-party notices in built artifacts, record exact results in `specs/006-media-delivery-titles/validation.md`, and leave this gate open if required checks are unavailable.
-- [ ] T020 Record real Telegram caption/saved-filename/client checks only if explicitly authorized, using the optional procedure in `specs/006-media-delivery-titles/quickstart.md`; otherwise document them as unverified in `specs/006-media-delivery-titles/validation.md`, reconcile every FR/SC with evidence, and update `specs/006-media-delivery-titles/spec.md` status without claiming unperformed checks passed.
+- [X] T020 Record real Telegram caption/saved-filename/client checks only if explicitly authorized, using the optional procedure in `specs/006-media-delivery-titles/quickstart.md`; otherwise document them as unverified in `specs/006-media-delivery-titles/validation.md`, reconcile every FR/SC with evidence, and update `specs/006-media-delivery-titles/spec.md` status without claiming unperformed checks passed.
 
 **Checkpoint**: Controlled acceptance and release evidence are distinguished. No live Telegram
 messages are sent merely because this task list exists; explicit authorization is required.
@@ -153,3 +153,13 @@ without evidence. No migrations, new services, callback formats, or worker schem
 | FR-007–008; SC-003, SC-005 | T005–T006, T009–T010, T012–T013, T016, T019 |
 | FR-009 | T017 |
 | Dependency/container and documentation gates | T001–T002, T018–T020 |
+
+## Execution handoff (2026-10-19)
+
+All five phases were executed sequentially under the user's explicit override of
+one-phase-per-invocation. T001–T018 and T020 are complete. T019 remains OPEN only
+for unavailable Docker build/import/image notices, configured environment and
+container startup/health checks. See validation.md for exact failures and resume
+commands. No live Telegram/client check was authorized or performed. Independent
+final review approved the repaired implementation; no implementation defect remains
+known. Controlled final result: 944 passed, 3 live deselected; uv build passed.

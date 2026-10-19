@@ -135,3 +135,16 @@ when multiple audio versions were ranked. The first status is `Audio only — do
 missing-metadata fallbacks and one status surface remain. Collection and no-native-audio
 messages follow the [005 Telegram contract](../../005-youtube-music-download/contracts/telegram-bot.md).
 All source-byte, anonymous-access, deadline, cap, isolation and diagnostic rules remain.
+
+## Media delivery titles (amended by 006)
+
+Every delivered video, silent video, audio document, YouTube Music document, and picture
+document carries a plain caption and title-derived upload filename under the
+[006 Telegram delivery contract](../../006-media-delivery-titles/contracts/telegram-bot.md).
+Captions and safe filename stems have independent 64-code-point limits; complete
+filenames fit 240 UTF-8 bytes including the selected extension. Missing or display-empty
+delivery titles use `Untitled media`. Labels preserve native bytes, embedded tags, local
+paths, delivery methods, and existing retry/failure behavior.
+
+Preview cards keep the existing 200-character title limit and `Untitled video` fallback,
+including music cards. The delivery title rules do not change choices or status text.

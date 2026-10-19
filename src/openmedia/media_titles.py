@@ -16,6 +16,10 @@ FILENAME_BYTE_LIMIT = 240
 FALLBACK_TITLE = "Untitled media"
 
 _JOINERS = frozenset(("\u200c", "\u200d"))
+# Keep a complete black-flag/tag-spec/cancel-tag sequence as one token. Tags
+# outside that sequence remain non-display controls and are removed below.
+_TITLE_PARTS = re.compile(r"\U0001f3f4[\U000e0020-\U000e007e]+\U000e007f|.", re.DOTALL)
+_DEFAULT_IGNORABLE = regex.compile(r"\p{Default_Ignorable_Code_Point}")
 _UNSAFE_FILENAME_RUN = re.compile(r'[<>:"/\\|?*]+')
 _RESERVED_BASENAME = re.compile(r"(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])", re.IGNORECASE)
 
@@ -29,25 +33,23 @@ class DeliveryLabels:
 
 
 def _is_invisible(character: str) -> bool:
-    """Identify retained joiners/selectors that cannot supply a title alone."""
-    code_point = ord(character)
-    return (
-        character in _JOINERS
-        or 0xFE00 <= code_point <= 0xFE0F
-        or 0xE0100 <= code_point <= 0xE01EF
-        or 0x180B <= code_point <= 0x180D
-        or code_point == 0x180F
-    )
+    """Identify characters that cannot make a title or filename stem visible.
+
+    This predicate only decides fallback eligibility; retained characters remain
+    unchanged when they accompany visible text.
+    """
+    return _DEFAULT_IGNORABLE.fullmatch(character) is not None
 
 
 def _normalize_title(title: str | None) -> str:
     # Convert whitespace first: tabs/newlines are controls but separate words.
     spaced = " ".join((title or "").split())
     cleaned = "".join(
-        character
-        for character in spaced
-        if character in _JOINERS
-        or unicodedata.category(character) not in {"Cc", "Cs", "Cf"}
+        part
+        for match in _TITLE_PARTS.finditer(spaced)
+        if len(part := match.group()) > 1
+        or part in _JOINERS
+        or unicodedata.category(part) not in {"Cc", "Cs", "Cf"}
     )
     normalized = " ".join(cleaned.split())
     if not any(
