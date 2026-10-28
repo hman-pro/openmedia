@@ -63,3 +63,24 @@ htmlcov/
 Thumbs.db
 CLAUDE.md
 AGENTS.md
+
+# Feature 008 host deployment and release-acquisition state.
+# No host credentials, live manifests, or media enter assets.
+/deploy/deploy.env
+/deploy/secrets/
+/deploy/.state/
+/deploy/state/
+/deploy/evidence/
+/deploy/updates/
+/deploy/*.local.*
+/release-output/
+/source-collection/
+/release/.state/
+/release/evidence/
+/release/sources/
+/release/inventory/
+*.credentials.json
+.netrc
+.docker/config.json
+.gh/
+# Keep deploy.env.example, reviewed release policies and sanitized fixtures available.
