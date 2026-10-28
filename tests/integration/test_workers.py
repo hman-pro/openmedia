@@ -216,3 +216,34 @@ async def test_audio_inspection_survives_bounded_worker_protocol() -> None:
     assert decoded.metadata.canonical_url == expected.metadata.canonical_url
     with pytest.raises(WorkerProtocolError):
         await WorkerSupervisor([sys.executable, "-c", script], result_limit=32).run("inspect", {}, timeout=5)
+
+
+async def test_file_token_never_enters_worker_environment_or_payload(tmp_path, monkeypatch):
+    import json
+    from openmedia.config import Settings
+    token = '123456789:sentinel-file-loaded-secret'
+    path = tmp_path / 'sentinel-credential-path'
+    path.write_text(token)
+    monkeypatch.delenv('TELEGRAM_BOT_TOKEN', raising=False)
+    monkeypatch.setenv('TELEGRAM_BOT_TOKEN_FILE', str(path))
+    settings = Settings.from_env()
+    script = "import os,sys,json; print(json.dumps({'event':'result','value':{'env':dict(os.environ),'payload':json.loads(sys.stdin.readline())}}))"
+    worker = WorkerSupervisor([sys.executable, '-c', script])
+    from openmedia.models import FormatOption, MediaMetadata
+    from openmedia.sources import InspectInput, DownloadInput
+    from openmedia.workers import inspect_payload, download_payload
+    metadata = MediaMetadata('youtube', 'https://youtu.be/abcDEF12345', 'abcDEF12345')
+    option = FormatOption(0, 'yt_dlp', 'v', 'video', 'mp4', 'video/mp4', includes_audio=False)
+    payloads = [inspect_payload(InspectInput(metadata.canonical_url, 'a' * 32, tmp_path, 1000.)),
+        download_payload(DownloadInput('a' * 32, metadata, option, tmp_path, 1000., 1000, 2000))]
+    rendered = repr(settings)
+    for operation, payload in zip(('inspect', 'download'), payloads):
+        rendered += json.dumps(await worker.run(operation, payload, timeout=5))
+    assert token not in rendered and str(path) not in rendered
+    assert 'TELEGRAM_BOT_TOKEN' not in rendered
+
+
+@pytest.mark.parametrize('key', ['TELEGRAM_BOT_TOKEN_FILE', 'telegram_bot_token_file'])
+async def test_file_token_input_is_rejected_before_worker_spawn(key):
+    with pytest.raises(ValueError, match='cannot contain bot tokens'):
+        await supervisor().run('inspect', {'nested': {key: '/private/file'}}, timeout=1)

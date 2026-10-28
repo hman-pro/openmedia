@@ -1,0 +1,40 @@
+# Invoke with --project-name openmedia --env-file /opt/openmedia/deploy.env
+# --file /opt/openmedia/compose.yaml. deploy.env supplies interpolation only.
+name: openmedia
+services:
+  openmedia:
+    image: ${OPENMEDIA_IMAGE:?Set the verified ghcr.io/hman-pro/openmedia@sha256 digest}
+    user: "10001:10001"
+    init: true
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      OPENMEDIA_WORK_DIR: /tmp/openmedia
+      OPENMEDIA_MAX_FILE_BYTES: ${OPENMEDIA_MAX_FILE_BYTES:-50000000}
+      OPENMEDIA_MAX_WORKERS: ${OPENMEDIA_MAX_WORKERS:-2}
+      OPENMEDIA_MAX_PENDING: ${OPENMEDIA_MAX_PENDING:-100}
+      OPENMEDIA_WORKSPACE_BYTES: ${OPENMEDIA_WORKSPACE_BYTES:-134217728}
+      OPENMEDIA_LOG_LEVEL: ${OPENMEDIA_LOG_LEVEL:-INFO}
+      OPENMEDIA_DIAGNOSTIC_LOG: ${OPENMEDIA_DIAGNOSTIC_LOG:-0}
+      OPENMEDIA_DIAGNOSTIC_LOG_DIR: ${OPENMEDIA_DIAGNOSTIC_LOG_DIR:-/var/log/openmedia}
+      OPENMEDIA_DIAGNOSTIC_LOG_LEVEL: ${OPENMEDIA_DIAGNOSTIC_LOG_LEVEL:-DEBUG}
+    secrets:
+      - telegram_bot_token
+    read_only: true
+    cpus: 2
+    mem_limit: 2g
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=536870912,mode=1777
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+secrets:
+  telegram_bot_token:
+    file: ${OPENMEDIA_TOKEN_FILE:-/opt/openmedia/secrets/telegram_bot_token}

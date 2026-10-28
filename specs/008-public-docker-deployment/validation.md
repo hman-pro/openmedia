@@ -58,11 +58,11 @@ All rows have gate_scope **Feature 008 acceptance**.
 | gate_id | requirement_ids | class | Required execution / evidence and limitations | result |
 |---|---|---|---|---|
 | F008-SETUP | FR-003, FR-009, FR-019 | Controlled | Official pin provenance/checksums; validation register; Git/Docker secret exclusions; execution record below | pass |
-| F008-CONFIG | FR-008–FR-010, FR-018; SC-004 | Controlled | Presence conflicts including empty keys, file/path/type/size/ASCII/newline/grammar errors, bounded nonblocking reads, direct compatibility, redacted chains/repr/logs/workers and CLI no-poll behavior | pending |
+| F008-CONFIG | FR-008–FR-010, FR-018; SC-004 | Controlled | Presence conflicts including empty keys, file/path/type/size/ASCII/newline/grammar errors, bounded nonblocking reads, direct compatibility, redacted chains/repr/logs/workers and CLI no-poll behavior | pass |
 | F008-REGRESSION | FR-014, FR-017–FR-021; SC-006, SC-008 | Controlled | Full locked controlled suite; native byte/stream-copy, source categories, titles, state/deadlines/limits, worker/child/upload cleanup, failure/refusal/retry and privacy regressions | pending |
 | F008-NATIVE-AMD64 | FR-007, FR-018; SC-004 | Native container | Native linux/amd64 build/import config identity; restricted offline smoke, tools/EJS, local stream-copy, bounded writable tmpfs, read-only root, UID/capabilities/init, secret permissions/negative cases, no runtime executable acquisition | pending |
 | F008-NATIVE-ARM64 | FR-007, FR-018; SC-004 | Native container | Same checks independently on native linux/arm64; retain runner/image/tool versions and exact checked image ID | pending |
-| F008-COMPOSE | FR-005, FR-007–FR-011, FR-016, FR-018 | Controlled | Effective published Compose with fixture settings; fixed project and digest; explicit allowed environment, read-only secret, limits/logging, no ports/build/socket; retained local-build Compose path | pending |
+| F008-COMPOSE | FR-005, FR-007–FR-011, FR-016, FR-018 | Controlled | Effective published Compose with fixture settings; fixed project and digest; explicit allowed environment, read-only secret, limits/logging, no ports/build/socket; retained local-build Compose path | pass |
 | F008-RELEASE-POLICY | FR-001–FR-004, FR-020; SC-002 | Controlled | Identity/manifest/source collectors and tamper/failure cases; both imported identities before either push; zero writes on pre-push failure; correct incomplete distribution behavior after push/finalization; immutable pins/least privilege/tag authority/preview | pending |
 | F008-SOURCES | FR-002, FR-004; SC-002 | Public distribution | Both actual-image component closures, Debian Built-Using/system+application Python/unmanaged/embedded coverage and notices; exact source hashes/build materials; anonymous source-only release retrieval before first push; retain sources on later failure | pending |
 | F008-PUBLIC | FR-001, FR-003–FR-004, FR-020; SC-001–SC-002 | Public distribution | Actual preview: anonymous both-platform pull, exact child/index/config joins, local signed raw-index/manifest bundles with trusted numeric repo/workflow/source identity, negative proof, all final public assets redownloaded/hash verified; no rebuild promotion; immutable-release staging | pending |
@@ -142,3 +142,113 @@ build alone is live startup.
 - evidence / limitations: baseline `uv run --locked pytest`: 943 passed, 1 failed, 3 deselected; existing exited-leader cleanup test gets macOS `PermissionError` signaling the process group, reproduced independently before application edits. Linux arm64 baseline cleanup suite: 27 passed. Wider ephemeral Linux dev-container baseline: 940 passed, 4 failed, 3 deselected; four rotation fixtures use `-display_rotation`, unavailable in pinned FFmpeg 5.1.9. These are pre-feature platform/test issues, not source limitations or feature acceptance passes. Foundation/lifecycle phases will investigate them.
 - baseline native build: `docker build --platform linux/arm64 --tag openmedia:008-baseline .` passed with retained pins; config ID `sha256:c593cdff6463dd5249f431098f2d4c86c2c674e08feed00320d079bcdf949072`, Python 3.13.15, Deno 2.9.6, FFmpeg 5.1.9 GPL enabled/nonfree absent. This baseline build is not final restricted smoke/public/server acceptance. Dev test dependencies were installed only in disposable container layers.
 - infrastructure: canonical repository numeric ID `1380348601`; maintainer made repository public during this session. SSH acceptance target reports Ubuntu 26.04.1 amd64, Engine 29.1.3, Compose 2.40.3. Existing local-build polling service is healthy; no service change or token read occurred during inspection.
+
+### Phase 2 foundation — controlled configuration and Compose (2026-10-28)
+
+- gate_id / requirement_ids: F008-CONFIG, F008-COMPOSE; FR-005, FR-007–FR-011,
+  FR-016, FR-018; SC-004.
+- class: Controlled. gate_scope: Feature 008 acceptance. failure_class: none.
+- release / platform: `008-public-docker-deployment`, Phase 2 working tree based on
+  Phase 1 commit `b2e9e1f`; installed package version unchanged; macOS arm64 and
+  disposable Linux arm64 test container. No published version/digest selected.
+- environment: macOS 27.0.1 arm64; Docker Engine 29.9.2 Linux arm64 / Compose 5.6.1;
+  controlled pytest fixtures prohibit external connections. Fake credentials only.
+- result: pass for Phase 2 configuration/privacy/CLI and effective Compose checks.
+- evidence / limitations: tests were added before the loader: the first targeted run
+  produced **39 failed, 67 passed**, including file parsing, conflict detection, loaded
+  credential logging and worker privacy failures. Additional surrogate-path and nested
+  worker-key rejection cases were also observed failing before their fixes. Final
+  `uv run --locked pytest tests/unit/test_config.py tests/unit/test_config_diagnostics.py
+  tests/unit/test_diagnostics.py tests/integration/test_workers.py
+  tests/integration/test_runtime.py tests/integration/test_diagnostic_trace.py
+  tests/integration/test_merge.py -q`: **240 passed**, two existing PTB warnings, 3.02s.
+  Parent independently ran its targeted subset: **193 passed**, two warnings, 2.87s.
+  The final FIFO test adds an assertion of O_NONBLOCK before opening the real FIFO to
+  prevent a regression hanging CI; config suite rerun: **57 passed**, 0.05s.
+  Errors/tracebacks, repr, enabled diagnostics, console, actual inspect/download payloads,
+  minimal environment and case-insensitive nested credential-key refusal are covered.
+  Descriptor closure on success/fstat/read failure and the 4,097-byte total read budget
+  are asserted; FIFO/device rejection never uses blocking opens.
+- Compose evidence: rendered `docker compose --project-name openmedia --env-file
+  TEMP_FIXTURE/deploy.env --file deploy/compose.yaml config --format json` with a fake
+  canonical SHA256 image and default `/opt/openmedia/secrets/telegram_bot_token`. Parsed
+  the rendered model and asserted fixed project/service, UID/GID, explicit allowed env,
+  all resource/security/log restrictions, secret source and target, no build/ports/media
+  volumes or unfiltered env_file. Extra fake `TELEGRAM_BOT_TOKEN` and unrelated keys in
+  the interpolation file did not enter container environment. No token value rendered.
+  Root local-build `compose.yaml` retained. Compose interpolation itself does not enforce
+  digest grammar; the later operator/release validator must enforce that boundary.
+
+### Phase 2 foundation — native Linux arm64 build and restricted smoke (2026-10-28)
+
+- gate_id / requirement_ids: F008-NATIVE-ARM64 (foundation build/smoke subset),
+  F008-REGRESSION (Linux controlled subset); FR-007, FR-018–FR-021; SC-004.
+- class: Native container and Controlled. gate_scope: Feature 008 acceptance.
+  failure_class: none for the executed checks.
+- release / platform: Phase 2 working tree based on `b2e9e1f`; `openmedia:008-foundation`,
+  native `linux/arm64`; development labels `version=008-foundation`, `revision=b2e9e1f`.
+  Docker local index/image ID
+  `sha256:f0556ed5396cc27752a5f8037268cf6fe11d9749ee742cf0834f221d4c47cb48`;
+  platform manifest `sha256:eeeb05f0be561621fec31e4f13caa02d525454a54c2449811180c45200120f78`;
+  OCI config `sha256:ed5f5f876da99a86542dcf8b04f52c51c7909c238fa6fdb10a3c7eb5afe2522a`.
+  These are distinct local build identities, not published release identities.
+- environment: macOS 27.0.1 arm64 with native Linux arm64 Docker Engine 29.9.2;
+  Compose 5.6.1. Python 3.13.15, Deno 2.9.6 aarch64, FFmpeg/ffprobe 5.1.9-0+deb12u1;
+  all Dockerfile base/tool/runtime pins retained.
+- result: pass for actual native build, restricted offline smoke and full Linux suite.
+- evidence / limitations: `docker build --platform linux/arm64 --tag
+  openmedia:008-foundation --build-arg OPENMEDIA_VERSION=008-foundation --build-arg
+  OPENMEDIA_REVISION=b2e9e1f .` passed; `scripts/smoke-container.sh
+  openmedia:008-foundation` passed twice after fixture corrections. Every checked CLI
+  and probe container uses network none, UID/GID 10001, init, read-only root, all caps
+  dropped, no-new-privileges, 2 CPUs/2 GiB/512 MiB noexec/nosuid tmpfs, 30s stop timeout,
+  unless-stopped restart and 10 MiB × 3 json-file logging. Docker inspect assertions
+  confirm effective restrictions and read-only sanitized mounts. CLI checks valid fake
+  file token (0), absent token (2), missing/unreadable/malformed file (2), and both keys
+  with empty direct value (2), with safe fixed output. The probe checks installed EJS,
+  executes bundled Deno, Python and media tools, compares original and merged encoded
+  packet SHA256 lists for both streams, exercises writable bounded scratch, root/secret
+  write denial, UID-10001 PermissionError on mode-000 fake secret and injected heartbeat
+  freshness/staleness. It never polls, sleeps for readiness, or contacts Telegram/sources.
+  Initial chmod-000 host-bind fixture was exposed as missing by Docker Desktop and was
+  replaced by root-owned Linux-volume fixture; no permission-denial claim uses ENOENT.
+  Script exit traps remove all its containers, fixture volume and temporary host files.
+- Controlled regression: a separate disposable container copied only project/test files
+  to `/tmp/project`, set `UV_NO_DEV=0 UV_OFFLINE=0 UV_CACHE_DIR=/tmp/uv-cache`, ran
+  `uv sync --locked --group dev`, then `uv run --locked pytest -q`: **992 passed,
+  3 deselected, 32 warnings in 9.73s**. Dev dependencies are absent from the published
+  runtime layer. The initial disposable attempt inherited UV_NO_DEV=1 and could not
+  spawn pytest; the corrected explicit dev setting produced the successful run above.
+  The four rotation cases pass using pinned FFmpeg's metadata interface; the research
+  record explains the fixture-only compatibility adjustment. macOS's pre-existing
+  process-group cleanup defect remains assigned to the lifecycle phase; it is not a
+  source limitation and the aggregate regression gate remains pending.
+- Remaining gates: same-run native CI builds, archive export/import and config identity
+  joins, final release images, public retrieval, and real health/polling/server/media
+  acceptance remain required. This local build/smoke does not close those gates.
+
+### Phase 2 foundation — parent native Linux amd64 build and restricted smoke (2026-10-28)
+
+- gate_id / requirement_ids: F008-NATIVE-AMD64 (foundation build/smoke subset);
+  FR-007, FR-018; SC-004.
+- class: Native container. gate_scope: Feature 008 acceptance. failure_class: none.
+- release / platform: same Phase 2 working tree; local image `openmedia:008-foundation`,
+  native `linux/amd64`. OCI config
+  `sha256:748d712b946a89f046b2cf131661a978d41963cd1194aa01505178ce3091af20`;
+  platform manifest `sha256:723dbfba91510ed0c37f3c425059e13b2b84b190bfe74ec14cb6a015895c645f`;
+  Docker local index/image ID
+  `sha256:01a0c43050ad58b162a53cf9bf7ce0ca530c6cd7e36128b7b35dd8207b313066`.
+- environment: Ubuntu 26.04.1 x86_64, Docker Engine 29.1.3, Compose 2.40.3; parent
+  orchestrator executed through the SSH Docker context, with no running service changes.
+- result: pass for actual native amd64 build and the finalized restricted offline smoke.
+- evidence / limitations: parent ran `docker --host ssh://openmedia-server build
+  --platform linux/amd64 --tag openmedia:008-foundation .`, then copied only the sanitized
+  smoke script/probe into a disposable `/tmp` tree and ran
+  `scripts/smoke-container.sh openmedia:008-foundation` on the native host. It reported
+  the same effective restriction, permission denial, CLI, bundled tool, packet-copy and
+  synthetic-health successes as arm64; temporary smoke resources were cleaned. Local
+  transient logs: `/tmp/openmedia-008-amd64-foundation-build.log` and
+  `/tmp/openmedia-008-amd64-foundation-smoke.log`. The existing polling service remained
+  healthy and untouched. This is neither CI/promotion evidence nor final-release or
+  real-polling acceptance. Both native architectures are available and tested for this
+  foundation; later native CI and final exact release-image checks remain mandatory.

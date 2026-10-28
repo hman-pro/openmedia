@@ -423,3 +423,25 @@ class TestFailureIsolation:
 
     def test_a_normal_entry_is_not_marked_truncated(self) -> None:
         assert "truncated" not in render(make_record(origin="lifecycle", stage="startup"))
+
+
+def test_file_loaded_token_redacted_in_console_and_enabled_diagnostics(tmp_path):
+    import io
+    from openmedia.config import Settings
+    from openmedia.__main__ import SafeLogFormatter
+    path = tmp_path / 'sentinel-private-path'
+    path.write_text(TOKEN)
+    settings = Settings.from_env({'TELEGRAM_BOT_TOKEN_FILE': str(path),
+        'OPENMEDIA_DIAGNOSTIC_LOG': '1', 'OPENMEDIA_DIAGNOSTIC_LOG_DIR': str(tmp_path / 'logs')})
+    output = io.StringIO()
+    console = logging.StreamHandler(output)
+    console.setFormatter(SafeLogFormatter('%(message)s', secrets=(settings.telegram_bot_token,)))
+    record = make_record(f'credential {TOKEN}')
+    console.handle(record)
+    stop = diagnostics.configure_diagnostics(settings)
+    try:
+        diagnostics.event('sentinel', origin='lifecycle', msg=f'credential {TOKEN}')
+    finally:
+        stop()
+    rendered = output.getvalue() + repr(settings) + ''.join(p.read_text() for p in (tmp_path / 'logs').glob('*'))
+    assert TOKEN not in rendered and str(path) not in rendered

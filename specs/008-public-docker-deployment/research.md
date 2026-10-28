@@ -388,3 +388,31 @@ Resolve architecture-specific binary hashes from authenticated metadata for amd6
 collector assembly; arm64 binary hashes must not be reused for amd64. The source
 identities and required exact versions above are shared. These are input pins, not a
 claim that collector assembly/source acquisition has already passed.
+
+## Foundation compatibility observations — Phase 2 (2026-10-28)
+
+No base, Python package, tool, FFmpeg version or retained license file changed. The
+four inherited rotation fixtures used `-display_rotation`, which pinned FFmpeg 5.1.9
+does not provide. Fixture generation now selects that option when advertised by
+`ffmpeg -h full`; otherwise it stream-copies with `-metadata:s:v:0 rotate=ANGLE`, the
+5.1 display-matrix interface. All 0/90/-90/180 dimension assertions remain. Both the
+newer macOS FFmpeg and retained Linux FFmpeg pass the four cases. This changes only
+synthetic test creation, without changing application media processing or relaxing
+assertions. The full Linux arm64 suite passes (992 tests).
+
+Docker Desktop's host-file sharing exposed a chmod-000 bind fixture as missing rather
+than returning permission denial. Smoke now initializes a root-owned mode-000 fake
+secret inside its own disposable Docker volume, mounts it read-only, and requires
+`PermissionError` from the actual UID/GID 10001 probe. Its CLI invocation separately
+requires exit 2 and the fixed unreadable-file category. The helper has no network or
+capabilities; all test resources are removed by the shell exit/interruption trap. This
+volume is test-fixture storage, never production request/media storage.
+
+With Docker Engine 29.9.2's containerd image store, a default BuildKit build produces
+an OCI index containing its platform manifest and a build attestation. In this case
+`docker image inspect .Id` is the local index identity, **not** the OCI config digest.
+The build export reports each distinctly (see Phase 2 validation). Smoke reports
+“Docker image ID” without mislabeling it a config hash. Release promotion must preserve
+and independently join archive/image/platform/config identities; it cannot infer a
+config identity from `.Id` on this store. Default development labels do not claim a
+published version. Release workflows must supply exact version/full revision build args.

@@ -9,6 +9,14 @@ FROM ${UV_IMAGE} AS uv
 FROM ${DENO_IMAGE} AS deno
 FROM ${PYTHON_IMAGE} AS runtime
 
+ARG OPENMEDIA_VERSION=development
+ARG OPENMEDIA_REVISION=unknown
+LABEL org.opencontainers.image.source="https://github.com/hman-pro/openmedia" \
+    org.opencontainers.image.version="${OPENMEDIA_VERSION}" \
+    org.opencontainers.image.revision="${OPENMEDIA_REVISION}" \
+    org.opencontainers.image.licenses="MIT" \
+    org.opencontainers.image.documentation="https://github.com/hman-pro/openmedia#readme"
+
 ARG FFMPEG_DEBIAN_VERSION=7:5.1.9-0+deb12u1
 
 COPY --from=uv /uv /uvx /usr/local/bin/

@@ -85,3 +85,15 @@ day files and 50,000,000 bytes (amended by 002; see
 
 The build/startup smoke test and live source matrix are required before claiming deployment
 readiness. This contract specifies the future image; planning does not build or deploy it.
+
+## File-backed token source (amended by 008)
+
+The mutually exclusive `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_TOKEN_FILE` inputs
+follow [feature 008 configuration](../../008-public-docker-deployment/contracts/configuration.md).
+Presence of both keys, including empty values, is an error before either is read.
+The file input is an absolute path to a bounded regular ASCII file, loaded privately
+once per settings initialization. The direct input retains its existing validation
+and remains the development path. `--check-config` validates local shape and runtime
+prerequisites without network access, polling, readiness claims, or workspace cleanup;
+Telegram authenticates the credential only during explicitly requested polling startup.
+All other settings, deadlines, source-worker and diagnostic boundaries remain in force.
