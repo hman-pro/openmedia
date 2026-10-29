@@ -252,3 +252,118 @@ build alone is live startup.
   healthy and untouched. This is neither CI/promotion evidence nor final-release or
   real-polling acceptance. Both native architectures are available and tested for this
   foundation; later native CI and final exact release-image checks remain mandatory.
+
+### Phase 3 US1 implementation checkpoint — controlled release boundaries (2026-10-29)
+
+- gate_id / requirement_ids: F008-RELEASE-CONTROLLED, F008-REGRESSION (controlled subset);
+  FR-001–FR-004, FR-018–FR-021; SC-001, SC-002, SC-008.
+- class: Controlled. gate_scope: Feature 008 acceptance. failure_class: none for executed checks.
+- release / platform: working tree based on `e3b27763208ee31d3e9d83a90aa0505a99bbeb75`,
+  feature `008-public-docker-deployment`; no release tag, registry image or public acceptance.
+- environment: macOS 27.0.1 arm64; locked Python 3.13.15 application/test environment.
+- result: pass for the implemented controlled release interfaces. T013–T015 first failed
+  with three expected missing-module collection errors before implementation. The final
+  three release suites pass **104 tests**: identities, pure final assembly of an existing
+  matching version, archive/config/child/index distinction, actual inner source/notice/
+  recipe hashes, unsafe archives/link chains, stale inventory/source/SBOM joins, exact
+  sdists, atomic interrupted/checksum/oversize acquisition, DSC source version/reference
+  checks, unknown executable coverage outside /usr/local, complete certificate baseline
+  and individual identity mutations, local-bundle auth independence, both real promotion
+  command imports before either push, arm64 import mismatch, no rebuild, workflow privilege/
+  action-pin rejection, and actual signing/image/public-evidence failure boundaries.
+  Failures before publication produce zero image writes; later failures preserve sources
+  and immutable artifacts and never claim acceptance. Certificate/signature command
+  doubles are controlled boundary evidence, never a real own-release signature proof.
+- evidence / limitations: `uv run --locked pytest -q tests/unit/test_release_manifest.py
+  tests/integration/test_release_tools.py tests/contract/test_release_policy.py`: 104 passed.
+  Full controlled suite before the last three isolated stage-boundary additions passed
+  **1093, 3 deselected, 32 warnings in 6.36s**; those added cases subsequently pass in the
+  104-test suite. `python3 -m py_compile scripts/release/*.py`, Ruby standard-library YAML
+  parsing for both workflows, `publish.py audit-pins`, and `git diff --check` pass.
+  The read-only CI workflow exports one-day native/controlled/source artifacts; only
+  the separate protected-tag workflow grants publication permissions. Audits check the
+  reviewed full action SHAs, exact tool checksums, all three runtime image digests,
+  effective CI read-only declarations and forbidden privileged PR triggers.
+- Superseding inherited baseline: the earlier macOS child-cleanup failure was caused by
+  local Python 3.13.5. The parent synchronized the existing lock to the planned Python
+  3.13.15, with unchanged dependencies, and observed the formerly failing child test pass,
+  cleanup suite 27/27 pass, and original full baseline 992 pass/3 deselected/32 warnings.
+  No lifecycle workaround or test weakening was needed. Parent logs include
+  `/tmp/openmedia-008-python31315-full.log` and `/tmp/openmedia-008-phase3-full-tests.log`.
+- Host verifier compatibility: parent independently executed the standalone verifier's
+  parsing/hashing on actual isolated Python 3.11.18 without application dependencies;
+  pass, log `/tmp/openmedia-008-verifier-python311.log`. Actual gh 2.103.3 local-bundle
+  verification of its upstream original signed demo fixture also passed without auth;
+  see the exact field/provenance record in research.md. OpenMedia's raw-index/image-subject
+  signature and negative proof remains pending T062.
+
+### Phase 3 actual native inventory/source acquisition — partial, not T034 completion
+
+- gate_id / requirement_ids: F008-NATIVE-AMD64, F008-NATIVE-ARM64 (intermediate artifact
+  audit subsets), F008-SOURCE-COVERAGE (partial acquisition); FR-004, FR-007, FR-018;
+  SC-002, SC-004. class: Native container. gate_scope: Feature 008 acceptance.
+  failure_class: none for the executed subsets; full source/native CI gates pending.
+- release / platform: native working-tree audit images based on the above commit plus
+  explicit cache-cleanup changes, with local version `v0.1.0-preview.audit`. Parent amd64
+  config/Docker ID `sha256:31e11f42208d88e07452e693b91f6d8170977fa0892ddbe3685df9315eedfc15`.
+  Native arm64 OCI config
+  `sha256:b75f8c8b701425874897db31750c56a457015cc61e26b82bfb34250969016354`;
+  Docker local image/manifest ID
+  `sha256:907657c196c75266eaf2c5c92f9106ae76b678d7990feef0cde8abf7dfcaa6ee`.
+  Even with build provenance disabled, these identities differ on this image store;
+  the archive-derived config digest is authoritative for config joins.
+  These intermediate images precede the subsequently added runtime notice COPY input;
+  they are not final candidate images and do not substitute for the required CI rebuilds.
+- environment: native amd64 Ubuntu 26.04.1 / Engine 29.1.3 / Compose 2.40.3 through
+  authorized Docker access; native arm64 macOS Docker VM / Engine 29.9.2 / Compose 5.6.1.
+  The parent kept the existing server polling project untouched. Python 3.13.15,
+  uv/uvx 0.12.15, Deno 2.9.6, FFmpeg/ffprobe 5.1.9 retained.
+- result: pass for actual cache-cleanup builds, both restricted offline smokes and whole-
+  filesystem inventory audits. Actual inventories contain 317 arm64 / 321 amd64 components,
+  including separate pip 26.2.1 and five unmanaged groups after exact base-helper naming.
+  Both actual inventories resolve to reviewed source identities and exact unmanaged
+  byte sets. The initial amd64 record's `unknown:/usr/sbin/policy-rc.d` was explicitly
+  normalized only by its already recorded exact bytes; the latest collector names it
+  directly. No path or unknown component is skipped. Native FFmpeg configuration has
+  `--enable-gpl` and no `--enable-nonfree` on both architectures.
+- evidence / limitations: actual parent source audit build/smoke logs are
+  `/tmp/openmedia-008-amd64-source-audit-build-direct.log` and
+  `/tmp/openmedia-008-amd64-source-audit-smoke.log`; actual full inventory/notices are in
+  `/tmp/openmedia-008-inventory-amd64-final`. Local arm64 smoke/inventory logs are
+  `/tmp/008-phase3-smoke.log`, `/tmp/008-runtime-arm64-final`; no polling or external source
+  media request occurred. The Docker source-context audit excluded ten synthetic private/
+  staging paths while retaining only the explicit notice exception; parent log
+  `/tmp/openmedia-008-context-audit.log`.
+- The pinned native arm64 build-only collector assembled successfully. A real APT-
+  authenticated bzip2 source acquisition and standard dpkg-source unpackability check
+  passed for source `1.0.8-5`, independent of binary `1.0.8-5+b1`. Receipt/materials are
+  at `/tmp/008-debian-bzip2-source`. It retains `.dsc`, original and Debian archives,
+  authenticated source stanza/index signatures, checksums, acquisition URLs and collector
+  dpkg inventory. Direct tools: apt 2.6.1, dpkg/dpkg-dev 1.21.23, gpgv
+  2.2.40-1.1+deb12u2, debian-archive-keyring 2023.3+deb12u2, tar
+  1.34+dfsg-1.2+deb12u1, xz-utils 5.4.1-1+deb12u2, bzip2 1.0.8-5+b1,
+  patch 2.7.6-7. Sources are never built/executed during validation.
+- The reviewed source policy has 1,879 exact component entries, including a complete
+  locked Rust source superset, explicit CPython/ICU/TypeScript/standard-library and pip
+  vendoring edges. All 1,553 distinct crate archives were actually downloaded and matched
+  their Cargo.lock hashes. The runtime notice bundle contains 18,175 deduplicated original
+  notice/attribution entries; deterministic gzip SHA256
+  `6db348e47b894d5d93618c453aefe021c3e20d94b1e49b2384cb4720829587fb`.
+  It supplements installed Debian/Python notices; its presence/hash is a native inventory
+  gate and its full provenance is tracked. Authors/template placeholders are never treated
+  as original copyright notices; explicit MIT-only absence findings remain in notice-review.
+- **Pending**: T034 must execute the committed candidate's actual native CI/archive jobs
+  and entire source/notice collection after the runtime notice input change. The policy,
+  one real Debian source, or the preceding intermediate images do not close that gate.
+  Any unavailable exact source/notice remains blocking. Own signed bundles, anonymous
+  registry/material/evidence access, immutable tag/settings bootstrap and public acceptance
+  remain T060–T062; no tag, release or image was published during this phase.
+
+### Phase 3 orchestrator code review before committed CI
+
+- gate_id / requirement_ids: F008-RELEASE-POLICY, F008-REGRESSION (controlled subsets); FR-001–FR-004, FR-018, FR-020–FR-021; SC-002, SC-008.
+- class: Controlled. gate_scope: Feature 008 acceptance. failure_class: none.
+- release / platform: Phase 3 working tree on `008-public-docker-deployment`; macOS arm64, Python 3.13.15. No published candidate.
+- result: pass — parent full run before final subject-name assertion: 1096 passed, 3 deselected, 32 warnings in 6.46s. After that narrow hardening, parent independently reran all 105 release cases successfully; frozen-tree agent full run passed 1097, 3 deselected, 32 warnings in 6.42s. `uv build` passed, with the existing nonfatal uv/backend-range warning; no dependency or lock changes.
+- evidence / limitations: parent verified both workflow YAML files with Ruby, `audit-pins`, shell examples, diff whitespace, notice compressed/uncompressed hashes against provenance, and actual Docker build-context exclusion of ten synthetic private/staging paths while retaining only the notice exception. Standalone verifier parsing/hashing passed on Python 3.11.18. Logs: `/tmp/openmedia-008-phase3-final-full.log`, `/tmp/008-phase3-final-full.log`, `/tmp/openmedia-008-phase3-build.log`, `/tmp/openmedia-008-context-audit.log`. T034 remains unchecked until the committed candidate executes both native CI/archive jobs and complete source collection. Intermediate native image checks do not close that gate.
+- authorized acceptance boundary: maintainer confirmed use of available Docker access and explicitly left root-only installation/ownership/reboot acceptance pending. An authorized test chat is held privately for later delivery checks; no ID or credential is included in tracked/public evidence. Existing server service remains healthy and unchanged.

@@ -1,0 +1,141 @@
+name: Checked release artifacts
+on:
+  pull_request:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  controlled:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Controlled locked suite with the exact runtime tools
+        run: |
+          set -euo pipefail
+          python3 scripts/release/install_tools.py --output "$HOME/.docker/cli-plugins" buildx
+          docker buildx version
+          docker build --provenance=false --tag openmedia:controlled .
+          docker run --rm --user 0:0 --entrypoint /bin/sh \
+            --mount type=bind,src="$GITHUB_WORKSPACE",dst=/input,readonly \
+            --env UV_NO_DEV=0 --env UV_OFFLINE=0 --env UV_CACHE_DIR=/tmp/uv-cache \
+            openmedia:controlled -ec '
+              mkdir /tmp/project
+              cp -R /input/src /input/tests /input/scripts /input/release /input/.github /input/pyproject.toml /input/uv.lock /input/README.md /input/LICENSE /input/THIRD_PARTY_NOTICES.md /input/Dockerfile /input/deploy /tmp/project/
+              cd /tmp/project
+              uv sync --locked --group dev
+              uv run --locked pytest
+            '
+          python3 scripts/release/publish.py audit-pins
+          mkdir -p controlled
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path('controlled/controlled.json').write_text(json.dumps({'result':'pass','source_revision':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT']}))
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: controlled
+          path: controlled/
+          if-no-files-found: error
+          retention-days: 1
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      RELEASE_VERSION: ${{ inputs.version || 'development' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install checksum-pinned build tools
+        run: |
+          set -euo pipefail
+          python3 scripts/release/install_tools.py --output "$HOME/.docker/cli-plugins" buildx
+          python3 scripts/release/install_tools.py --output "$RUNNER_TEMP/tools" syft
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+      - name: Native build, restricted smoke, inventory and same-run archive
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "$(case "$ARCH" in amd64) echo x86_64;; arm64) echo aarch64;; esac)"
+          mkdir -p output
+          docker version > output/engine.txt
+          docker buildx version > output/buildx.txt
+          docker compose version > output/compose.txt
+          # Release config identity comes from archived OCI config bytes. Disable
+          # automatic BuildKit provenance; our checked final index is signed later.
+          docker build --provenance=false --platform "linux/$ARCH" \
+            --build-arg "OPENMEDIA_VERSION=$RELEASE_VERSION" \
+            --build-arg "OPENMEDIA_REVISION=$GITHUB_SHA" --tag "openmedia:tested-$ARCH" .
+          scripts/smoke-container.sh "openmedia:tested-$ARCH" | tee output/smoke.txt
+          python3 scripts/release/collect_sources.py inventory --image "openmedia:tested-$ARCH" --platform "linux/$ARCH" --output output
+          docker image save --output "output/image-$ARCH.tar" "openmedia:tested-$ARCH"
+          syft "docker-archive:output/image-$ARCH.tar" --output "spdx-json=output/sbom-$ARCH.spdx.json"
+          python3 scripts/release/build_record.py --image "openmedia:tested-$ARCH" --platform "linux/$ARCH" --directory output --version "$RELEASE_VERSION" --revision "$GITHUB_SHA"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.arch }}
+          path: output/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+  sources:
+    needs: [controlled, native]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: native-*
+          path: checked
+      - name: Matching sources, full notices and build recipes
+        run: |
+          set -euo pipefail
+          python3 scripts/release/install_tools.py --output "$HOME/.docker/cli-plugins" buildx
+          docker buildx version
+          docker build --file release/Collector.Dockerfile --tag openmedia-source-collector:008 .
+          python3 scripts/release/collect_sources.py collect \
+            --inventory checked/native-amd64/inventory-amd64.json \
+            --inventory checked/native-arm64/inventory-arm64.json \
+            --policy release/source-policy.json --lock uv.lock --output materials
+          python3 scripts/release/validate_release.py sources --directory materials
+      - name: Preserve source-closure diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: source-diagnostics
+          path: |
+            materials/collection-progress.json
+            materials/source-manifest.json
+          if-no-files-found: ignore
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: matching-sources
+          path: |
+            materials/source-manifest.json
+            materials/sources-*.tar.gz
+            materials/notices.tar.gz
+            materials/inventory-*.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0

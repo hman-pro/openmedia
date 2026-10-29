@@ -416,3 +416,95 @@ The build export reports each distinctly (see Phase 2 validation). Smoke reports
 and independently join archive/image/platform/config identities; it cannot infer a
 config identity from `.Id` on this store. Default development labels do not claim a
 published version. Release workflows must supply exact version/full revision build args.
+
+## Phase 3 implementation decisions and executed compatibility evidence
+
+The canonical repository was independently queried with `gh api repos/hman-pro/openmedia`
+on 2026-10-29: `id=1380348601`, `full_name=hman-pro/openmedia`, public canonical URL.
+Both the reviewed verification policy and standalone verifier pin this identity
+independently of downloaded release assets.
+
+GitHub CLI 2.103.3's actual local-bundle JSON was exercised without authentication using
+the pinned CLI repository's original `github_provenance_demo-0.0.12-py3-none-any.whl`
+and matching real signed `.jsonl` fixture, from source commit
+`63837fb778d6a39f02be0ce76ff89f2bc8d74bdc`. `gh attestation verify FILE --bundle BUNDLE
+--repo actions/attest-demo --format json`, with an empty GH_CONFIG_DIR and no GH_TOKEN/
+GITHUB_TOKEN, passed using established roots. Its authenticated fields are
+`verificationResult.signature.certificate.sourceRepositoryIdentifier`,
+`sourceRepositoryURI`, `sourceRepositoryDigest`, `sourceRepositoryRef`,
+`subjectAlternativeName`, `issuer`, and `runnerEnvironment`; subject digests are in
+`verificationResult.statement.subject`. These exact field names drive policy checks.
+This is CLI-output/established-root compatibility evidence, not OpenMedia's own signed
+raw-index proof. That proof and negative tests remain T062. No supplied root is trusted.
+
+The final image's whole-filesystem inventory uses root in a disposable read-only,
+network-none helper with all capabilities dropped except DAC_READ_SEARCH. This narrowly
+permits reading root-only and UID-10001 mode-0700 directories without silently skipping
+them. Production identity/restrictions remain unchanged and are separately smoke-tested.
+DPKG file ownership is joined through merged-/usr aliases, registered maintainer scripts
+are included, Python RECORD ownership is joined for both environments, and every remaining
+ELF or executable script must map to an explicit reviewed, architecture-specific checksum.
+Traversal errors are fatal. This found the otherwise untracked base `policy-rc.d` script;
+its exact installed SHA256 is
+`21a8dca0d6a52cbac52cb7a86178d973616ffb42ea08747e6ff311659ab095e1`.
+The retained debuerreotype source's policy-rc.d heredoc was extracted and matched those
+exact bytes; its recorded source revision denotes matching source, not an invented claim
+about the original base-image builder revision.
+
+Whole-image inspection also found unused uv build caches under /root. The maintainer
+approved `uv cache clean` in the same Dockerfile RUN as uv sync, so unused cached wheels
+never enter a layer. No Python/package/tool/base/FFmpeg pin or runtime behavior changed.
+Exact original package notices remain, and the image now additionally includes deterministic
+`RUNTIME_NOTICES.txt.gz`, with original unmanaged/embedded license texts, source attribution
+lines and material provenance. The Docker source archive/build inputs include every COPY
+input. The notice file is the sole release-directory runtime build-context exception.
+
+The checked source policy records 1,553 distinct Cargo registry archives verified against
+the exact uv/Deno Cargo.lock checksums. The uv source revision is
+`d35f1f2703b4a9cefbfa7fc21164e3ca4fcab933`; Deno is
+`e518fbd66dda5debcbdefc0beb0b3756b37b64fa`; CPython is
+`4061bc4c35f7c26f25264666d4ba083b93d2f6f9`. The exact Python image's OCI annotation
+identifies official recipe commit `688a0b86bb44289df16a363e9f41d90514c1a5f9`.
+V8 crate 150.4.0 includes V8, Chromium build and ICU source rather than empty gitlinks;
+its ICU header identifies 77.1. Deno's ICU-data wrapper is separately identified and
+linked to those source/license materials. Native CPython reports embedded Expat 2.8.2
+and libmpdec 2.5.1, distinct from Debian shared-library versions; HACL source and pip's
+18 vendored components have explicit corresponding-source/notice edges as well.
+Rust 1.98.1/1.95.0 source archives match their official published checksums, and TypeScript
+6.0.3 source is separately retained. This is matching-source coverage, not a binary
+reproducibility promise. Full acquisition of every declared material is still a native
+CI gate, not established by policy construction or this paragraph.
+
+Some exact crate archives omit a separate license file; unavailable recorded git commits
+were not treated as retrieved. The reviewed narrow fallback preserves every original
+source/header and Cargo authors/license declaration, supplies checksum-pinned full
+standard text for an explicitly permitted license branch, and records the absence.
+SPDX text revision `617f1a78824394ada7525017d98c6fb215aad09b` is pinned in policy.
+Prefer Apache-2.0 in an allowed OR expression, retain LLVM exception text for WITH,
+and retain complete source for the selected MPL branch. Unsupported expressions or
+missing required original notices block coverage. Original source copyright notices
+are not replaced with author-derived statements or SPDX template placeholders. The
+MIT-only original-notice audit is retained in `release/notice-review.json`, including
+explicit cases where no copyright line was found. See
+[SPDX guidance](https://spdx.dev/learn/handling-license-info/) and
+[Apache section 4](https://www.apache.org/licenses/LICENSE-2.0.html).
+
+Collector direct package pins and runtime pins are unchanged. The actual arm64 collector
+image built successfully, and APT-authenticated bzip2 source `1.0.8-5` (binary may be
+`1.0.8-5+b1`) was acquired with `.dsc`, original and Debian patch archives and signed-index
+receipt. Frozen signed snapshots at base-era `20260831T000000Z` and review-era
+`20261028T000000Z` supplement current signed metadata; only historical expiry checks are
+disabled, never signature verification. Exact source metadata, acquisition URI, hashes
+and collector dpkg inventory are retained. Full both-platform source closure is T034.
+
+Index media compatibility is explicit: Buildx 0.38.1's reviewed
+[`util/imagetools/create.go`](https://github.com/docker/buildx/blob/v0.38.1/util/imagetools/create.go)
+chooses a Docker manifest list when all children have Docker media types. Newer OCI
+stores normally supply OCI children, and promotion uses `docker buildx imagetools create`
+there. For a classic store yielding two Docker children, the already pinned regctl
+0.11.7 `index create --media-type application/vnd.oci.image.index.v1+json --ref ...`
+creates the required OCI index instead. This decision precedes the first exact-version
+write; it never rewrites a published version or rebuilds either checked child. Child
+config/digest checks and the exact two-platform raw-index verification are unchanged.
+The regctl flag/default was checked against its pinned official source
+`36abda84830dae07db00bf9e5cec95d97b78222a/cmd/regctl/index.go`.

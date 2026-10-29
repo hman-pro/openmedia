@@ -84,3 +84,15 @@ AGENTS.md
 .docker/config.json
 .gh/
 # Keep deploy.env.example, reviewed release policies and sanitized fixtures available.
+
+# Temporary CI/release staging; public sources are hosted as immutable release assets.
+/checked/
+/materials/
+/output/
+/controlled/
+/release-assets/
+/authority/
+/release-tools/
+
+# Notice generator scratch text; the reproducible gzip and provenance are tracked.
+/release/runtime-notices.txt

@@ -40,10 +40,12 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY src ./src
+COPY release/runtime-notices.txt.gz /usr/local/share/doc/openmedia/RUNTIME_NOTICES.txt.gz
 
 # `yt-dlp[default]` installs the pinned yt-dlp-ejs wheel from uv.lock. The application also
 # sets yt-dlp remote_components to an empty set, so EJS is bundled and never fetched at run time.
 RUN uv sync --locked --no-dev --no-editable --compile-bytecode \
+    && uv cache clean \
     && /app/.venv/bin/python -c "import yt_dlp_ejs" \
     && deno --version \
     && ffmpeg -version \

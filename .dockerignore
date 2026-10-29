@@ -95,3 +95,17 @@ htmlcov/
 /release/
 /release-output/
 /source-collection/
+
+# Temporary CI/release staging is never runtime application input.
+/checked/
+/materials/
+/output/
+/controlled/
+/release-assets/
+/authority/
+/release-tools/
+
+# Exact reviewed license texts must accompany the copied unmanaged binaries.
+!/release/
+/release/*
+!/release/runtime-notices.txt.gz

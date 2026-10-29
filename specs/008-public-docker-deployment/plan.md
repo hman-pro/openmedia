@@ -235,3 +235,20 @@ No violations. Additional build-only inventory/signing tools satisfy explicit re
 trust and redistribution requirements. No new runtime dependency or service is justified
 or introduced. The source collector and detached-index verifier add bounded CI work;
 their completeness and negative-path checks are publication gates.
+
+### Phase 3 artifact compatibility adjustment
+
+Whole-image inventory found unused uv build caches and base-generated helpers outside
+the original three scanner paths. Clear uv's cache in the same install RUN, inventory
+the entire static image with explicit read-only DAC_READ_SEARCH permission, and record
+all unmanaged source/notice identities. Include the reviewed compressed original
+unmanaged/embedded notice texts as a Docker COPY input. All exact runtime/base/tool
+pins and production restrictions remain unchanged; the CI candidate must rebuild and
+rerun both native smokes after these artifact-input changes. Source/tool provenance and
+the narrow missing-separate-notice fallback are documented in research.md and policies.
+
+For index assembly, retain Buildx on OCI stores; explicitly use the already pinned
+regctl OCI-index creation boundary if both promoted children are Docker media types.
+Buildx otherwise deliberately emits a Docker list, conflicting with the required OCI
+index contract. Select the format before the first version write, with both exact
+child digests/configs preserved. See the source-level compatibility evidence in research.
