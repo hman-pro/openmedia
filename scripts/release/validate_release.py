@@ -94,7 +94,7 @@ def material_path(root, name):
 
 def inspect_archive(path, max_expanded=32 * 1024**3):
     """Validate paths, link targets, types and expansion without executing/extracting."""
-    total = 0; names = set(); links = {}; member_names = []
+    total = 0; names = set(); links = {}; fifos = set(); member_names = []
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as archive:
             for info in archive.infolist():
@@ -112,7 +112,12 @@ def inspect_archive(path, max_expanded=32 * 1024**3):
             normalized = str(name)
             require(normalized not in names, 'Duplicate archive member')
             names.add(normalized); member_names.append(normalized)
-            require(member.isfile() or member.isdir() or member.issym() or member.islnk(), 'Unsupported archive member type')
+            require(member.isfile() or member.isdir() or member.issym() or member.islnk() or member.isfifo(), 'Unsupported archive member type')
+            if member.isfifo():
+                # dpkg's original source includes FIFO test fixtures. Inspection
+                # never opens/extracts them; dpkg-source unpacks only in the collector.
+                require(member.size == 0, 'FIFO archive member has data')
+                fifos.add(normalized)
             if member.issym() or member.islnk():
                 target = member.linkname
                 require(target and not target.startswith('/') and '\\' not in target and '\x00' not in target, 'Unsafe archive link')
@@ -132,6 +137,7 @@ def inspect_archive(path, max_expanded=32 * 1024**3):
         parts = PurePosixPath(member_name).parts
         for count in range(1, len(parts)):
             require('/'.join(parts[:count]) not in links, 'Archive member traverses a link')
+            require('/'.join(parts[:count]) not in fifos, 'Archive member traverses a FIFO')
     for original in links:
         current = links[original]; seen = {original}
         while True:

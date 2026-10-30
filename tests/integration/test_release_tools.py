@@ -38,6 +38,29 @@ def test_safe_internal_symlink_archive_is_inspectable(tmp_path):
     release.inspect_archive(path)
 
 
+def test_fifo_source_fixture_is_inspected_without_creating_it(tmp_path):
+    path = tmp_path / 'source.tar.gz'
+    with tarfile.open(path, 'w:gz') as out:
+        info = tarfile.TarInfo('pkg/tests/test-fifo'); info.type = tarfile.FIFOTYPE
+        out.addfile(info)
+    release.inspect_archive(path)
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.parametrize('fault', ['data', 'descendant', 'device'])
+def test_unsafe_fifo_or_device_fixture_is_rejected(tmp_path, fault):
+    path = tmp_path / 'source.tar.gz'
+    with tarfile.open(path, 'w:gz') as out:
+        info = tarfile.TarInfo('pkg/fifo'); info.type = tarfile.FIFOTYPE
+        if fault == 'device': info.type = tarfile.BLKTYPE
+        if fault == 'data': info.size = 1
+        out.addfile(info, io.BytesIO(b'x'))
+        if fault == 'descendant':
+            child = tarfile.TarInfo('pkg/fifo/file'); child.size = 1
+            out.addfile(child, io.BytesIO(b'x'))
+    with pytest.raises(release.ReleaseError): release.inspect_archive(path)
+
+
 def test_debian_source_version_and_built_using():
     text = (ROOT / 'tests/fixtures/release/sources/dpkg.tsv').read_text()
     rows = collector.parse_dpkg(text, 'linux/arm64')

@@ -526,3 +526,12 @@ the collector's explicit signed HTTPS source file, excluding other source parts.
 The original `adduser=3.134` failure reproduced locally; the isolated configuration
 passes with exact HTTPS URLs and verified material hashes. Archive signature checks
 and frozen-snapshot expiry handling remain unchanged.
+
+The exact authenticated `dpkg_1.21.23.tar.xz` (SHA256
+`fb14678feb1129380c6ca1d0facffa56db16db0c4f497b902e703a6f369291c1`)
+contains three zero-length FIFO fixtures under `tests/t-unpack-fifo` and
+`tests/t-unpack-hardlink`. Archive inspection permits inert FIFO metadata, rejects
+FIFO data/descendants and devices, and never creates or opens FIFO members on the
+host. Original archive bytes remain unchanged; actual dpkg-source unpacking passes
+inside the disposable network-free collector. Logical distribution parts still
+contain only regular material files. This changes build-only validation, not runtime.

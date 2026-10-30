@@ -400,5 +400,13 @@ build alone is live startup.
   `/tmp/openmedia-008-t034/apt-https-repro/receipt.json`. Injected receipt regression plus
   release-tool suites: 108 passed. The next committed CI rerun must still complete all
   materials, notices, packaging and validation. T034 remains unchecked.
+- Candidate `d4d7d4b7a64f42278724c00268b8d32f26a037b8`,
+  [push run 41105041723](https://github.com/hman-pro/openmedia/actions/runs/41105041723):
+  controlled and both native jobs passed; source collection reached `dpkg=1.21.23`
+  and rejected its three original FIFO test fixtures as unsupported types. Actual
+  signed-APT acquisition and isolated network-free dpkg-source unpacking pass after
+  allowing zero-length FIFO metadata without host extraction. Devices, FIFO data and
+  descendant traversal remain rejected; release-tool suites: 112 passed. This is a
+  corrected validator compatibility issue, not a waived archive/source gate.
 - Public material retrieval/signatures, release authority/settings and distribution
   remain T060–T062. No source tag, version tag, registry image or release was published.
