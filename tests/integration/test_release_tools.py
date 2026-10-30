@@ -38,6 +38,44 @@ def test_safe_internal_symlink_archive_is_inspectable(tmp_path):
     release.inspect_archive(path)
 
 
+def test_symlink_to_archive_root_is_safe_but_cannot_be_traversed(tmp_path):
+    path = tmp_path / 'source.tar.gz'
+    archive(path, 'pkg/root', '..')
+    release.inspect_archive(path)
+    with tarfile.open(path, 'w:gz') as out:
+        info = tarfile.TarInfo('pkg/root'); info.type = tarfile.SYMTYPE; info.linkname = '..'
+        out.addfile(info)
+        child = tarfile.TarInfo('pkg/root/file'); child.size = 1
+        out.addfile(child, io.BytesIO(b'x'))
+    with pytest.raises(release.ReleaseError, match='traverses'): release.inspect_archive(path)
+
+
+@pytest.mark.parametrize('second', ['directory', 'changed-mode', 'file'])
+def test_repeated_directory_headers_do_not_allow_conflicting_members(tmp_path, second):
+    path = tmp_path / 'source.tar.gz'
+    with tarfile.open(path, 'w:gz') as out:
+        directory = tarfile.TarInfo('pkg/'); directory.type = tarfile.DIRTYPE
+        out.addfile(directory)
+        repeated = tarfile.TarInfo('pkg/')
+        if second != 'file': repeated.type = tarfile.DIRTYPE
+        if second == 'changed-mode': repeated.mode = 0o777
+        out.addfile(repeated)
+    if second == 'directory': release.inspect_archive(path)
+    else:
+        with pytest.raises(release.ReleaseError): release.inspect_archive(path)
+
+
+def test_systemd_literal_hex_escape_filename_is_not_decoded(tmp_path):
+    path = tmp_path / 'source.tar.gz'
+    name = r'pkg/units/system-systemd\x2dcryptsetup.slice'
+    archive(path, name)
+    release.inspect_archive(path)
+    assert str(release.archive_path(name)) == name
+    with pytest.raises(release.ReleaseError): release.safe_path(name)
+    for unsafe in [r'pkg\..\escape', r'pkg/../escape', r'pkg/\x2d/../escape']:
+        with pytest.raises(release.ReleaseError): release.archive_path(unsafe)
+
+
 def test_fifo_source_fixture_is_inspected_without_creating_it(tmp_path):
     path = tmp_path / 'source.tar.gz'
     with tarfile.open(path, 'w:gz') as out:

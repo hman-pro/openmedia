@@ -92,13 +92,21 @@ def material_path(root, name):
     return path
 
 
+def archive_path(value):
+    # systemd sources use literal POSIX filenames such as dev-mapper-foo\x2dbar.
+    # Accept the spelled-out hex escape only; never decode it into a path character.
+    require(isinstance(value, str), 'Invalid archive path')
+    safe_path(re.sub(r'\\x[0-9a-fA-F]{2}', '_', value))
+    return PurePosixPath(value)
+
+
 def inspect_archive(path, max_expanded=32 * 1024**3):
     """Validate paths, link targets, types and expansion without executing/extracting."""
-    total = 0; names = set(); links = {}; fifos = set(); member_names = []
+    total = 0; names = set(); directories = {}; links = {}; fifos = set(); member_names = []
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as archive:
             for info in archive.infolist():
-                safe_path(info.filename)
+                archive_path(info.filename)
                 require(info.filename not in names, 'Duplicate archive member')
                 names.add(info.filename); total += info.file_size
                 mode = (info.external_attr >> 16) & 0o170000
@@ -108,10 +116,14 @@ def inspect_archive(path, max_expanded=32 * 1024**3):
     with tarfile.open(path, 'r:*') as archive:
         for member in archive:
             if member.isdir() and member.name in ('.', './'): continue
-            name = safe_path(member.name)
+            name = archive_path(member.name)
             normalized = str(name)
+            if normalized in names and member.isdir():
+                require(member.size == 0 and directories.get(normalized) == (member.mode, member.uid, member.gid), 'Conflicting duplicate archive directory')
+                continue
             require(normalized not in names, 'Duplicate archive member')
             names.add(normalized); member_names.append(normalized)
+            if member.isdir(): directories[normalized] = (member.mode, member.uid, member.gid)
             require(member.isfile() or member.isdir() or member.issym() or member.islnk() or member.isfifo(), 'Unsupported archive member type')
             if member.isfifo():
                 # dpkg's original source includes FIFO test fixtures. Inspection
@@ -126,7 +138,7 @@ def inspect_archive(path, max_expanded=32 * 1024**3):
                     if part == '..':
                         require(bool(parts), 'Escaping archive link'); parts.pop()
                     elif part != '.': parts.append(part)
-                require(bool(parts), 'Invalid archive link')
+                require(bool(parts) or member.issym(), 'Invalid archive link')
                 links[str(name)] = '/'.join(parts)
             total += member.size
             require(total <= max_expanded, 'Oversized source archive')
@@ -147,7 +159,7 @@ def inspect_archive(path, max_expanded=32 * 1024**3):
             require(found not in seen, 'Archive link cycle'); seen.add(found)
             tail = parts[len(PurePosixPath(found).parts):]
             current = '/'.join(PurePosixPath(links[found]).parts + tail)
-            safe_path(current)
+            if current: safe_path(current)
     # Inspection does not execute or extract upstream code.
 
 

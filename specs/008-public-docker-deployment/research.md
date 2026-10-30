@@ -535,3 +535,20 @@ FIFO data/descendants and devices, and never creates or opens FIFO members on th
 host. Original archive bytes remain unchanged; actual dpkg-source unpacking passes
 inside the disposable network-free collector. Logical distribution parts still
 contain only regular material files. This changes build-only validation, not runtime.
+
+Further actual source inspection found NORM's `norp/norm -> ..` symlink resolves
+exactly to the archive root, and its repeated `protolib/` directory header differs
+only in timestamp. Permit in-bounds root symlinks and repeated directories with
+matching type/mode/ownership; still reject escaping links, traversal through links,
+duplicate files, conflicting directory metadata and devices. Systemd sources use
+literal `\\x2d` unit-name spellings: the archive-only path checker accepts literal
+hex escapes without decoding them. Material paths retain their stricter rules.
+Each case has controlled positive/negative regressions. Source notice retention
+hashes an archive once rather than once per notice and skips scans when no notice
+patterns are requested; exact notice bytes and material hashes remain authoritative.
+
+The exact CPython release carries libmpdec original copyright/license notices in
+`Modules/_decimal/libmpdec/` source headers, including `mpdecimal.h`, rather than
+the previously named nonexistent COPYRIGHT file. Preserve that directory's original
+source files as notice materials. The checksum-pinned release archive was inspected
+directly; no replacement attribution or inferred copyright text is introduced.

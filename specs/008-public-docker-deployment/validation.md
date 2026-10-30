@@ -408,5 +408,19 @@ build alone is live startup.
   allowing zero-length FIFO metadata without host extraction. Devices, FIFO data and
   descendant traversal remain rejected; release-tool suites: 112 passed. This is a
   corrected validator compatibility issue, not a waived archive/source gate.
+- Candidate `a076cca9b83b77b30f1c08dcd0414e6a0eee463a`,
+  [push run 41106267477](https://github.com/hman-pro/openmedia/actions/runs/41106267477):
+  controlled and both native jobs passed; source collection rejected the NORM source's
+  archive-root symlink. Local source acquisition reproduced this and its equivalent
+  repeated directory header, then reached systemd's literal hex-escape filenames.
+  Corrections preserve original archive bytes and retain traversal/device/conflicting
+  member rejection. Controlled release-tool suites: 117 passed. The local acquisition
+  diagnostic uses earlier inventories/notices and is not candidate acceptance evidence.
+- The resumed local diagnostic now uses matching inventories/notices downloaded from
+  run 41105041723, and individually rehashes cached upstream materials before reuse.
+  It passed acquisition/notices for every component and reached source packaging.
+  It also exposed libmpdec's incorrect notice pattern, corrected to the original source
+  headers in the exact CPython archive. This working-tree diagnostic is not evidence
+  for a later committed candidate; a complete fresh CI run remains required.
 - Public material retrieval/signatures, release authority/settings and distribution
   remain T060–T062. No source tag, version tag, registry image or release was published.

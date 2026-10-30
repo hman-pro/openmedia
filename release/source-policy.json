@@ -72698,7 +72698,7 @@
       "license": "BSD-2-Clause",
       "name": "cpython-libmpdec",
       "notice_patterns": [
-        "modules/_decimal/libmpdec/copyright"
+        "modules/_decimal/libmpdec/"
       ],
       "source_evidence": "Bundled source within exact official CPython release. Expat2.8.2 and libmpdec2.5.1 also observed from native installed pyexpat/_decimal; HACL identity denotes CPython vendoring revision, not an invented upstream release.",
       "source_files": [

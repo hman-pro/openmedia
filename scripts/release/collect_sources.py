@@ -244,13 +244,16 @@ def validate_debian_receipt(receipt, destination, identity):
 
 def retain_archive_notices(path, output, component):
     patterns = [x.lower() for x in component.get('notice_patterns', [])]
+    if not patterns: return
     retained = []
+    source_digest = None
     if tarfile.is_tarfile(path):
         with tarfile.open(path, 'r:*') as source:
             for member in source:
                 if member.isfile() and any(p in member.name.lower() for p in patterns):
                     safe_path(member.name)
-                    target = output / 'notices' / 'sources' / digest(path) / member.name
+                    if source_digest is None: source_digest = digest(path)
+                    target = output / 'notices' / 'sources' / source_digest / member.name
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(source.extractfile(member).read())
                     retained.append(str(target.relative_to(output)))
