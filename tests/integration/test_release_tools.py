@@ -11,6 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/release'))
 import collect_sources as collector
+import debian_acquire
 import validate_release as release
 
 
@@ -51,6 +52,46 @@ def test_reviewed_source_policy_covers_every_incorporated_edge():
         for edge in component.get('incorporated_sources', []):
             matches = [c for c in policy['components'] if c.get('source_identity') == edge]
             assert len(matches) == 1, (component['name'], edge)
+
+
+def test_debian_receipt_uses_isolated_https_origins(tmp_path, monkeypatch):
+    payload = b'fixture'
+    checksum = hashlib.sha256(payload).hexdigest()
+    original_write = Path.write_text
+    commands = []
+
+    def write(path, text, *args, **kwargs):
+        if str(path) == '/etc/apt/sources.list.d/openmedia-sources.sources':
+            assert 'URIs: http://' not in text
+            return len(text)
+        return original_write(path, text, *args, **kwargs)
+
+    def command(args):
+        commands.append(args)
+        if args[0] == 'dpkg-query': return 'fixture\t1\n'
+        assert args[1:5] == debian_acquire.SOURCE_OPTIONS
+        if args[0] == 'apt-cache':
+            return f'Package: fixture\nVersion: 1\nChecksums-Sha256:\n {checksum} 7 fixture.tar.gz\n'
+        if '--print-uris' in args:
+            return f"'https://example.org/fixture.tar.gz' fixture.tar.gz 7 SHA256:{checksum}\n"
+        return ''
+
+    def run(args, **kwargs):
+        if args[0] == 'apt-get':
+            assert args[1:5] == debian_acquire.SOURCE_OPTIONS
+            (kwargs['cwd'] / 'fixture.tar.gz').write_bytes(payload)
+
+    monkeypatch.setattr(Path, 'write_text', write)
+    monkeypatch.setattr(Path, 'touch', lambda *args, **kwargs: None)
+    monkeypatch.setattr(debian_acquire, 'command', command)
+    monkeypatch.setattr(debian_acquire.subprocess, 'run', run)
+    monkeypatch.setattr(sys, 'argv', ['debian_acquire.py', '--name', 'fixture', '--version', '1',
+                                    '--snapshot', '20261028T000000Z', '--output', str(tmp_path)])
+    debian_acquire.main()
+    receipt = json.loads((tmp_path / 'receipt.json').read_text())
+    assert receipt['files'][0]['url'] == 'https://example.org/fixture.tar.gz'
+    assert receipt['files'][0]['sha256'] == checksum
+    assert any('--print-uris' in args for args in commands)
 
 
 def test_built_using_debian_source_retains_original_notices(tmp_path, monkeypatch):

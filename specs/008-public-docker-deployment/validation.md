@@ -367,3 +367,38 @@ build alone is live startup.
 - result: pass — parent full run before final subject-name assertion: 1096 passed, 3 deselected, 32 warnings in 6.46s. After that narrow hardening, parent independently reran all 105 release cases successfully; frozen-tree agent full run passed 1097, 3 deselected, 32 warnings in 6.42s. `uv build` passed, with the existing nonfatal uv/backend-range warning; no dependency or lock changes.
 - evidence / limitations: parent verified both workflow YAML files with Ruby, `audit-pins`, shell examples, diff whitespace, notice compressed/uncompressed hashes against provenance, and actual Docker build-context exclusion of ten synthetic private/staging paths while retaining only the notice exception. Standalone verifier parsing/hashing passed on Python 3.11.18. Logs: `/tmp/openmedia-008-phase3-final-full.log`, `/tmp/008-phase3-final-full.log`, `/tmp/openmedia-008-phase3-build.log`, `/tmp/openmedia-008-context-audit.log`. T034 remains unchecked until the committed candidate executes both native CI/archive jobs and complete source collection. Intermediate native image checks do not close that gate.
 - authorized acceptance boundary: maintainer confirmed use of available Docker access and explicitly left root-only installation/ownership/reboot acceptance pending. An authorized test chat is held privately for later delivery checks; no ID or credential is included in tracked/public evidence. Existing server service remains healthy and unchanged.
+
+### US1 T034 committed CI validation — 2026-10-30
+
+- gate_id / requirement_ids: F008-REGRESSION, F008-NATIVE-AMD64,
+  F008-NATIVE-ARM64, F008-SOURCE-COVERAGE; FR-002, FR-004, FR-007, FR-018;
+  SC-002, SC-004. class: Controlled and native container/source acquisition.
+  gate_scope: Feature 008 acceptance. No polling, publication or host operations.
+- Original candidate `cbc74cc9ca3399fb3f709bf3f5fe21768c6686d1`:
+  [push run 40851016043](https://github.com/hman-pro/openmedia/actions/runs/40851016043)
+  passed both native jobs but failed controlled tests (1 failed, 1096 passed,
+  3 deselected). Root bypassed chmod in the diagnostic outage test. Commit
+  `07885b4111b0819a41707172d4302f8104e90cf8` injects `PermissionError` at the
+  filesystem boundary, retaining outage/retry/recovery assertions; local diagnostics:
+  33 passed. No application change was required.
+- [PR run 41102961896](https://github.com/hman-pro/openmedia/actions/runs/41102961896)
+  passed controlled and both native jobs, then failed source policy resolution:
+  `libslang2` incorporated `unicode-data=15.0.0-1` without a reviewed source entry.
+  This is a deployment tooling defect, not a source-network limitation or waived gate.
+  The PR artifact identifies merge revision `e80b9e7f4235059947e064b910192fbcf8321ffa`;
+  it is not evidence for the subsequent corrected candidate.
+- Commit `46a6fe3d5e891f606144e06d7f1767ce624219ea` adds the exact Debian source
+  entry and retains original notices from authenticated incorporated source archives.
+  Controlled policy-edge and notice-retention regression checks added; release-tool
+  suites: 107 passed. [Candidate push run 41104236736](https://github.com/hman-pro/openmedia/actions/runs/41104236736)
+  passed controlled and both native jobs, then failed recording the first Debian source
+  receipt: APT selected an equivalent HTTP binary mirror from the base configuration,
+  so the required HTTPS acquisition URL was absent. Reproduced with real `adduser=3.134`
+  acquisition in the native arm64 collector. Source operations now use only the explicit
+  signed HTTPS source configuration (`Dir::Etc::sourcelist`/`sourceparts`). The same real
+  acquisition passes and records both HTTPS material URLs; local evidence:
+  `/tmp/openmedia-008-t034/apt-https-repro/receipt.json`. Injected receipt regression plus
+  release-tool suites: 108 passed. The next committed CI rerun must still complete all
+  materials, notices, packaging and validation. T034 remains unchecked.
+- Public material retrieval/signatures, release authority/settings and distribution
+  remain T060–T062. No source tag, version tag, registry image or release was published.

@@ -518,3 +518,11 @@ copyright/license files from source archives: incorporated sources have no insta
 binary notice directory. A controlled policy-closure check now rejects missing or
 ambiguous edges, and an acquisition fixture proves original notice retention for
 Debian incorporated sources. No runtime input or source-access mode changes.
+
+Actual CI then exposed APT mirror coalescing: the base image's HTTP binary origin
+could supply the equivalent source URI despite the additional HTTPS deb-src entries.
+Source update, metadata resolution, URI recording and download now all select only
+the collector's explicit signed HTTPS source file, excluding other source parts.
+The original `adduser=3.134` failure reproduced locally; the isolated configuration
+passes with exact HTTPS URLs and verified material hashes. Archive signature checks
+and frozen-snapshot expiry handling remain unchanged.

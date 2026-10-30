@@ -8,6 +8,12 @@ import shlex
 import subprocess
 
 
+# Exclude the base image's HTTP binary origins: APT can otherwise choose their
+# equivalent mirror URI when resolving an HTTPS deb-src entry.
+SOURCE_OPTIONS = ['-o', 'Dir::Etc::sourcelist=/etc/apt/sources.list.d/openmedia-sources.sources',
+                  '-o', 'Dir::Etc::sourceparts=-']
+
+
 def command(args):
     return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT)
 
@@ -59,9 +65,9 @@ Check-Valid-Until: no
 '''
     Path('/etc/apt/sources.list.d/openmedia-sources.sources').write_text(sources)
     if not Path('/tmp/openmedia-apt-ready').exists():
-        command(['apt-get', 'update', '-o', 'APT::Update::Error-Mode=any'])
+        command(['apt-get', *SOURCE_OPTIONS, 'update', '-o', 'APT::Update::Error-Mode=any'])
         Path('/tmp/openmedia-apt-ready').touch()
-    raw = command(['apt-cache', 'showsrc', '--only-source', args.name])
+    raw = command(['apt-cache', *SOURCE_OPTIONS, 'showsrc', '--only-source', args.name])
     matches = [fields(x) for x in raw.split('\n\n') if fields(x).get('Version') == args.version and fields(x).get('Package') == args.name]
     if not matches: raise SystemExit('Exact authenticated Debian source unavailable')
     metadata = matches[0]
@@ -71,12 +77,12 @@ Check-Valid-Until: no
         checksum, size, name = line.split()
         if not re.fullmatch('[a-f0-9]{64}', checksum) or '/' in name or name in ('.', '..'): raise SystemExit('Invalid authenticated source metadata')
         rows.append({'name': name, 'sha256': checksum, 'size': int(size)})
-    uris = command(['apt-get', 'source', '--print-uris', '--download-only', '--only-source', args.name + '=' + args.version])
+    uris = command(['apt-get', *SOURCE_OPTIONS, 'source', '--print-uris', '--download-only', '--only-source', args.name + '=' + args.version])
     locations = {}
     for line in uris.splitlines():
         if line.startswith("'https://"):
             parts = shlex.split(line); locations[parts[1]] = parts[0]
-    subprocess.run(['apt-get', 'source', '--download-only', '--only-source', args.name + '=' + args.version], cwd=output, check=True)
+    subprocess.run(['apt-get', *SOURCE_OPTIONS, 'source', '--download-only', '--only-source', args.name + '=' + args.version], cwd=output, check=True)
     for row in rows:
         path = output / row['name']
         if not path.is_file() or path.stat().st_size != row['size'] or hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() != row['sha256']: raise SystemExit('APT source checksum failed')
