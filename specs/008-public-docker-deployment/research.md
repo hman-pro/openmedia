@@ -508,3 +508,13 @@ write; it never rewrites a published version or rebuilds either checked child. C
 config/digest checks and the exact two-platform raw-index verification are unchanged.
 The regctl flag/default was checked against its pinned official source
 `36abda84830dae07db00bf9e5cec95d97b78222a/cmd/regctl/index.go`.
+
+### US1 committed CI source-closure correction
+
+The first completed source job found the actual Debian `libslang2` Built-Using edge
+to `unicode-data=15.0.0-1` missing from reviewed policy. Explicitly acquire that exact
+source through the existing authenticated APT boundary and preserve its original
+copyright/license files from source archives: incorporated sources have no installed
+binary notice directory. A controlled policy-closure check now rejects missing or
+ambiguous edges, and an acquisition fixture proves original notice retention for
+Debian incorporated sources. No runtime input or source-access mode changes.

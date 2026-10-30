@@ -357,6 +357,10 @@ def _acquire_components(components, inventories, policy, output, repository, con
             receipt = collect_debian(identity, output / location, policy['collector_image'], policy.get('debian_snapshots', [policy['debian_snapshot']]), container, output)
             component['source_files'] = [{**x, 'path': location + '/' + x['name'], 'role': 'debian-source'} for x in receipt['files']]
             component['build_materials'].extend([location + '/receipt.json', location + '/authenticated-source-stanza.txt', location + '/unpack-validation.json', 'apt-authentication.tar.gz', 'build/Collector.Dockerfile', 'build/source-policy.json'])
+            # Built-Using sources may have no installed binary or installed notice.
+            # Retain their original notices from the authenticated source archives.
+            for material in component['source_files']:
+                retain_archive_notices(output / material['path'], output, component)
         elif component['name'] == 'openmedia':
             revision = inventories[0]['source_revision']; target = output / 'materials' / ('openmedia-' + revision + '.tar.gz'); target.parent.mkdir(parents=True, exist_ok=True)
             run(['git', '-C', str(repository), 'archive', '--format=tar.gz', '--output', str(target.resolve()), revision, 'src', 'scripts', 'release', '.github', '.dockerignore', 'Dockerfile', 'pyproject.toml', 'uv.lock', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md'])

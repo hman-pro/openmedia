@@ -72745,6 +72745,28 @@
         "version": "3.13.15-4061bc4c35f7c26f25264666d4ba083b93d2f6f9"
       },
       "version": "3.13.15-4061bc4c35f7c26f25264666d4ba083b93d2f6f9"
+    },
+    {
+      "acquisition": "debian",
+      "build_materials": [
+        "build/source-policy.json"
+      ],
+      "embedded_review": "complete",
+      "incorporated_sources": [],
+      "kind": "embedded",
+      "license": "Debian source copyright and Unicode data license texts",
+      "name": "unicode-data",
+      "notice_patterns": [
+        "copyright",
+        "license",
+        "copying"
+      ],
+      "source_files": [],
+      "source_identity": {
+        "name": "unicode-data",
+        "version": "15.0.0-1"
+      },
+      "version": "15.0.0-1"
     }
   ],
   "debian_snapshot": "20261028T000000Z",

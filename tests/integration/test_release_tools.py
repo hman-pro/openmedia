@@ -45,6 +45,36 @@ def test_debian_source_version_and_built_using():
     assert rows[0]['incorporated_sources'] == [{'name': 'embedded', 'version': '2.0-1'}]
 
 
+def test_reviewed_source_policy_covers_every_incorporated_edge():
+    policy = json.loads((ROOT / 'release/source-policy.json').read_text())
+    for component in policy['components']:
+        for edge in component.get('incorporated_sources', []):
+            matches = [c for c in policy['components'] if c.get('source_identity') == edge]
+            assert len(matches) == 1, (component['name'], edge)
+
+
+def test_built_using_debian_source_retains_original_notices(tmp_path, monkeypatch):
+    component = {'component_id': 'embedded:unicode-data@15.0.0-1',
+                 'name': 'unicode-data', 'kind': 'embedded', 'acquisition': 'debian',
+                 'source_identity': {'name': 'unicode-data', 'version': '15.0.0-1'},
+                 'notice_patterns': ['copyright'], 'notice_paths': [], 'build_materials': []}
+
+    def acquire(identity, destination, *args):
+        destination.mkdir(parents=True)
+        source = destination / 'unicode-data.debian.tar.gz'
+        archive(source, 'debian/copyright')
+        return {'files': [{'name': source.name, 'sha256': release.digest(source),
+                           'size': source.stat().st_size}]}
+
+    monkeypatch.setattr(collector, 'collect_debian', acquire)
+    collector._acquire_components({component['component_id']: component}, [],
+                                 {'collector_image': 'fixture', 'debian_snapshot': 'fixture'},
+                                 tmp_path, ROOT, 'fixture')
+    assert component['coverage'] == 'complete'
+    assert len(component['notice_paths']) == 1
+    assert (tmp_path / component['notice_paths'][0]).read_bytes() == b'license'
+
+
 def test_unknown_unmanaged_and_unlocked_python_fail_closed():
     for component in [{'kind': 'unmanaged', 'name': 'surprise', 'version': '1'}, {'kind': 'system-python', 'name': 'pip', 'version': 'unknown'}]:
         with pytest.raises(release.ReleaseError): collector.resolve_component(component, {'components': []}, {'package': []})
