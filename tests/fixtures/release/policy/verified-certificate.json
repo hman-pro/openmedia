@@ -1,0 +1,58 @@
+[
+  {
+    "verificationResult": {
+      "mediaType": "application/vnd.dev.sigstore.verificationresult+json;version=0.1",
+      "signature": {
+        "certificate": {
+          "certificateIssuer": "CN=Fulcio Intermediate l2,O=GitHub\\, Inc.",
+          "subjectAlternativeName": "https://github.com/hman-pro/openmedia/.github/workflows/release.yml@refs/tags/v0.1.0-preview.1",
+          "issuer": "https://token.actions.githubusercontent.com",
+          "buildSignerURI": "https://github.com/hman-pro/openmedia/.github/workflows/release.yml@refs/tags/v0.1.0-preview.1",
+          "buildSignerDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "runnerEnvironment": "github-hosted",
+          "sourceRepositoryURI": "https://github.com/hman-pro/openmedia",
+          "sourceRepositoryDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceRepositoryRef": "refs/tags/v0.1.0-preview.1",
+          "sourceRepositoryIdentifier": "1380348601",
+          "sourceRepositoryOwnerURI": "https://github.com/hman-pro",
+          "sourceRepositoryOwnerIdentifier": "1",
+          "buildConfigURI": "https://github.com/hman-pro/openmedia/.github/workflows/release.yml@refs/tags/v0.1.0-preview.1",
+          "buildConfigDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "buildTrigger": "workflow_dispatch",
+          "runInvocationURI": "https://github.com/hman-pro/openmedia/actions/runs/1/attempts/1",
+          "sourceRepositoryVisibilityAtSigning": "public"
+        }
+      },
+      "verifiedTimestamps": [
+        {
+          "type": "TimestampAuthority",
+          "uri": "timestamp.githubapp.com",
+          "timestamp": "2024-04-22T17:33:26Z"
+        }
+      ],
+      "verifiedIdentity": {
+        "subjectAlternativeName": {
+          "subjectAlternativeName": "",
+          "regexp": "(?i)^https://github\\.com/actions/attest-demo/"
+        },
+        "issuer": {
+          "issuer": "",
+          "regexp": ".*"
+        }
+      },
+      "statement": {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": [
+          {
+            "name": "ghcr.io/hman-pro/openmedia",
+            "digest": {
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        ],
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "predicate": {}
+      }
+    }
+  }
+]

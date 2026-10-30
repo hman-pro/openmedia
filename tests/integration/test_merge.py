@@ -323,8 +323,14 @@ def test_measured_frame_is_the_displayed_frame_after_rotation(tmp_path: Path, ro
         check=True,
     )
     clip = tmp_path / "rotated.mp4"
+    # FFmpeg 5.1 (the pinned runtime) writes display matrices through stream metadata;
+    # newer FFmpeg versions use the explicit input rotation option instead.
+    help_text = subprocess.run([tool("ffmpeg"), "-h", "full"], capture_output=True, text=True, check=True).stdout
+    rotation_args = (["-display_rotation", str(rotation), "-i", str(stored), "-c", "copy"]
+        if "-display_rotation" in help_text else
+        ["-i", str(stored), "-c", "copy", "-metadata:s:v:0", f"rotate={rotation}"])
     subprocess.run(
-        [tool("ffmpeg"), "-nostdin", "-v", "error", "-display_rotation", str(rotation), "-i", str(stored), "-c", "copy", str(clip)],
+        [tool("ffmpeg"), "-nostdin", "-v", "error", *rotation_args, str(clip)],
         check=True,
     )
     option = replace(unknown_codec_option(includes_audio=False), height=None)

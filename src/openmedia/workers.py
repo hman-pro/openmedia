@@ -39,7 +39,7 @@ _TOKEN_DIAGNOSTIC = re.compile(
     rb"(?i)(telegram_bot_token\s*=\s*)[^\s]+|\b\d{6,}:[A-Za-z0-9_-]{20,}\b"
 )
 _FORBIDDEN_KEYS = frozenset(
-    {"telegram_bot_token", "bot_token", "telegram_user_id", "user_id", "chat_id"}
+    {"telegram_bot_token", "telegram_bot_token_file", "bot_token", "telegram_user_id", "user_id", "chat_id"}
 )
 _REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 
