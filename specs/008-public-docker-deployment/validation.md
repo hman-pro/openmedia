@@ -55,6 +55,10 @@ source limitations. No classification changes a failed result to `pass`.
 
 All rows have gate_scope **Feature 008 acceptance**.
 
+T034's US1 candidate milestone passed on `52f4dc8` (record below). Aggregate
+final-candidate, promotion and public-distribution gates still require T059–T062;
+their pending rows are not a claim that the completed US1 checks were unexecuted.
+
 | gate_id | requirement_ids | class | Required execution / evidence and limitations | result |
 |---|---|---|---|---|
 | F008-SETUP | FR-003, FR-009, FR-019 | Controlled | Official pin provenance/checksums; validation register; Git/Docker secret exclusions; execution record below | pass |
@@ -368,7 +372,7 @@ build alone is live startup.
 - evidence / limitations: parent verified both workflow YAML files with Ruby, `audit-pins`, shell examples, diff whitespace, notice compressed/uncompressed hashes against provenance, and actual Docker build-context exclusion of ten synthetic private/staging paths while retaining only the notice exception. Standalone verifier parsing/hashing passed on Python 3.11.18. Logs: `/tmp/openmedia-008-phase3-final-full.log`, `/tmp/008-phase3-final-full.log`, `/tmp/openmedia-008-phase3-build.log`, `/tmp/openmedia-008-context-audit.log`. T034 remains unchecked until the committed candidate executes both native CI/archive jobs and complete source collection. Intermediate native image checks do not close that gate.
 - authorized acceptance boundary: maintainer confirmed use of available Docker access and explicitly left root-only installation/ownership/reboot acceptance pending. An authorized test chat is held privately for later delivery checks; no ID or credential is included in tracked/public evidence. Existing server service remains healthy and unchanged.
 
-### US1 T034 committed CI validation — 2026-10-30
+### US1 T034 committed CI validation — 2026-10-30–31
 
 - gate_id / requirement_ids: F008-REGRESSION, F008-NATIVE-AMD64,
   F008-NATIVE-ARM64, F008-SOURCE-COVERAGE; FR-002, FR-004, FR-007, FR-018;
@@ -431,5 +435,65 @@ build alone is live startup.
   pass; it never substituted for committed CI acceptance. Native output upload now
   explicitly preserves hidden files, with inventory notice validation before network
   acquisition. This fix requires a fresh complete CI run; no missing notice is waived.
-- Public material retrieval/signatures, release authority/settings and distribution
-  remain T060–T062. No source tag, version tag, registry image or release was published.
+
+### US1 T034 candidate evidence — 2026-10-31
+
+- gate_id / requirement_ids: F008-REGRESSION, F008-NATIVE-AMD64,
+  F008-NATIVE-ARM64, F008-SOURCE-COVERAGE; FR-002, FR-004, FR-007, FR-018;
+  SC-002, SC-004. class: Controlled, native container and source acquisition.
+  gate_scope: Feature 008 acceptance. failure_class: none for completed checks.
+- Candidate: `52f4dc8cecf23e781df827a2305cf15f4a5030ce`, image label
+  `development`, installed package 0.1.0; [push run 41229989620, attempt 1](https://github.com/hman-pro/openmedia/actions/runs/41229989620).
+  **Result: pass.** All four jobs completed successfully: controlled, native amd64,
+  native arm64 and sources. The controlled suite reports **1110 passed, 3 live tests
+  deselected, 32 existing warnings**. Source collection, bundle validation and material
+  upload passed. T034 is complete; US1 has no remaining implementation tasks.
+- Environment: native GitHub-hosted Ubuntu 24.04 runners; amd64 image revision
+  `20261026.354.1`, arm64 `20261026.166.1`. Both report Engine 28.0.4, Compose
+  2.38.2, checksum-pinned Buildx 0.38.1 and Syft 1.55.0. Runtime tools remain
+  Python 3.13.15, uv/uvx 0.12.15, Deno 2.9.6 (V8 15.0.245.2, TypeScript 6.0.3),
+  FFmpeg/ffprobe 5.1.9-0+deb12u1. No runtime pins changed.
+
+| Identity | linux/amd64 | linux/arm64 |
+|---|---|---|
+| Checked config/Docker ID | `sha256:e2f606d92ed0dd7bd319173af6d2743e3a702fc0070330f9805804c1c52c68de` | `sha256:79fc13659c36d37bdc7280b73f326eed7405df4ae3670278221aa3758ec7fbf3` |
+| Docker archive SHA256 | `3b0a503ceee24ed64020033c968bcee24e606103c85f59a1995a81a7aa42cd0f` | `299ce46b89740713e260d6d87d0d3d34ac3e768d435c0f7bcc1148feeb06aef0` |
+| Inventory SHA256 | `641650044fb4f209a809c3a3defa4ac4292d5693f72d214ce45dbeb5da5b36a1` | `7b11bd0ea4088da11137dc30f6ea8835b77cf1cf308e1834a3ade62c386887dc` |
+| SPDX SBOM SHA256 | `19076db08866f8db513abc773e7938fb909d033bb9fce93b48f1f145e8ca1984` | `9b653c4e254477cf700ebb8fe09dc5af17998d4bd4a6f6e79f6297f075bec774` |
+| Actual image components | 321 | 317 |
+
+- Both native reports pass effective production restrictions and offline smoke:
+  tools/EJS, local native packets/stream copy, bounded storage, permissions, synthetic
+  health and negative secret cases. These tests use fake secrets and no real polling.
+- Independently downloaded `native-amd64`/`native-arm64` artifacts to
+  `/tmp/openmedia-008-t034/52f4dc8/`; rehashed both archives, parsed their archived
+  configs and matched the native records. Validated every declared installed notice,
+  including hidden `.venv` paths, after transfer. Archive, config, SBOM and inventory
+  identities remain distinct; no registry child/index digest is invented.
+- Complete source result: **1899 components**, all `coverage=complete`, with both
+  final native inventories/config identities joined to this exact commit. Source job
+  duration 19m 4s; total workflow 20m 20s. Both source/notice bundle validation and
+  the explicit `validate_release.py sources --directory materials` check passed.
+  The run retains five artifacts: controlled, both native archives, source diagnostics
+  and matching sources (1.87 GB). CI artifact retention is one day; this is validation
+  evidence, not the durable public source distribution required before image push.
+- Downloaded `source-diagnostics` to
+  `/tmp/openmedia-008-t034/52f4dc8-source-diagnostics/`, validated its manifest schema,
+  complete component coverage and exact equality with both downloaded image inventories.
+  Manifest SHA256: `cd908355a1ad29290c137dddb1d8e357f16c636fb59a98002c6ab964b04cf7a2`.
+  Passing progress record: `stage=source-bundle-validation`, `coverage=complete`,
+  `result=pass`, `components=1899`. Controlled log:
+  `/tmp/openmedia-008-t034/52f4dc8-controlled.log`.
+
+| CI source material | Bytes | SHA256 |
+|---|---|---|
+| `sources-001.tar.gz` | 1064431804 | `2f4df42155a8de696774cc13aa2cc70d2027e33dde07dd1ca0eec8381d07c547` |
+| `sources-002.tar.gz` | 918726676 | `199af34c91677f6577c759a026f527b9263dad3df3188bd598c6e61f190c4c0a` |
+| `notices.tar.gz` | 16245613 | `b499f8bf2f2bd2b04ed3fd9872d1375ddcea0f05ae8fac605af321bce01f5d1a` |
+
+- Public source availability, source/version tag authority, signed provenance and
+  anonymous image/evidence retrieval remain T060–T062. Final integrated candidate
+  checks after the later stories remain T059. This record does not claim a release,
+  real-host installation, polling or media-delivery acceptance. No source tag, version
+  tag, registry image or release was published. Later artifact-input changes invalidate
+  affected checks; release publication must rerun against its own exact candidate.
