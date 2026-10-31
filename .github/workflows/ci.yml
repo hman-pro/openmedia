@@ -93,6 +93,8 @@ jobs:
         with:
           name: native-${{ matrix.arch }}
           path: output/
+          # Installed Python notices live under notices/app/.venv/.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
           compression-level: 0

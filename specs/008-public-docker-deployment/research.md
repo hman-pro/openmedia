@@ -552,3 +552,11 @@ The exact CPython release carries libmpdec original copyright/license notices in
 the previously named nonexistent COPYRIGHT file. Preserve that directory's original
 source files as notice materials. The checksum-pinned release archive was inspected
 directly; no replacement attribution or inferred copyright text is introduced.
+
+The full CI transfer exposed upload-artifact's hidden-directory default: installed
+Python notices under `notices/app/.venv/` were omitted. Enable hidden files only for
+the native job's generated `output/` artifact, whose inputs are the checked image,
+inventories, notices, SBOM, reports and archive. Never upload the checkout wholesale.
+After download, validate every declared installed notice before source acquisition;
+missing transfer content remains a hard failure. The offline regression covers the
+actual hidden Python notice path. Existing credential/context exclusions remain.

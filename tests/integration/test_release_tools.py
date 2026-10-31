@@ -182,6 +182,15 @@ def test_unknown_unmanaged_and_unlocked_python_fail_closed():
         with pytest.raises(release.ReleaseError): collector.resolve_component(component, {'components': []}, {'package': []})
 
 
+def test_transferred_inventory_requires_hidden_python_notices(tmp_path):
+    notice = 'notices/app/.venv/lib/python3.13/site-packages/anyio.dist-info/licenses/LICENSE'
+    inventory = {'components': [{'name': 'anyio', 'notice_paths': [notice]}]}
+    with pytest.raises(release.ReleaseError, match='Missing material'):
+        collector.validate_inventory_notices(inventory, tmp_path)
+    path = tmp_path / notice; path.parent.mkdir(parents=True); path.write_text('original license')
+    collector.validate_inventory_notices(inventory, tmp_path)
+
+
 def test_python_sdist_is_selected_by_installed_version_and_hash():
     lock = {'package': [{'name': 'example-pkg', 'version': '1', 'sdist': {'url': 'https://files.pythonhosted.org/pkg.tar.gz', 'hash': 'sha256:' + 'a'*64, 'size': 7}}]}
     resolved = collector.resolve_component({'kind': 'application-python', 'name': 'example_pkg', 'version': '1'}, {'components': []}, lock)

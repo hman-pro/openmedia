@@ -422,5 +422,14 @@ build alone is live startup.
   It also exposed libmpdec's incorrect notice pattern, corrected to the original source
   headers in the exact CPython archive. This working-tree diagnostic is not evidence
   for a later committed candidate; a complete fresh CI run remains required.
+- Candidate `e6677271921c3f7301c3994c5a81166fff87739b`,
+  [push run 41117313115](https://github.com/hman-pro/openmedia/actions/runs/41117313115):
+  1109 controlled tests passed (3 live tests deselected, 32 existing warnings); both
+  native jobs passed. CI source collection failed on the first Python package notice:
+  artifact upload omitted hidden `notices/app/.venv/` files. The local diagnostic had
+  retained those files from its earlier inputs, explaining its full 1899-component
+  pass; it never substituted for committed CI acceptance. Native output upload now
+  explicitly preserves hidden files, with inventory notice validation before network
+  acquisition. This fix requires a fresh complete CI run; no missing notice is waived.
 - Public material retrieval/signatures, release authority/settings and distribution
   remain T060–T062. No source tag, version tag, registry image or release was published.

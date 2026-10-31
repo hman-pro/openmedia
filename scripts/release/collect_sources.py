@@ -22,7 +22,7 @@ import tomllib
 from urllib.request import urlopen
 
 from validate_release import (ReleaseError, require, read_json, write_json, digest, safe_path,
-                              inspect_archive, image_config, validate_sources, PLATFORMS, run)
+                              inspect_archive, image_config, material_path, validate_sources, PLATFORMS, run)
 
 HERE = Path(__file__).resolve().parent
 
@@ -286,6 +286,14 @@ def package_parts(output, components, max_size=1024**3):
     return result
 
 
+def validate_inventory_notices(inventory, output):
+    # Validate transferred inputs before starting any network acquisition. Artifact
+    # services can omit hidden directories such as the application's .venv.
+    for component in inventory['components']:
+        for name in component.get('notice_paths', []):
+            material_path(output, name)
+
+
 def collect(inventory_files, policy, lock, output, repository):
     output = Path(output); output.mkdir(parents=True, exist_ok=True)
     repository = Path(repository).resolve()
@@ -306,6 +314,7 @@ def collect(inventory_files, policy, lock, output, repository):
                 target = output / 'notices' / source.relative_to(notice_dir); target.parent.mkdir(parents=True, exist_ok=True)
                 if target.exists(): require(digest(target) == digest(source), 'Conflicting cross-platform notice bytes')
                 else: shutil.copyfile(source, target)
+        validate_inventory_notices(inventory_value, output)
         for actual in inventory_value['components']:
             write_json(output / 'collection-progress.json', {'component_id': re.sub(r'[^A-Za-z0-9.:+_@-]', '?', actual['component_id'])[:160], 'coverage': 'missing', 'stage': 'policy-resolution'})
             resolved = resolve_component(actual, policy, lock)
