@@ -1,9 +1,9 @@
 # Quickstart Validation: Public Docker Deployment
 
-This guide is for validating the future implementation. Planned deployment, workflow,
-and release-helper files do not exist merely because this planning document exists.
-Do not record the examples below as passed until they are executed against a concrete
-release. Record sanitized results in this feature's future `validation.md`.
+Deployment and release tooling through Phase 4 are implemented. Execute the checks
+below against a concrete candidate; record actual results in [validation.md](validation.md).
+Public distribution and real-server acceptance remain pending. Update/rollback and
+maintenance sections below still describe later-phase validation work.
 
 ## 1. Controlled configuration and regression checks
 
@@ -148,58 +148,57 @@ public source/evidence download success are explicit recorded gates.
 
 ## 5. Real-server setup and preflight
 
-Use an operator-owned Ubuntu 24.04/26.04 LTS server with standard rootful Docker Engine
-and Compose installed from the [official repository](https://docs.docker.com/engine/install/ubuntu/).
-Record OS, architecture and these capability checks:
+Follow the executable [single-server installation guide](../../deploy/README.md#install-on-a-single-server)
+on an operator-owned Ubuntu 24.04/26.04 LTS amd64/arm64 host. Use Bash and standard
+rootful Docker from Docker's official signed APT repository, with no userns remapping.
+The guide is authoritative for the exact shell blocks; do not substitute implicit
+Compose discovery or a host-wide environment import.
 
-```sh
-sudo docker version
-sudo docker compose version
-sudo docker compose up --help
-sudo docker compose run --help
-```
+1. Execute **Install Docker and check capabilities**. Record OS, architecture, Engine
+   client/server, Compose versions, rootful security options and required `up`/`run`
+   flags. Missing capabilities abort setup.
+2. Complete **Account-free verification** with a separately trusted checkout/policy,
+   expected version/source revision and literal index digest. Public-release T062
+   remains required; offline fixtures cannot supply this trust proof.
+3. Execute **Provision protected configuration and credential** from the reviewed
+   checkout. The files are `/opt/openmedia/compose.yaml`, `/opt/openmedia/deploy.env`
+   and `/opt/openmedia/secrets/telegram_bot_token`. Check root-owned 0700 parent,
+   `root:10001` 0640 secret and unrelated primary/supplementary GID 10001 users.
+   Enter credentials through the protected editor; never include them in evidence.
+4. In the same Bash session, define `CANDIDATE_IMAGE` and `dc()` from **Select, pull
+   and preflight without polling**. The wrapper validates exact digest shape and uses
+   `sudo env -i` with only PATH and command-scoped image selection. Other settings
+   come only from the explicit env file. Verify its selected image matches, then run
+   `config --quiet`, `pull openmedia`, and
+   `run --rm --no-deps -T --pull never openmedia python -m openmedia --check-config`.
+   Require the whole block to succeed. It starts no poller, uses a separate tmpfs and
+   leaves the current bot/workspaces untouched. Pull requires networking; the CLI
+   preflight does not make network requests. Actual UID 10001 secret readability is
+   exercised. Shape validation does not prove Telegram accepts the token.
+5. Establish that no other project/host/development process polls this token. Execute
+   **First activation and failed-start cleanup**, using
+   `up --no-build --pull never --force-recreate --wait --wait-timeout 180 openmedia`.
+   The first-install block refuses a currently running service. Error/signal traps
+   stop failed candidates; the adjacent manual cleanup block handles terminal loss
+   and confirms the candidate stopped before recovery. Existing service updates and
+   migration require the later Phase 5 runbook, rather than first-install commands.
+6. Record actual healthy polling and representative real Telegram delivery as **T063**.
+   Local `--check-config` returns 0/2; `--healthcheck` returns 0/1/2 and only reads local
+   freshness state. Neither creates a second poller. Successful offline checks do not
+   pass T063. Other host combinations remain pending in the supported-host matrix.
 
-Install the reviewed files, edit the nonsecret image/settings selection, and enter the
-token through the protected editor (no literal token appears in these commands):
+For negative acceptance, use isolated fake secrets, never corrupt a production token:
+missing/unreadable/malformed files must fail preflight with exit 2, no token/path leakage,
+no polling and no interruption of a running bot. Record the actual failure separately
+from a successful startup. Optional diagnostics require protected mounted storage under
+feature 002; default diagnostics remain off. Tmpfs is 512 MiB within the 2 GiB limit.
 
-```sh
-sudo install -d --mode=0750 --owner=root --group=root /opt/openmedia
-sudo install --mode=0640 --owner=root --group=root deploy/compose.yaml /opt/openmedia/compose.yaml
-sudo install --mode=0600 --owner=root --group=root deploy/deploy.env.example /opt/openmedia/deploy.env
-sudoedit /opt/openmedia/deploy.env
-sudo install -d --mode=0700 --owner=root --group=root /opt/openmedia/secrets
-sudoedit /opt/openmedia/secrets/telegram_bot_token
-sudo chown root:10001 /opt/openmedia/secrets/telegram_bot_token
-sudo chmod 0640 /opt/openmedia/secrets/telegram_bot_token
-```
+## 6. Later-phase update failure and rollback validation
 
-Confirm there are no unrelated host users in GID 10001. Set no literal token in env files. See
-[configuration.md](contracts/configuration.md) for exact values/restrictions.
-
-For repeatable validation, define this shell convenience function; its first argument
-selects the image for that command only:
-
-```sh
-dc() {
-  image_ref="$1"
-  shift
-  sudo env OPENMEDIA_IMAGE="$image_ref" docker compose -p openmedia \
-    --env-file /opt/openmedia/deploy.env -f /opt/openmedia/compose.yaml "$@"
-}
-dc "$CANDIDATE_IMAGE" config --quiet
-dc "$CANDIDATE_IMAGE" pull openmedia
-dc "$CANDIDATE_IMAGE" run --rm --no-deps -T --pull never \
-  openmedia python -m openmedia --check-config
-```
-
-Expected: no poller starts, UID 10001 reads the mounted token, only local validation
-runs, and a running previous bot remains unaffected. A failed pull or malformed/unreadable
-secret must stop the procedure without interrupting the old deployment. Use isolated
-acceptance fixtures for failures rather than corrupt a production credential.
-
-## 6. Activation, update failure, and rollback
-
-On first installation, confirm no other poller uses the token. For an existing published
+Phase 5 has not been implemented in this checkpoint. The following are planned
+validation scenarios, not a completed operator update runbook. For first activation,
+use the complete guarded startup/cleanup blocks in section 5's installation guide.
+Confirm no other poller uses the token. For an existing published
 deployment, record the actual container and previous immutable image before stopping it:
 
 ```sh

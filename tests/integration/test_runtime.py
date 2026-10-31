@@ -526,6 +526,111 @@ def test_check_config_is_local_and_redacts_token(
     assert "<redacted>" in captured.out
 
 
+@pytest.mark.parametrize("diagnostics", ["0", "1"])
+@pytest.mark.parametrize("mode,secret_case", [
+    (mode, case) for mode in ("--check-config", "--healthcheck", "poll")
+    for case in ("valid", "missing", "malformed", "conflict", "unreadable")
+    if (mode, case) != ("poll", "valid")
+])
+def test_file_token_cli_boundary(tmp_path, monkeypatch, capsys, diagnostics, mode, secret_case):
+    """Exercise actual environment parsing before any poller/log writer can start."""
+    token = "123456789:file-cli-sentinel"
+    secret = tmp_path / "private-path-sentinel"
+    secret.write_text(token if secret_case != "malformed" else "malformed-content-sentinel")
+    if secret_case == "missing":
+        secret.unlink()
+    work = tmp_path / "work"
+    work.mkdir()
+    workspace = work / ("c" * 32 + "-other-process")
+    workspace.mkdir()
+    media = workspace / "selected.mp4"
+    media.write_bytes(b"another process owns this")
+    diagnostic_dir = tmp_path / "diagnostics"
+    values = {
+        "TELEGRAM_BOT_TOKEN_FILE": str(secret),
+        "OPENMEDIA_WORK_DIR": str(work),
+        "OPENMEDIA_DIAGNOSTIC_LOG": diagnostics,
+        "OPENMEDIA_DIAGNOSTIC_LOG_DIR": str(diagnostic_dir),
+    }
+    if secret_case == "conflict":
+        values["TELEGRAM_BOT_TOKEN"] = ""
+    if secret_case == "unreadable":
+        original_open = runtime.os.open
+        def deny_secret(path, *args, **kwargs):
+            if path == str(secret):
+                raise PermissionError("private-path-sentinel file-cli-sentinel")
+            return original_open(path, *args, **kwargs)
+        monkeypatch.setattr(runtime.os, "open", deny_secret)
+    # Replace the process environment without changing Settings.from_env itself.
+    monkeypatch.setattr(runtime.os, "environ", values)
+    monkeypatch.setattr(runtime.shutil, "which", lambda name: f"/fixture/{name}")
+    monkeypatch.setattr(runtime, "build_application", lambda *_: pytest.fail("must not poll"))
+    monkeypatch.setattr(runtime, "configure_diagnostics", lambda *_: pytest.fail("must not open logs"))
+    if secret_case != "valid":
+        monkeypatch.setattr(runtime, "configure_logging", lambda *_: pytest.fail("invalid before logs"))
+    expected = 2 if secret_case != "valid" else (1 if mode == "--healthcheck" else 0)
+    assert runtime.main([] if mode == "poll" else [mode]) == expected
+    output = capsys.readouterr()
+    assert all(value not in output.out + output.err for value in
+               (token, str(secret), "malformed-content-sentinel", "Traceback"))
+    assert media.read_bytes() == b"another process owns this"
+    assert not (work / runtime.HEALTH_FILENAME).exists()
+    assert not list(diagnostic_dir.glob("*.log"))
+    if mode == "--healthcheck" or secret_case != "valid":
+        assert not diagnostic_dir.exists()
+
+
+@pytest.mark.parametrize("token_source", ["direct", "file"])
+@pytest.mark.parametrize("diagnostics", ["0", "1"])
+@pytest.mark.parametrize("healthy", [True, False])
+def test_health_cli_reads_local_state_only(tmp_path, monkeypatch, capsys, token_source, diagnostics, healthy):
+    token = "123456789:health-cli-sentinel"
+    values = environment(tmp_path / "work", token)
+    (tmp_path / "work").mkdir()
+    if token_source == "file":
+        secret = tmp_path / "secret"
+        secret.write_text(token + "\r\n")
+        del values["TELEGRAM_BOT_TOKEN"]
+        values["TELEGRAM_BOT_TOKEN_FILE"] = str(secret)
+    diagnostic_dir = tmp_path / "diagnostics"
+    values.update(OPENMEDIA_DIAGNOSTIC_LOG=diagnostics,
+                  OPENMEDIA_DIAGNOSTIC_LOG_DIR=str(diagnostic_dir))
+    health = runtime.RuntimeHealth(tmp_path / "work" / runtime.HEALTH_FILENAME, wall_time=lambda: 200.0)
+    health.record_successful_poll()
+    original_check = runtime.check_runtime_health
+    monkeypatch.setattr(runtime, "check_runtime_health", lambda path:
+                        original_check(path, wall_time=lambda: 201.0 if healthy else 400.0))
+    monkeypatch.setattr(runtime.os, "environ", values)
+    for name in ("build_application", "configure_logging", "configure_diagnostics", "validate_local_runtime"):
+        monkeypatch.setattr(runtime, name, lambda *_: pytest.fail("health must only read local state"))
+    assert runtime.main(["--healthcheck"]) == (0 if healthy else 1)
+    output = capsys.readouterr()
+    assert token not in output.out + output.err
+    assert not diagnostic_dir.exists()
+
+
+@pytest.mark.parametrize("diagnostics", ["0", "1"])
+def test_file_loaded_token_redacted_during_fixture_runtime(tmp_path, monkeypatch, capsys, diagnostics):
+    token = "123456789:polling-cli-sentinel"
+    secret = tmp_path / "secret"
+    secret.write_text(token)
+    diagnostic_dir = tmp_path / "diagnostics"
+    values = {"TELEGRAM_BOT_TOKEN_FILE": str(secret), "OPENMEDIA_WORK_DIR": str(tmp_path / "work"),
+              "OPENMEDIA_DIAGNOSTIC_LOG": diagnostics, "OPENMEDIA_DIAGNOSTIC_LOG_DIR": str(diagnostic_dir)}
+    monkeypatch.setattr(runtime.os, "environ", values)
+    monkeypatch.setattr(runtime.shutil, "which", lambda name: f"/fixture/{name}")
+    class FixtureApplication:
+        def run_polling(self, **kwargs):
+            runtime.logging.getLogger("openmedia").warning("fixture credential %s", token)
+    monkeypatch.setattr(runtime, "build_application", lambda settings: (FixtureApplication(), None))
+    assert runtime.main([]) == 0
+    output = capsys.readouterr()
+    logs = "".join(path.read_text() for path in diagnostic_dir.glob("*.log"))
+    assert token not in output.out + output.err + logs
+    if diagnostics == "1":
+        assert "startup" in logs and "shutdown" in logs
+
+
 def test_check_config_keeps_workspaces_but_polling_startup_sweeps_them(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

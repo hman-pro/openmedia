@@ -497,3 +497,140 @@ build alone is live startup.
   real-host installation, polling or media-delivery acceptance. No source tag, version
   tag, registry image or release was published. Later artifact-input changes invalidate
   affected checks; release publication must rerun against its own exact candidate.
+
+
+## Phase 4 — secure installation implementation checkpoint (2026-10-31)
+
+- gate_id / requirement_ids: F008-CONFIG, F008-REGRESSION,
+  F008-NATIVE-ARM64; FR-005–FR-010, FR-018, FR-021; SC-003–SC-004.
+  class: Controlled and native container. gate_scope: Feature 008 acceptance.
+  result: **pass for this implementation checkpoint (T036–T042)**.
+  failure_class: none. This does **not** pass F008-INSTALL or T063.
+- Source: Phase 4 working tree based on
+  `7a9c1bb03261b168271df71d9f2f23a2264d9620`, subsequently committed at the
+  Phase 4 boundary. Changes are CLI integration tests, the nonsecret settings
+  example, installation guidance and evidence. No application, Dockerfile, Compose
+  or dependency changes were needed. Exact runtime pins remain unchanged.
+- Pre-implementation artifact review: prerequisites resolved the existing feature;
+  requirements checklist 16/16 checked, unchanged. Read-only spec/plan/tasks review
+  found no blocking inconsistency, constitutional issue or unmapped task. The task
+  coverage register maps all 21 FR and 8 SC identifiers (29/29) to the 67 tasks.
+  Phase 4 remains sequential T036–T042; actual installation acceptance is T063.
+  `.specify/extensions.yml` is absent; no analysis/implementation hooks are registered.
+
+### Controlled CLI and local development evidence
+
+Command:
+
+```sh
+uv run --locked pytest tests/unit/test_config.py tests/integration/test_runtime.py tests/integration/test_workers.py tests/unit/test_diagnostics.py tests/integration/test_diagnostic_trace.py -q
+```
+
+**234 passed**, 2 existing PTB deprecation warnings. Runtime suite alone:
+**75 passed**. New CLI cases use actual injected environment parsing, fake file secrets,
+injected permission failures and clocks, and fixture application startup with no network.
+They cover local check-config 0/2; healthcheck 0/1/2; missing, malformed, conflicting and
+unreadable secrets before logging/polling; intact foreign workspaces; no preflight
+heartbeat; no healthcheck diagnostic storage; direct-input compatibility; and file-loaded
+token redaction with diagnostics off/on. Existing unit tests retain suppressed formatted
+exception-chain coverage and exact loader boundaries. Tests were added before deciding
+whether runtime changes were needed: first execution exposed test-fixture errors (log
+extension and a diagnostic directory nested inside scratch); correcting those fixtures
+made the existing runtime pass. No runtime defect or failing behavior was concealed.
+
+Unchanged root `compose.yaml` was copied into an isolated fixture directory and rendered
+with a fake direct-token `.env`: only the direct token source is mapped. The current
+native image passed `python -m openmedia --check-config` with that direct input under
+`--network none`, read-only root, dropped capabilities and private bounded tmpfs.
+An isolated copy of `scripts/dev.sh --check-config` also passed both its preflight and
+final CLI invocation using an exported fake direct token and a nonsecret `.env`.
+Only uv dependency synchronization/dispatch was stubbed; the actual installed Python
+CLI and bundled local tool checks ran. No keyring credential or user `.env` was read,
+no poller started, and neither output exposed the fake token. `bash -n scripts/dev.sh`
+passed. The local-build example remains unchanged; the guide explains removing both
+token keys from dev.sh's nonsecret `.env` for its keyring/direct-token workflow.
+
+### Native and effective Compose evidence
+
+Environment: macOS host with Docker Desktop native Linux/aarch64 VM, Engine **29.9.2**,
+Compose **5.6.1**. This is native arm64 container evidence, not Ubuntu host acceptance.
+
+```sh
+docker build --tag openmedia:008-phase4 .
+bash scripts/smoke-container.sh openmedia:008-phase4
+```
+
+Both **passed**. Local Docker image-store identity:
+`sha256:3a99b2ed0257267c840f297647b4967ea1b224d03aab7c12d72b52dbcd76a75e`;
+build config identity:
+`sha256:085754a5df6cb7fba326286deb906c509866d703c3b00524dc38f3592d43ad71`;
+local child manifest:
+`sha256:0b702bd0c00a6cc0725c832fb88ed5f49e35932958ccedfe0ec1cc1293860d4a`.
+These are local build identities, **not a published GHCR production digest**.
+Python 3.13.15, Deno 2.9.6 and FFmpeg/ffprobe 5.1.9-0+deb12u1 passed; bundled EJS,
+stream-copy/native packets, effective identity/restrictions, writable bounded storage,
+negative secret access, all fake-token CLI error cases and synthetic health passed.
+The smoke starts no real poller and uses `--network none`.
+
+Additional actual Compose checks rendered `deploy/compose.yaml` with the new example,
+a synthetic 64-hex digest and a fake secret path. Effective settings contain only the
+file path, no token value/direct-token key/service env_file or shared work volume.
+An isolated local-only copy of that effective config selected `openmedia:008-phase4`
+and `network_mode: none`; its real `run --rm --no-deps -T --pull never openmedia
+python -m openmedia --check-config` passed as UID/GID 10001. Two separate one-offs
+confirmed a marker created in the first tmpfs is absent in the second. No production
+project was touched. Temporary containers/network/files were removed.
+Separately, a Linux-volume fake secret created as **root:10001 mode 0640** was read
+successfully by UID/GID 10001 with a read-only mount, no network/capabilities and the
+read-only root. The temporary volume was removed. Host directory traversal/ownership
+on real Ubuntu remains T063; Docker Desktop sharing is not substituted for it.
+Diagnostic defaults remain off; no writable diagnostic volume was added.
+
+### Guide consistency and failure-path review
+
+The guide now provides signed official Docker Ubuntu APT setup, supported-host checks,
+installed tool version/flag recording, protected absolute files, group membership review,
+exact digest-shape checks after independent signature verification, clean command-scoped
+overrides, isolated preflight, stop-before-start ownership review and first activation.
+The startup block refuses an already running project service. A failed 180-second health
+wait or signal explicitly stops the candidate; terminal-loss cleanup is adjacent.
+All discovery operations propagate errors before permitting activation.
+
+`bash -n` passed for **11** operator-guide and **15** quickstart shell blocks. A disposable
+command-boundary harness executed the actual guide wrapper/preflight/startup blocks:
+success, failed pull, failed preflight, failed container discovery, failed startup,
+SIGTERM during startup and malformed image selection all produced expected outcomes.
+Failures before startup executed no `up`; startup failure/SIGTERM executed stop cleanup.
+This is controlled shell evidence, not an actual unhealthy/restarted Telegram service.
+Temporary harnesses/checks were in `/tmp/openmedia-008-phase4/`, outside release assets.
+`git diff --check` passed. Existing ignore files already exclude host secrets/state,
+Python artifacts and editor files while retaining the new nonsecret example; no change
+was necessary. Quickstart section 5 now follows the exact executable installation guide;
+section 6 is explicitly later-phase work.
+
+Official documentation consulted 2026-10-31:
+[Ubuntu signed APT installation](https://docs.docker.com/engine/install/ubuntu/),
+[Compose run flags](https://docs.docker.com/reference/cli/docker/compose/run/),
+[Compose up/wait flags](https://docs.docker.com/reference/cli/docker/compose/up/).
+
+### Supported-host and external acceptance matrix
+
+| Target host | Architecture | Clean-host Docker/permissions/preflight | Real token polling/health/delivery (T063) |
+|---|---|---|---|
+| Ubuntu 24.04 LTS | amd64 | pending | pending |
+| Ubuntu 24.04 LTS | arm64 | pending | pending |
+| Ubuntu 26.04 LTS | amd64 | pending | pending |
+| Ubuntu 26.04 LTS | arm64 | pending | pending |
+
+Each row has gate_id F008-INSTALL; requirement_ids FR-005–FR-010, FR-018–FR-019,
+SC-003–SC-004; class deployment-network/manual; gate_scope Feature 008 acceptance;
+failure_class none; release/environment not yet selected. Required next action: execute
+the guide on the operator's actual combination with T062's exact verified public digest,
+protected real credential, installed version/capability evidence, successful polling,
+fresh health and representative native Telegram delivery. Other combinations remain
+pending. No public image was published or real credential used during Phase 4.
+
+T040's local arm64 evidence does not rerun native amd64: the earlier T034 record retains
+both native architectures at its exact candidate. Final integrated candidate gates T059
+must rerun both after all story work. T062/T063 remain pending, as do Phase 5–7 tasks
+and inherited acceptance gates. This is the code-ready US2 checkpoint only.
