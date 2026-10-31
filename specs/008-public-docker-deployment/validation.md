@@ -634,3 +634,128 @@ T040's local arm64 evidence does not rerun native amd64: the earlier T034 record
 both native architectures at its exact candidate. Final integrated candidate gates T059
 must rerun both after all story work. T062/T063 remain pending, as do Phase 5–7 tasks
 and inherited acceptance gates. This is the code-ready US2 checkpoint only.
+
+## Phase 5 — deliberate update and recovery implementation checkpoint (2026-10-31)
+
+- gate_id / requirement_ids: F008-REGRESSION (targeted lifecycle/configuration subset),
+  F008-UPDATE and F008-SHUTDOWN (controlled substitutes only); FR-011–FR-015,
+  FR-018–FR-019, FR-021; SC-003, SC-005–SC-006.
+- class: Controlled. gate_scope: Feature 008 acceptance.
+  result: **pass for implementation tasks T043–T050**; the aggregate real-host
+  F008-UPDATE/F008-SHUTDOWN gates and T064 remain **pending**.
+  failure_class: none.
+- release / platform: Phase 5 working tree based on
+  `e643411` (Phase 4), committed at this phase boundary; macOS arm64,
+  Python 3.13.15. No runtime, dependency, Dockerfile or Compose-definition change.
+  No public version/index selected, image rebuilt, production project touched,
+  real credential used, or real poller started.
+- environment: Existing locked uv development environment; Bash shell syntax and
+  command-boundary checks with disposable state under `/tmp/openmedia-008-phase5/`.
+  Actual Docker Compose 5.6.1 rendered a sanitized old-project recovery override;
+  a stopped identity fixture was also created/inspected/removed; no service started. No external source/Telegram network used in tests.
+- Prerequisites: existing feature branch reused; requirements checklist 16/16 checked,
+  unchanged. Git/Docker ignores retain all critical Python/secret/state exclusions;
+  no new ignore entry necessary. `.specify/extensions.yml` absent at pre/post checks;
+  no implementation hooks registered.
+
+### Lifecycle and file-token regressions (T043, T049)
+
+```sh
+uv run --locked pytest tests/integration/test_runtime.py tests/integration/test_failure_cleanup.py tests/integration/test_workers.py tests/unit/test_config.py tests/unit/test_diagnostics.py tests/integration/test_diagnostic_trace.py -q
+```
+
+**263 passed**, 2 existing PTB deprecation warnings, **16.48 seconds** total suite
+runtime. This total is controlled test execution time, not measured real-host downtime.
+The real child-group shutdown case now runs with both direct and file-loaded settings
+through `build_application`: actual leader/descendant reaping, closed admission, owned
+work cancellation, scratch/heartbeat cleanup and maintenance completion remain inside
+the test's 20-second bound. The music shutdown case now uses the built runtime with a
+fake file credential, for both active download and upload. Actual `deliver_media` opens
+the file; injected Telegram transport stalls on an event. Runtime shutdown cancels it,
+closes the file, releases capacity, rejects late admission and stale selection replay,
+records uncertain delivery, and never issues a second upload. No external connections
+or new sleep-based readiness checks were added. The deployment grace remains 30 seconds.
+
+Tests were extended before deciding whether runtime changes were needed. The first run
+reported two test-fixture errors (wrong registry attribute and missing `self` on the
+injected bot method); both were corrected. Failure-cleanup alone then passed **28 tests**,
+followed by the integrated 263-test pass above. Existing runtime behavior satisfied the
+new assertions; no application implementation fix was justified. Controlled shutdown
+bounds do not establish real SIGTERM, Docker stop timing, or real Telegram cancellation.
+
+### Runbook commands, persistence, and failure exits (T044–T049)
+
+`deploy/README.md` provides a nonsecret operator record, digest-scoped commands in a
+clean environment, shared explicit stop/health/persistence helpers, complete update and
+rollback sequences, old-project discovery/config preservation/local-image pinning,
+migration and the return path. Quickstart section 6 references these exact procedures
+with expected states for each acceptance scenario. Credentials/settings are current
+through rollback; only the image selection is atomically replaced after health.
+
+`bash -n` passed for **20 guide shell blocks** and **7 quickstart shell blocks**.
+A disposable harness (`python3 /tmp/openmedia-008-phase5/check_runbook.py`) extracted
+and executed actual guide blocks with injected sudo/Docker/verifier boundaries and
+stateful synthetic container identities. **31 scenarios passed**:
+
+- Update: healthy; failed verify, pull, preflight, discovery, stop and unconfirmed stop;
+  failed startup, unhealthy candidate, SIGTERM during startup, and persistence error.
+- Rollback: healthy; locally missing plus unavailable remote image; incompatible
+  preflight; failed startup; SIGTERM; persistence error.
+- Migration: healthy; failed verify/pull/preflight/old stop; failed new startup;
+  SIGTERM; persistence error. Old poller is stopped before new activation.
+- Old-project return: healthy; missing preserved image; failed preflight/startup;
+  SIGTERM. Candidate is stopped before recovery and failed old startup is cleaned up.
+- Discovery/preservation: actual old identity retained and pinned; protected config-copy
+  and override commands dispatched before migration.
+
+Assertions checked nonzero failure exits, no `up` after failed prerequisites, candidate
+stop after startup/health/signal failure, no overlapping old/new pollers, unchanged
+selection on persistence failure, and healthy selected identity on success. Shell
+signal handling was actually exercised; unhealthy/timeout return statuses were injected,
+not an actual 180-second host health wait. Syntax checks alone are not these assertions.
+
+The actual embedded persistence Python was separately executed on a disposable nonsecret
+env file: only the image line changed, other settings/comment stayed intact, mode was
+0600, and missing/duplicate image lines failed without altering the original file.
+The production root ownership syscall alone was omitted in this nonroot fixture;
+root:root enforcement and real host filesystem failure handling remain manual evidence.
+Atomic replacement uses a same-directory temporary file and `os.replace`, after flushing
+and fsync of file contents. No credential is read or hashed by this helper.
+
+Actual `docker compose ... --file <root-fixture> --file <recovery-override> config --images`
+selected exactly the synthetic preserved local recovery tag. Root Compose and all runtime
+restrictions remain unchanged; recovery explicitly uses `--no-build --pull never`.
+A separate stopped `--network none --entrypoint /bin/true` fixture from the existing
+`openmedia:008-phase4` image confirmed container `.Image` equals the local image-store
+identity `sha256:3a99b2ed0257267c840f297647b4967ea1b224d03aab7c12d72b52dbcd76a75e`;
+`.Config.Image` retained the tag and `.State.Running` was false. The fixture was removed
+without being started. This identity is not a published GHCR digest or necessarily the
+OCI config object's hash. These checks do not prove local image availability on a server.
+`git diff --check` passed.
+
+Official references checked 2026-10-31:
+[Compose up and bounded wait](https://docs.docker.com/reference/cli/docker/compose/up/),
+[one-off nonpolling run](https://docs.docker.com/reference/cli/docker/compose/run/),
+[ordered Compose image overrides](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/).
+
+### Transition review and remaining real-host cases (T050 / T064)
+
+Reviewed against `contracts/operations.md` and `data-model.md`:
+
+| Contract transition | Concrete implemented mapping and controlled evidence | T064 still required |
+|---|---|---|
+| running(previous) → downloaded → validated | Complete update block verifies then pulls/config-checks/nonpolling preflights before stop; injected failures leave old bot and env intact | Real failed pull/file-token preflight with old poller uninterrupted |
+| validated → previous_recorded → previous_stopped | Inspect actual `.Config.Image`, `.Image`, container ID and UTC; reject local-only reference; stop helper and original-container check must succeed | Real identity/stop timing, active-work cancellation, child/scratch/upload cleanup |
+| previous_stopped → candidate_starting → candidate_healthy | `start_checked` refuses a running service; no-build/no-pull recreate/wait 180; inspect running/health/reference | Actual healthy and never-healthy candidates, deadline/downtime measurement, single polling ownership |
+| candidate_healthy → selection_persisted | Atomic image-only env replacement, then effective env selection/running health agreement; error exits before success message | Root ownership/mode, actual host persistence failure and correction |
+| startup failure/timeout/interruption → candidate_stopped → rollback_available | EXIT/INT/TERM cleanup stops/confirms; adjacent terminal-loss cleanup; unconfirmed absence blocks recovery | Actual startup/timeout/interruption and cleanup, including terminal loss |
+| rollback_available → previous_validated → starting → healthy | Explicit previous record digest; candidate stop first; retained local image or pull; current settings/token validation; same checked startup and post-health persistence | Compatible recovery, unavailable/incompatible previous image, failed/interrupted rollback and real delivery |
+| rollback failure → stopped, explicit recovery error | Preflight aborts before up; failed health/signal stops attempted previous service; persistence failure stays incomplete | Real failed recovery and operator correction; no revived token/settings |
+| migration / return | Actual old project/files protected, local content ID pinned; new nonpolling preflight; old stop/confirm; new checked startup. Return stops new first and validates/starts pinned local old content with cleanup | Actual root-Compose migration/return, retained image availability, current credential compatibility, no overlap |
+
+All real-host rows remain **pending** for the selected Ubuntu 24.04/26.04 LTS and
+amd64/arm64 acceptance combination. Record observed UTC/timing/outcomes and exact verified
+public source/index identity in T064; other host combinations stay pending. Do not count
+this checkpoint as passing T062 publication, T063 installation, T064 update/shutdown,
+or later maintenance/media acceptance. Final integrated/native checks and inherited
+stable-readiness obligations remain required. No new support or stable-release claim.

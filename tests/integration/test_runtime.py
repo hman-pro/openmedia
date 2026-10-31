@@ -69,13 +69,19 @@ async def test_application_stop_reaps_active_source_child(tmp_path, monkeypatch)
     assert job.cancelled()
 
 
-async def test_shutdown_reaps_real_child_group_cleans_workspace_and_removes_health(tmp_path, monkeypatch):
+@pytest.mark.parametrize("token_source", ["direct", "file"])
+async def test_shutdown_reaps_real_child_group_cleans_workspace_and_removes_health(tmp_path, monkeypatch, token_source):
     import asyncio, os, re, sys, time
     from telegram.ext import Application
     from unittest.mock import AsyncMock
     from openmedia.coordinator import AdmissionOutcome, MediaWorkflow
     from openmedia.workers import WorkerSupervisor
-    settings = Settings.from_env(environment(tmp_path))
+    values = environment(tmp_path)
+    if token_source == "file":
+        secret = tmp_path / "credential"
+        secret.write_text(values.pop("TELEGRAM_BOT_TOKEN") + "\n")
+        values["TELEGRAM_BOT_TOKEN_FILE"] = str(secret)
+    settings = Settings.from_env(values)
     app, registry = runtime.build_application(settings)
     callbacks = app.bot_data["openmedia_callbacks"]
     pids = tmp_path / "pids"

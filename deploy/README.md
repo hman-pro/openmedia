@@ -175,7 +175,7 @@ before activation. Inventory local containers with `sudo docker ps` and project 
 without printing their environments. The operator must establish token ownership across
 hosts; container discovery cannot prove that a remote poller is absent. This first-install
 block refuses an existing running `openmedia` service; update/migration procedures are
-separate Phase 5 work. At most one polling container per token is permitted.
+covered below. At most one polling container per token is permitted.
 
 ```bash
 (
@@ -222,6 +222,346 @@ poll history; `--healthcheck` never creates a second poller (0 healthy, 1 unheal
 preflight is not real-token acceptance. Record actual OS/architecture, Engine/Compose,
 verified source/index identity, health outcome and representative real Telegram delivery
 for **T063** before claiming installation acceptance. Other host combinations remain pending.
+
+## Update, rollback, and migration
+
+Use one operator/change session. Establish that no other host, development process or
+Compose project polls this token. **At most one polling container per token across
+projects.** Keep the previous image locally until real delivery acceptance; do not prune
+it during recovery. Shutdown cancels active requests/uploads, reaps source child groups
+and removes scratch/heartbeat state within the inherited 20-second application budget
+and 30-second deployment grace. Users resubmit after restart; selections do not resume,
+and an uncertain send is never automatically repeated. Check the chat before resubmitting.
+
+### Operator record and shared commands
+
+Keep a protected, nonsecret change record outside the repository. Copy actual inspected
+values and UTC outcomes into this template; use a reviewed configuration revision or
+nonsecret settings diff as identity. **Do not hash/log credential contents as an identity
+mechanism.** Never record tokens, full container environments or diagnostic contents.
+
+```text
+UTC / operator / host OS / architecture / Engine / Compose:
+settings identity (nonsecret config revision/diff; current credential, no value/hash):
+previous reference / actual container ID / .Image content ID:
+candidate version / source commit / verified index reference:
+candidate actual container ID / .Image content ID:
+verify / pull / isolated preflight result and UTC:
+previous stop result / confirmed stopped UTC:
+startup UTC / 180-second health deadline / health outcome UTC:
+failed-start or interruption cleanup / confirmed stopped UTC:
+healthy image persistence / running-selected agreement:
+rollback availability / preflight / stop / startup / health / persistence outcomes:
+migration old project / absolute compose+env paths / preserved local image ID+tag:
+real delivery acceptance / canceled-work observation / limitations / next action:
+```
+
+In Bash, define `dc()` from [Select, pull and preflight without polling](#select-pull-and-preflight-without-polling).
+It validates digest shape and supplies the fixed project/files in a clean environment.
+Define these additional functions in the same session. Each function propagates errors;
+call them only as standalone commands under `set -e`, as the complete blocks below do.
+Do not wrap a whole procedure in `if`, `!`, `&&` or `||`, which can disable Bash errexit
+inside functions. `stop_selected` confirms project-wide absence of a running service.
+
+```bash
+stop_selected() {
+  local ref=$1 running
+  dc "$ref" stop --timeout 30 openmedia || return 1
+  running=$(dc "$ref" ps --status running -q openmedia) || return 1
+  test -z "$running" || return 1
+}
+start_checked() (
+  set -euo pipefail
+  local_ref=$1
+  running=$(dc "$local_ref" ps --status running -q openmedia)
+  test -z "$running"
+  trap 'status=$?; trap - EXIT; if ! stop_selected "$local_ref"; then echo "Cleanup unconfirmed: stop and inspect before recovery" >&2; fi; exit "$status"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  dc "$local_ref" up --no-build --pull never --force-recreate \
+    --wait --wait-timeout 180 openmedia
+  container=$(dc "$local_ref" ps -q openmedia)
+  test -n "$container"
+  test "$(sudo docker inspect --format '{{.State.Running}}' "$container")" = true
+  test "$(sudo docker inspect --format '{{.State.Health.Status}}' "$container")" = healthy
+  test "$(sudo docker inspect --format '{{.Config.Image}}' "$container")" = "$local_ref"
+  sudo docker inspect --format '{{.Id}} {{.Config.Image}} {{.Image}}' "$container"
+  trap - EXIT INT TERM
+)
+persist_selected() {
+  sudo python3 - "$1" <<'PY'
+import os
+from pathlib import Path
+import re
+import sys
+import tempfile
+image = sys.argv[1]
+if not re.fullmatch(r"ghcr\.io/hman-pro/openmedia@sha256:[0-9a-fA-F]{64}", image):
+    raise SystemExit("Invalid image selection")
+path = Path('/opt/openmedia/deploy.env')
+lines = path.read_text().splitlines(keepends=True)
+indices = [i for i, line in enumerate(lines) if line.startswith('OPENMEDIA_IMAGE=')]
+if len(indices) != 1:
+    raise SystemExit("Expected exactly one OPENMEDIA_IMAGE setting; selection not persisted")
+lines[indices[0]] = 'OPENMEDIA_IMAGE=' + image + '\n'
+fd, name = tempfile.mkstemp(prefix='.deploy.env.', dir=path.parent)
+try:
+    with os.fdopen(fd, 'w') as output:
+        os.fchmod(output.fileno(), 0o600)
+        os.fchown(output.fileno(), 0, 0)
+        output.writelines(lines)
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(name, path)
+finally:
+    if os.path.exists(name):
+        os.unlink(name)
+PY
+}
+confirm_selection() {
+  local ref=$1 selected container
+  selected=$(sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin docker compose \
+    --project-name openmedia --env-file /opt/openmedia/deploy.env \
+    --file /opt/openmedia/compose.yaml config --images) || return 1
+  test "$selected" = "$ref" || return 1
+  container=$(dc "$ref" ps -q openmedia) || return 1
+  test -n "$container" || return 1
+  test "$(sudo docker inspect --format '{{.Config.Image}}' "$container")" = "$ref" || return 1
+  test "$(sudo docker inspect --format '{{.State.Health.Status}}' "$container")" = healthy || return 1
+}
+```
+
+Persistence atomically replaces only the image line on the same filesystem, preserving
+all other current settings and enforcing root:root 0600. A duplicate/missing image line
+aborts. A persistence or final confirmation failure is an **incomplete operation**, even
+if the new bot is healthy. Inspect running/selected identities, correct the protected
+settings and rerun `persist_selected` and `confirm_selection` with the actually healthy
+reference, or explicitly roll back. Never report success merely because `up` succeeded.
+
+### Update a published deployment
+
+Choose `CANDIDATE_IMAGE`, `version`, `revision` and downloaded `release-assets` as in
+[Account-free verification](#account-free-verification). Use independently reviewed
+identity/evidence and the current trusted verifier/policy. Replace placeholders before
+running; digest validation rejects them. The complete block below aborts on any failed
+prerequisite. Candidate override never edits selected settings during pull/preflight.
+Record the printed previous identity before proceeding past its stop (retain this output
+privately). The actual running reference must be a published digest; local images use
+the migration path instead. Do not alter settings or credentials concurrently.
+
+```bash
+(
+set -euo pipefail
+python3 scripts/release/validate_release.py verify --directory release-assets \
+  --image "$CANDIDATE_IMAGE" --version "$version" --source-revision "$revision" \
+  --policy release/verification-policy.json
+dc "$CANDIDATE_IMAGE" config --quiet
+dc "$CANDIDATE_IMAGE" pull openmedia
+dc "$CANDIDATE_IMAGE" run --rm --no-deps -T --pull never \
+  openmedia python -m openmedia --check-config
+current=$(dc "$CANDIDATE_IMAGE" ps --status running -q openmedia)
+test -n "$current"
+previous=$(sudo docker inspect --format '{{.Config.Image}}' "$current")
+[[ "$previous" =~ ^ghcr\.io/hman-pro/openmedia@sha256:[0-9a-fA-F]{64}$ ]]
+test "$(sudo docker inspect --format '{{.State.Running}}' "$current")" = true
+sudo docker image inspect "$previous" --format '{{.Id}}'
+date -u +%FT%TZ
+sudo docker inspect --format 'previous: {{.Id}} {{.Config.Image}} {{.Image}}' "$current"
+stop_selected "$previous"
+test "$(sudo docker inspect --format '{{.State.Running}}' "$current")" = false
+start_checked "$CANDIDATE_IMAGE"
+# From here, a persistence failure leaves a healthy but incompletely selected candidate.
+persist_selected "$CANDIDATE_IMAGE"
+confirm_selection "$CANDIDATE_IMAGE"
+printf '%s\n' 'Healthy selection persisted; perform real delivery acceptance and complete record.'
+)
+```
+
+State progression is `running(previous) -> candidate_downloaded -> candidate_validated
+-> previous_recorded -> previous_stopped -> candidate_starting -> candidate_healthy
+-> selection_persisted`. Verify/pull/preflight failure leaves the old bot and selection
+unchanged. Stop failure prevents startup. Failed/timed-out/interrupted startup goes to
+`candidate_stopped -> rollback_available` only after cleanup is confirmed. No automatic
+rollback occurs; a later upstream outage also does not cause automatic rollback/restart.
+
+Keep this cleanup block next to startup. After terminal loss, uncertain interruption or
+failed cleanup, run it successfully before **any** recovery startup; examine the service
+list and record the stop result. If Docker is unavailable, recovery is blocked until
+absence of the candidate can be established. SIGKILL/host loss cannot run shell traps.
+
+```bash
+(
+set -euo pipefail
+stop_selected "$CANDIDATE_IMAGE"
+dc "$CANDIDATE_IMAGE" ps -a openmedia
+)
+```
+
+### Explicit rollback
+
+Set `PREVIOUS_IMAGE` to the literal reference from the protected update record, never
+from a potentially stale env file. Use its previously verified evidence. Rollback uses
+**current settings and current credentials**; it does not resurrect old settings or a
+revoked token. Confirm candidate stop before validation or startup. Inspect local image
+availability first, pulling only if absent. If missing remotely, incompatible with current
+settings/token, or unable to reach health, abort and leave the failed attempt stopped.
+Repair current configuration or select another verified compatible release deliberately.
+
+```bash
+(
+set -euo pipefail
+[[ "$PREVIOUS_IMAGE" =~ ^ghcr\.io/hman-pro/openmedia@sha256:[0-9a-fA-F]{64}$ ]]
+stop_selected "$CANDIDATE_IMAGE"
+if ! sudo docker image inspect "$PREVIOUS_IMAGE" --format '{{.Id}}'; then
+  dc "$PREVIOUS_IMAGE" pull openmedia
+fi
+dc "$PREVIOUS_IMAGE" config --quiet
+dc "$PREVIOUS_IMAGE" run --rm --no-deps -T --pull never \
+  openmedia python -m openmedia --check-config
+start_checked "$PREVIOUS_IMAGE"
+persist_selected "$PREVIOUS_IMAGE"
+confirm_selection "$PREVIOUS_IMAGE"
+printf '%s\n' 'Previous release healthy and selected; record real delivery recovery.'
+)
+```
+
+Recovery transitions are `rollback_available -> previous_validated -> previous_starting
+-> previous_healthy`, then restored selection persistence. Failed validation leaves service
+stopped; failed health invokes `start_checked` cleanup, including signals, and is a
+reported rollback failure. Use `stop_selected "$PREVIOUS_IMAGE"` after terminal loss
+in rollback before any further attempt. A persistence failure remains incomplete.
+
+### Migrate from root Compose and return to it
+
+This uses the existing root `compose.yaml`; it neither changes nor merges the separate
+`007-local-server-deploy` branch. Inventory actual containers/project labels first:
+
+```bash
+sudo docker ps --format '{{.ID}} {{.Names}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.service"}}'
+```
+
+Record the actual old project, absolute root Compose and env paths, and configuration
+revision. Preserve protected copies of those files and any credential files under a
+root-only backup directory chosen by the operator; treat direct-token `.env` as a secret.
+Do not print or put it in the nonsecret update record. Keep the original files protected
+and unchanged throughout migration; require another backup of any deliberate settings
+change. Recovery uses their **current** valid credentials/settings, not restored revoked
+credentials. Set the variables below to the actual paths/project; `OLD_PROJECT` must
+differ from `openmedia`. The old project wrapper clears inherited environment overrides.
+
+```bash
+OLD_PROJECT=REPLACE_ACTUAL_PROJECT
+OLD_COMPOSE=/absolute/path/to/compose.yaml
+OLD_ENV=/absolute/path/to/.env
+old_dc() {
+  sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin docker compose \
+    --project-name "$OLD_PROJECT" --env-file "$OLD_ENV" --file "$OLD_COMPOSE" "$@"
+}
+```
+
+Run this discovery/preservation block in the same Bash session. If any command fails,
+stop; do not run the activation block. Save the actual printed `OLD_CONTENT` and
+`OLD_PIN` in the protected record for a later session. The local tag retains the old
+content even when the original local tag changes. No registry digest is fabricated.
+The override is a protected host-only file, not a repository edit.
+
+```bash
+set -euo pipefail
+test "$OLD_PROJECT" != openmedia
+[[ "$OLD_COMPOSE" = /* && "$OLD_ENV" = /* ]]
+old_container=$(old_dc ps --status running -q openmedia)
+test -n "$old_container"
+# This directory contains credentials: protect it and include it only in encrypted backups.
+sudo install -d --mode=0700 --owner=root --group=root /opt/openmedia/migration
+sudo install --mode=0600 --owner=root --group=root "$OLD_COMPOSE" /opt/openmedia/migration/old-compose.yaml
+sudo install --mode=0600 --owner=root --group=root "$OLD_ENV" /opt/openmedia/migration/old.env
+OLD_CONTENT=$(sudo docker inspect --format '{{.Image}}' "$old_container")
+[[ "$OLD_CONTENT" =~ ^sha256:[0-9a-f]{64}$ ]]
+OLD_PIN="openmedia-recovery:${OLD_CONTENT#sha256:}"
+sudo docker image tag "$OLD_CONTENT" "$OLD_PIN"
+sudo docker image inspect "$OLD_PIN" --format '{{.Id}}'
+printf 'old project=%s container=%s content=%s recovery=%s\n' \
+  "$OLD_PROJECT" "$old_container" "$OLD_CONTENT" "$OLD_PIN"
+sudo install -d --mode=0700 --owner=root --group=root /opt/openmedia/migration
+printf 'services:\n  openmedia:\n    image: %s\n' "$OLD_PIN" | \
+  sudo tee /opt/openmedia/migration/recovery.yaml >/dev/null
+sudo chmod 0600 /opt/openmedia/migration/recovery.yaml
+old_recovery() {
+  old_dc --file /opt/openmedia/migration/recovery.yaml "$@"
+}
+test "$(old_recovery config --images)" = "$OLD_PIN"
+```
+
+Before stopping the old poller, complete verification, pull and isolated preflight for
+the new service. If these fail, the old project continues running. New project discovery
+must succeed and show no running poller. Retain the old configuration and pinned image.
+
+```bash
+(
+set -euo pipefail
+python3 scripts/release/validate_release.py verify --directory release-assets \
+  --image "$CANDIDATE_IMAGE" --version "$version" --source-revision "$revision" \
+  --policy release/verification-policy.json
+dc "$CANDIDATE_IMAGE" config --quiet
+dc "$CANDIDATE_IMAGE" pull openmedia
+dc "$CANDIDATE_IMAGE" run --rm --no-deps -T --pull never \
+  openmedia python -m openmedia --check-config
+running=$(dc "$CANDIDATE_IMAGE" ps --status running -q openmedia)
+test -z "$running"
+test "$(sudo docker inspect --format '{{.State.Running}}' "$old_container")" = true
+old_dc stop --timeout 30 openmedia
+test "$(sudo docker inspect --format '{{.State.Running}}' "$old_container")" = false
+old_running=$(old_dc ps --status running -q openmedia)
+test -z "$old_running"
+start_checked "$CANDIDATE_IMAGE"
+persist_selected "$CANDIDATE_IMAGE"
+confirm_selection "$CANDIDATE_IMAGE"
+printf '%s\n' 'Migration selection persisted; verify real delivery before acceptance.'
+)
+```
+
+If migration fails after old stop, or the operator chooses to return, first stop/confirm
+the new candidate. Then use preserved **local content**, current old-project settings and
+current credentials. Missing local content or incompatible settings blocks recovery;
+never substitute a freshly built image or an assumed registry digest. The override and
+`--no-build --pull never` prevent accidental rebuild/pull. After interruption, run
+`old_recovery stop --timeout 30 openmedia`, confirm no running old service, and also
+confirm the new candidate stopped before retrying. Keep using the recovery override for
+future old-project operations until deliberately reconciling its image configuration.
+
+```bash
+(
+set -euo pipefail
+stop_selected "$CANDIDATE_IMAGE"
+test "$(sudo docker image inspect "$OLD_PIN" --format '{{.Id}}')" = "$OLD_CONTENT"
+test "$(old_recovery config --images)" = "$OLD_PIN"
+old_recovery run --rm --no-deps -T --pull never openmedia python -m openmedia --check-config
+old_recovery stop --timeout 30 openmedia
+running=$(old_recovery ps --status running -q openmedia)
+test -z "$running"
+cleanup_old() {
+  old_recovery stop --timeout 30 openmedia || return 1
+  local running
+  running=$(old_recovery ps --status running -q openmedia) || return 1
+  test -z "$running"
+}
+trap 'status=$?; trap - EXIT; if ! cleanup_old; then echo "Old-project cleanup unconfirmed; inspect before recovery" >&2; fi; exit "$status"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+old_recovery up --no-build --pull never --force-recreate --wait --wait-timeout 180 openmedia
+restored=$(old_recovery ps -q openmedia)
+test -n "$restored"
+test "$(sudo docker inspect --format '{{.Image}}' "$restored")" = "$OLD_CONTENT"
+test "$(sudo docker inspect --format '{{.State.Health.Status}}' "$restored")" = healthy
+trap - EXIT INT TERM
+printf '%s\n' 'Old project recovered from pinned local content; verify delivery and record return.'
+)
+```
+
+On return, the published project stays stopped; its selected env is retained for a future
+deliberate migration and does not describe the old project's local image. Record this
+explicitly. Real update/rollback/migration timing, active-work cleanup and actual Telegram
+recovery remain **T064**, separate from controlled shell/lifecycle checks.
 
 ## Maintainer release procedure
 

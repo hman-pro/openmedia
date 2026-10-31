@@ -181,7 +181,7 @@ Compose discovery or a host-wide environment import.
    The first-install block refuses a currently running service. Error/signal traps
    stop failed candidates; the adjacent manual cleanup block handles terminal loss
    and confirms the candidate stopped before recovery. Existing service updates and
-   migration require the later Phase 5 runbook, rather than first-install commands.
+   migration use the update/rollback/migration runbook in section 6.
 6. Record actual healthy polling and representative real Telegram delivery as **T063**.
    Local `--check-config` returns 0/2; `--healthcheck` returns 0/1/2 and only reads local
    freshness state. Neither creates a second poller. Successful offline checks do not
@@ -193,98 +193,43 @@ no polling and no interruption of a running bot. Record the actual failure separ
 from a successful startup. Optional diagnostics require protected mounted storage under
 feature 002; default diagnostics remain off. Tmpfs is 512 MiB within the 2 GiB limit.
 
-## 6. Later-phase update failure and rollback validation
+## 6. Update failure, rollback, and migration validation
 
-Phase 5 has not been implemented in this checkpoint. The following are planned
-validation scenarios, not a completed operator update runbook. For first activation,
-use the complete guarded startup/cleanup blocks in section 5's installation guide.
-Confirm no other poller uses the token. For an existing published
-deployment, record the actual container and previous immutable image before stopping it:
+Use the executable [phase 5 runbook](../../deploy/README.md#update-rollback-and-migration).
+Define its `dc`, `stop_selected`, `start_checked`, `persist_selected` and
+`confirm_selection` functions in one Bash session. Use one operator/change session;
+confirm token ownership across projects/hosts. Preserve the nonsecret operator record,
+actual previous `.Config.Image`, `.Image` content ID and container ID before downtime.
+Record UTC outcomes and settings revision without hashing or logging credentials.
 
-```sh
-CURRENT_CONTAINER=$(dc "$CANDIDATE_IMAGE" ps -q openmedia)
-PREVIOUS_IMAGE=$(sudo docker inspect --format '{{.Config.Image}}' "$CURRENT_CONTAINER")
-sudo docker inspect --format '{{.Id}} {{.Image}} {{.State.Running}}' "$CURRENT_CONTAINER"
-```
+Execute the complete **Update a published deployment** block with a verified candidate,
+expected version/commit and downloaded evidence. Do not execute fragments after a failed
+prerequisite. Exercise the following on the T064 acceptance host with protected records:
 
-The record/stop commands apply only when a previous container exists. Require this
-stop-and-confirm block to return zero before proceeding; otherwise abort activation:
+| Scenario | Commands / expected state |
+|---|---|
+| Accepted update | Complete update block: verify, pull, nonpolling `run --rm --no-deps -T --pull never ... --check-config`; inspect actual previous identity; stop/confirm; `start_checked` with 180-second wait; atomically persist and confirm. Only the healthy digest is selected. Verify actual delivery before acceptance. |
+| Failed verification/pull/preflight | Complete block exits before stop/up; previous container remains running and selected env unchanged. Use isolated fake secrets for negative token cases. |
+| Failed stop or discovery | Exit before candidate startup; inspect actual state. Do not infer absence from a failed Docker command. |
+| Failed startup or health deadline | `start_checked` returns nonzero and explicitly stops/confirms candidate. Old bot is stopped, old selection retained; recovery is an explicit operator action. |
+| SIGINT/SIGTERM / terminal loss | Signal traps attempt stop/confirmation. Execute the adjacent cleanup block after terminal loss or uncertain cleanup; no recovery until candidate absence is confirmed. SIGKILL/host loss cannot execute traps. |
+| Persistence error | Healthy candidate may continue running while selection is stale; operation is incomplete. Record both identities, correct protected settings and rerun persistence/confirmation, or explicitly roll back. Never claim successful selection from health alone. |
+| Explicit rollback | Set previous digest from record, run complete rollback block: stop candidate, use retained image or pull if missing, validate current settings/credential, start/wait, persist only after health, confirm and verify delivery. |
+| Missing previous image | Remove only a disposable test image/fixture, then simulate unavailable pull; block exits with both pollers stopped. Retain production previous images until acceptance. |
+| Incompatible previous image | Local preflight failure prevents up; authentication or health failure invokes failed-start cleanup. Report rollback failure; correct current config/credential or choose a compatible verified release. |
+| Failed rollback / interrupted rollback | `start_checked` cleans failed attempt. After terminal loss execute `stop_selected "$PREVIOUS_IMAGE"` and confirm absence before retry. Persistence error remains incomplete. |
+| Root-Compose migration | Execute discovery/preservation and migration blocks with actual old project/files. Protect config copies, preserve local content ID/tag, verify/preflight new service while old runs, then stop/confirm old before activation. No invented GHCR digest. |
+| Migration return path | Execute complete old-project recovery block: stop/confirm new candidate, inspect retained local content ID, nonpolling preflight with current settings/credentials, no-build/no-pull startup and health. Failed recovery stops the old attempt too. Keep the recovery override for old-project operations. |
 
-```sh
-dc "$CANDIDATE_IMAGE" stop --timeout 30 openmedia &&
-  test "$(sudo docker inspect --format '{{.State.Running}}' "$CURRENT_CONTAINER")" = false
-```
+During active inspection/download/upload shutdown, measure actual application exit and
+child-group cleanup against 20 seconds / 30-second deployment grace. Confirm heartbeat
+and scratch removal, no overlapping pollers, invalid stale callbacks and canceled uploads.
+Users resubmit after restart; no request or selection resumes, and uncertain sends are
+never automatically retried. A controlled lifecycle test is not real-host timing evidence.
 
-After confirmed stop (or a first installation with no other poller), start the candidate.
-The failure branch explicitly cleans up and returns failure:
-
-```sh
-if dc "$CANDIDATE_IMAGE" up --no-build --pull never --force-recreate \
-    --wait --wait-timeout 180 openmedia; then
-  printf '%s\n' 'Candidate is healthy; persist its selection next.'
-else
-  dc "$CANDIDATE_IMAGE" stop --timeout 30 openmedia
-  dc "$CANDIDATE_IMAGE" ps -a openmedia
-  false
-fi
-```
-
-On interruption or uncertain terminal state, execute cleanup and confirm no candidate
-is running before considering recovery:
-
-```sh
-dc "$CANDIDATE_IMAGE" stop --timeout 30 openmedia
-dc "$CANDIDATE_IMAGE" ps -a openmedia
-```
-
-Expected: an unhealthy candidate is stopped; Compose wait failure alone is not cleanup.
-To explicitly roll back to a recorded available compatible previous digest with current
-settings/token:
-
-```sh
-dc "$PREVIOUS_IMAGE" pull openmedia
-```
-
-Proceed only if the pull succeeds. Then require successful preflight before running
-the separate rollback startup block:
-
-```sh
-dc "$PREVIOUS_IMAGE" run --rm --no-deps -T --pull never \
-  openmedia python -m openmedia --check-config
-```
-
-```sh
-if dc "$PREVIOUS_IMAGE" up --no-build --pull never --force-recreate \
-    --wait --wait-timeout 180 openmedia; then
-  printf '%s\n' 'Previous release is healthy; persist its selection next.'
-else
-  dc "$PREVIOUS_IMAGE" stop --timeout 30 openmedia
-  dc "$PREVIOUS_IMAGE" ps -a openmedia
-  false
-fi
-```
-
-Failed rollback startup needs the same explicit stop cleanup. After healthy activation
-or rollback, update only `OPENMEDIA_IMAGE` to the healthy selected digest in a protected
-copy, inspect the nonsecret diff, then replace the env file atomically on the same filesystem:
-
-```sh
-sudo install --mode=0600 --owner=root --group=root /opt/openmedia/deploy.env /opt/openmedia/deploy.env.next
-sudoedit /opt/openmedia/deploy.env.next
-sudo diff -u /opt/openmedia/deploy.env /opt/openmedia/deploy.env.next
-sudo mv /opt/openmedia/deploy.env.next /opt/openmedia/deploy.env
-```
-
-A one-line image-selection diff is expected (`diff` returns 1 for that expected change).
-Confirm persisted selection and running `.Config.Image` agree. Report persistence failure
-as an incomplete operation. These examples assume the single-operator change session
-defined in the operations contract.
-
-Repeat with a candidate failing startup and a candidate never reaching health: failure
-is bounded, no pollers overlap, and explicit rollback restores healthy service. Exercise
-missing/incompatible previous images too. Migration starts from the root Compose project:
-preserve its local image ID/configuration and stop that actual project before activation;
-use its preserved image for recovery, as [operations.md](contracts/operations.md) specifies.
+Record each scenario separately under **T064 / F008-UPDATE** with source/index identity,
+host/tool versions, observed timing, stop/health/persistence results and limitations.
+Controlled shell stubs do not pass real-host rollback, polling or migration acceptance.
 
 ## 7. Operations and real media acceptance
 
