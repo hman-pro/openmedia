@@ -1,9 +1,9 @@
 # Quickstart Validation: Public Docker Deployment
 
-Deployment and release tooling through Phase 4 are implemented. Execute the checks
+Deployment, release tooling and operator runbooks through Phase 6 are implemented. Execute the checks
 below against a concrete candidate; record actual results in [validation.md](validation.md).
 Public distribution and real-server acceptance remain pending. Update/rollback and
-maintenance sections below still describe later-phase validation work.
+maintenance procedures are ready for the separate T064–T066 real-host acceptance runs.
 
 ## 1. Controlled configuration and regression checks
 
@@ -24,7 +24,7 @@ CLI stdout/stderr, formatted traceback, console and enabled diagnostics. Prove l
 preflight/health paths never build a poller or contact Telegram, and workers receive
 neither token input. Existing media/merge/isolation/shutdown tests remain green.
 
-The second command group names new tests to implement. Controlled fixtures substitute
+The second command group exercises the implemented release-tool tests. Controlled fixtures substitute
 for network acquisitions, GitHub, Docker command results, and clocks as appropriate;
 actual native container execution belongs to the next section.
 
@@ -58,8 +58,8 @@ After collecting both native inventories using the paths emitted by the inventor
 
 ```sh
 uv run --locked python scripts/release/collect_sources.py collect \
-  --inventory dist/inventory-amd64/inventory.json \
-  --inventory dist/inventory-arm64/inventory.json \
+  --inventory dist/inventory-amd64/inventory-amd64.json \
+  --inventory dist/inventory-arm64/inventory-arm64.json \
   --policy release/source-policy.json --lock uv.lock --output dist/release
 uv run --locked python scripts/release/validate_release.py sources --directory dist/release
 ```
@@ -231,41 +231,71 @@ Record each scenario separately under **T064 / F008-UPDATE** with source/index i
 host/tool versions, observed timing, stop/health/persistence results and limitations.
 Controlled shell stubs do not pass real-host rollback, polling or migration acceptance.
 
-## 7. Operations and real media acceptance
+## 7. Maintenance walkthrough (T065)
 
-```sh
-dc "$CANDIDATE_IMAGE" ps
-dc "$CANDIDATE_IMAGE" logs --tail 100 openmedia
-ACTIVE_CONTAINER=$(dc "$CANDIDATE_IMAGE" ps -q openmedia)
-sudo docker inspect --format '{{json .State.Health}}' "$ACTIVE_CONTAINER"
-sudo docker stats --no-stream "$ACTIVE_CONTAINER"
-```
+Use the executable [maintenance runbook](../../deploy/README.md#maintenance) on an
+isolated acceptance host after T062/T063. Define `dc`, `stop_selected`, `start_checked`,
+`confirm_selection` and `ACTIVE_IMAGE` in one Bash change session. Use the actual verified
+selected digest after any rollback. Require selection/running agreement before maintenance;
+for stopped recovery, confirm absence before starting. Keep current credentials protected.
 
-Use the actually selected image in these commands after rollback. Verify normal polling
-and a representative real delivery before declaring healthy service usable. Exercise:
+Record **each case** using the [maintenance case register](validation.md#phase-6-maintenance-and-media-case-register-t056).
+Include exact version/source/index, actual container/image IDs, UTC, Ubuntu version,
+architecture, Engine/Compose versions and network context. Record result
+`pending`/`pass`/`fail`/`blocked`, a concrete reason, evidence and next action. Feature
+checks have scope `Feature 008 acceptance`; inherited cases have scope `Inherited
+stable-readiness obligation`. Classify failures as `deployment regression`, `evidenced
+pre-existing source limitation` or `unclassified` (otherwise `none`), citing the exact
+earlier evidence or independent comparable baseline for any source limitation. Never
+publish tokens/hashes, real URLs, Telegram identifiers or diagnostic contents.
 
-1. A real active download/upload stopped by SIGTERM: application exits within 20 seconds,
-   no child group survives, scratch data is cleaned, users resubmit, and no uncertain
-   delivery is automatically repeated.
-2. Unexpected process exit and host reboot recover service; intentionally stopped service
-   stays stopped across reboot. Perform reboot testing on the acceptance host.
-3. Temporary upstream outage becomes unhealthy without a health-triggered restart loop;
-   polling recovers without a second poller.
-4. Token rotation stops, atomically replaces the protected host file, validates and
-   **force-recreates** the container; replacement credentials actually authenticate.
-5. Secure config/credential backup, restore without request/media data, and project-scoped
-   removal match the guide; remaining secret/config/log files are explicitly identified.
-6. Existing YouTube, YouTube Music, LinkedIn video/image, Instagram video/image journeys
-   retain native output, titles and refusal/failure behavior. Keep blocked categories open;
-   include existing two-account, timing, music and title/manual acceptance obligations.
+| Case | Execute complete runbook procedure | Required observed outcome |
+|---|---|---|
+| OP-INSPECT | Inspect health, logs and resources | `ps -a`, selected health/restart/time fields, bounded logs, one-shot stats; no token/link/identifier disclosure; tmpfs accounted within memory limit; inspection starts no poller. |
+| OP-DIAGNOSTICS-OFF | Default-off inspection and configuration validation | No diagnostic files created. |
+| OP-DIAGNOSTICS-ON | Provision protected optional bind mount, edit flag, quiet config and isolated preflight, stop then checked recreation | Writable UID 10001 directory mode 0700/files 0600, private real trace/refusal, no console disclosure, UTC file rotation/14-file and 50MB retention, persistence across recreation; healthcheck never writes diagnostics. Disable/recreate afterward and inventory retained logs. |
+| OP-ROTATE | Rotate the runtime credential | Protected temporary input, confirmed stop, same-filesystem rename, isolated validation, forced recreation and real replacement authentication/health; one poller. Remove transient/editor copies under host policy. |
+| OP-ROTATE-FAIL | Failed-rotation recovery on dedicated bot only | Invalid input fails locally while stopped; rejected remote credential fails startup with stopped cleanup. Correct current input, repeat from stopped state without initial healthy-selection check. No restart-only mount renewal or revoked-token restoration. |
+| OP-EXIT | Unexpected process exit | After healthy runtime >10s, trigger in-container PID1 exit; do not use operator stop/kill as unexpected-exit evidence. Observe automatic recovery without up/start within 180s, increased restart count, one poller, health and real delivery. |
+| OP-REBOOT | Running service across reboot | Record pre-reboot identity, reboot isolated host, reconnect/redefine functions; automatic same-digest recovery within 180s of Engine availability, one poller and real delivery. |
+| OP-STOP | Intentional stop across reboot | Stop/confirm, reboot, observe retained stopped container and no polling for >=180s after Engine availability. Only then deliberately start/confirm and verify recovery. |
+| OP-OUTAGE | Temporary upstream outage | Record actual single network/container before disconnect; observe beyond poll freshness/retry windows using second session. Unhealthy without changed restart count/StartedAt or another poller. Reconnect with trap or recorded manual command; healthy polling within 180s and delivery, without restart. Source-only outage need not make polling unhealthy. |
+| OP-BACKUP | Back up configuration | Operator-verified encrypted mount, root-only consistent config/current-secret backup and protected identity record. Exclude media/request/tmpfs/diagnostics; privately prove recoverability. Mount existence alone does not prove encryption. |
+| OP-REMOVE | Remove this deployment | Fixed project stopped/removed; no unrelated service changes. Inventory retained config, secrets, diagnostics, migration files, private records/backups and images; make explicit retention/deletion decisions. |
+| OP-RESTORE | Restore on stopped supported host | Confirm previous/other pollers absent; review backup, verify intended digest, install current valid credential with correct ownership/mode, provision/disable optional diagnostics, full pull/preflight/activation. Healthy polling and real delivery; old requests never resume. |
 
-Real checks require the operator's token and deployment network and are separate from
-controlled/native smoke results. Record actual OS/architecture coverage, source availability,
-sanitized results, and remaining gates. README/release guidance must agree with the record.
-Feature-008 completion requires passing its own controlled/native/public/server checks and
-representative real delivery, and execution/assessment of the inherited matrix. Classify
-every observed failure using earlier validation or an independent baseline; only evidenced
-pre-existing source limitations may remain as open inherited gates. Unclassified failures
-and deployment regressions block completion. Recording such a limitation is not a gate pass.
-The feature may complete as a preview, but every release remains a preview until inherited
-container and live stable-readiness gates have actually passed.
+Run OP-REMOVE before OP-RESTORE when assessing the complete removal/restoration path.
+A test setup that cannot isolate destructive reboot/outage cases is blocked with a
+reason, not passed. Real active-work cancellation, <=20s application exit, no surviving
+children/scratch/uploads and no automatic uncertain sends are recorded separately in
+T064 / F008-SHUTDOWN. Neither an injected crash nor an offline smoke proves those cases.
+
+## 8. Representative delivery and inherited matrix (T066)
+
+Carry forward **every** inherited gate from the validation register. Use private manifests
+and permitted private diagnostics; public evidence uses sanitized case IDs only.
+
+| Gate group | Execute / assess |
+|---|---|
+| I001-SOURCES / TELEGRAM | Anonymous inspect/download and native-byte delivery for YouTube video, LinkedIn video/image and Instagram video/image; two independent accounts, originating-chat isolation, repeated/forged/stale selections, audio-only and absent-audio outcomes. |
+| I001-TIMING | 20 eligible inspections: >=19 acknowledgments <=2s and previews <=30s; 20 eligible <=20MB deliveries: >=19 <=2min. Record exclusions/replacements and <=2 global/<=1 Instagram concurrency. |
+| I001-RUNTIME / I005-CONTAINER / I006-CONTAINER | Exact configured restricted image startup, polling/health and real lifecycle evidence; preserve each earlier feature mapping. Packaging or fake-token checks alone do not pass them. |
+| I002-DIAGNOSTICS | Real trace/refusal, disabled no-files, private token/console checks, retention and persistence as above; retain separate inherited result. |
+| I003-UX / I004-SHORT-LINKS | Actual clients: one preview/status surface, first-page choices, audio/combined/image/video including silent video; short/full LinkedIn equivalence, refusals and redirect diagnostics. |
+| I005-LIVE / TELEGRAM | Plain/context/offset music track identity, whole native audio, automatic document/no picker, card/progress/completion, collection refusal and ordinary YouTube regression; actual received-byte comparison where available. Tested-track phone playback confirmation is partial historical evidence only. |
+| I006-TITLES | Real video/music caption, saved/forwarded filenames, long/Unicode titles, client/version rendering/playback and native received bytes. Controlled multipart labels are insufficient. |
+| I001-CONTROLLED | Final full controlled regression evidence from T059, separately from all network/manual cases. |
+
+Representative real delivery must pass for feature 008. Assess every required inherited
+case with an executed outcome or evidenced pre-existing source-blocked outcome. Compare
+any failure against exact earlier validation or an independent baseline on a comparable
+network before classifying it; an old category result alone is insufficient.
+
+Feature completion requires all feature-008 checks to pass, representative real delivery,
+and an executed/assessed inherited matrix, with no deployment regressions or unclassified
+failures. Only evidenced pre-existing source limitations may remain open inherited
+stable-readiness blockers on a completed **preview** feature. Recording a limitation does
+not pass its gate or justify an unsupported capability claim. Unexecuted checks remain
+open; controlled substitutes do not close external gates. Reconcile README, deployment
+guide and release status with actual outcomes in T067. Keep every release preview until
+all required inherited container/live/manual stable-readiness gates pass.

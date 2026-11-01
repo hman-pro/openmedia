@@ -1,7 +1,7 @@
 # Public release distribution
 
-The public-image pipeline is being implemented. Public preview distribution, real signed
-index proof, and server acceptance remain pending in
+Release tooling and operator runbooks are implemented through Phase 6. Public preview
+distribution, real signed index proof, and server acceptance remain pending in
 [feature 008 validation](../specs/008-public-docker-deployment/validation.md). A local
 build, a controlled certificate fixture, or a successful offline smoke is not public
 release acceptance. The existing root Compose file remains the local-build entry point.
@@ -562,6 +562,312 @@ On return, the published project stays stopped; its selected env is retained for
 deliberate migration and does not describe the old project's local image. Record this
 explicitly. Real update/rollback/migration timing, active-work cleanup and actual Telegram
 recovery remain **T064**, separate from controlled shell/lifecycle checks.
+
+## Maintenance
+
+Use one operator/change session and the `dc`, `stop_selected`, `start_checked` and
+`confirm_selection` functions above. Set `ACTIVE_IMAGE` to the verified digest currently
+selected in `/opt/openmedia/deploy.env`, including after rollback. Confirm it agrees
+with the running image before maintenance:
+
+```bash
+confirm_selection "$ACTIVE_IMAGE"
+```
+
+Keep the operator record private. Capture selected fields only: never run a full
+`docker inspect`, `compose config`, environment dump or HTTP debug trace for public
+evidence. Tokens, submitted links and Telegram identifiers must stay out of console
+output and published records. Canceled work is not resumed after any restart; users
+check for an uncertain delivery before submitting again.
+
+### Inspect health, logs and resources
+
+```bash
+(
+set -euo pipefail
+dc "$ACTIVE_IMAGE" ps -a openmedia
+container=$(dc "$ACTIVE_IMAGE" ps -q openmedia)
+test -n "$container"
+sudo docker inspect --format 'running={{.State.Running}} health={{.State.Health.Status}} restarts={{.RestartCount}} started={{.State.StartedAt}}' "$container"
+dc "$ACTIVE_IMAGE" logs --no-color --tail 100 --since 10m openmedia
+sudo docker stats --no-stream --format 'name={{.Name}} cpu={{.CPUPerc}} memory={{.MemUsage}} pids={{.PIDs}}' "$container"
+)
+```
+
+The parent writes a heartbeat every 15 seconds; readiness also requires a successful
+Telegram poll within 90 seconds. The image healthcheck reads local freshness state,
+starts no poller and makes no network request. Its interval is 30 seconds, timeout
+5 seconds, three retries, with a 120-second startup grace. Status can therefore lag an
+outage or recovery; the startup procedure separately limits its wait to 180 seconds.
+A media-source outage can fail downloads while Telegram polling remains healthy.
+Unhealthy status alone never restarts the service. Inspect bounded console logs and
+the affected upstream before deciding on an operator-initiated stop or update.
+The 512 MiB tmpfs counts against the 2 GiB memory limit; one-shot stats is an observation,
+not a guarantee of space for a particular delivery.
+
+Diagnostics remain **off by default**. If required for a private investigation, provision
+storage explicitly before setting `OPENMEDIA_DIAGNOSTIC_LOG=1` in `deploy.env`:
+
+```bash
+sudo install -d --mode=0700 --owner=10001 --group=10001 /opt/openmedia/diagnostics
+sudoedit /opt/openmedia/compose.yaml
+sudoedit /opt/openmedia/deploy.env
+```
+
+Add this mount to the existing `services.openmedia` mapping in the installed Compose
+file (do not replace the other restrictions), and keep the log directory setting at
+`/var/log/openmedia`:
+
+```yaml
+    volumes:
+      - type: bind
+        source: /opt/openmedia/diagnostics
+        target: /var/log/openmedia
+        bind:
+          create_host_path: false
+```
+
+Run `dc "$ACTIVE_IMAGE" config --quiet`, then the isolated `--check-config` command
+from installation. After both succeed, use `stop_selected "$ACTIVE_IMAGE"`,
+`start_checked "$ACTIVE_IMAGE"`, and `confirm_selection "$ACTIVE_IMAGE"` in that order
+under `set -euo pipefail`. A failure stops the sequence. The mount is writable only
+for the application identity and privileged host administrators. Files are mode 0600
+in the 0700 directory, named by UTC date; retention is at most 14 day files and
+50,000,000 bytes total, with entries capped at 65,536 bytes. They contain submitted
+links and Telegram identifiers, including refused requests; never publish their raw
+contents. They exclude tokens, signed media URLs and media bytes. Use only the
+[feature 002 privacy/retention contract](../specs/002-file-logging/contracts/diagnostic-log.md).
+Turning diagnostics off and recreating the service leaves existing files on the host;
+retain or delete them explicitly under the same privacy policy. They are not restoration
+data and are excluded from the backup below.
+
+### Rotate the runtime credential
+
+This block assumes the default host secret path. If `OPENMEDIA_TOKEN_FILE` selects
+another path, use that exact absolute path and a temporary file in its protected parent
+directory instead. Confirm the GID 10001 membership checks from installation still hold.
+Prepare a replacement through a protected editor, never a token literal in a command.
+If issuance revokes the current credential immediately, expect downtime from issuance.
+Stop every poller using this token before replacement. The following block stops on any
+failure; `start_checked` force-recreates the single-file mount and cleans failed startup:
+
+```bash
+(
+set -euo pipefail
+confirm_selection "$ACTIVE_IMAGE"
+replacement=$(sudo mktemp /opt/openmedia/secrets/.telegram_bot_token.XXXXXX)
+trap 'sudo rm -f -- "$replacement"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+sudo chmod 0600 "$replacement"
+sudoedit "$replacement"
+sudo chown root:10001 "$replacement"
+sudo chmod 0640 "$replacement"
+stop_selected "$ACTIVE_IMAGE"
+sudo mv -fT -- "$replacement" /opt/openmedia/secrets/telegram_bot_token
+dc "$ACTIVE_IMAGE" run --rm --no-deps -T --pull never \
+  openmedia python -m openmedia --check-config
+start_checked "$ACTIVE_IMAGE"
+confirm_selection "$ACTIVE_IMAGE"
+printf '%s\n' 'Replacement polling health passed; verify real use and complete rotation record.'
+)
+```
+
+The rename is atomic on the same filesystem. An existing file bind mount can retain the
+old inode; `restart` alone is insufficient. Local validation proves readability and shape,
+not remote authentication. Confirm fresh healthy polling and a real private-chat request
+with the replacement credential before accepting rotation. Do not record its value/hash.
+If local validation fails, the old service stays stopped. If authentication, health or
+startup fails, `start_checked` stops the attempt. After terminal loss, run
+`stop_selected "$ACTIVE_IMAGE"` and confirm absence before retrying. Prepare a corrected
+current credential and repeat the replacement/preflight/start steps (omit the initial
+`confirm_selection` when already stopped). Never restore a revoked token. Software
+rollback also uses the current credential. Remove any abandoned `.telegram_bot_token.*`
+file by its exact recorded path and clean protected editor temporary/backup files;
+do not print them. File unlinking is not guaranteed secure erasure on SSDs or snapshots;
+apply host encrypted-storage, snapshot and backup retention practices to secret copies.
+
+### Back up and restore configuration
+
+Back up the reviewed Compose file, `deploy.env`, the current credential and the private
+operator record containing the verified version/source/index identity. Include any
+deliberately retained migration files separately: `old.env` contains a credential.
+No media, tmpfs, heartbeat or request state is restoration data. Optional diagnostics
+are private investigation data with their own retention, not part of this backup.
+
+Use an operator-provisioned **encrypted backup filesystem** mounted at
+`/mnt/openmedia-encrypted-backup`, with root-only access and separately protected recovery
+keys. Verify encryption and access controls through your host backup system first;
+`mountpoint` only checks that a mount exists, not encryption. Keep a consistent snapshot
+in one change session, with no concurrent rotation/configuration update:
+
+```bash
+(
+set -euo pipefail
+sudo mountpoint -q /mnt/openmedia-encrypted-backup
+backup=$(sudo mktemp -d /mnt/openmedia-encrypted-backup/openmedia.XXXXXX)
+sudo chmod 0700 "$backup"
+sudo install -m 0600 -o root -g root /opt/openmedia/compose.yaml "$backup/compose.yaml"
+sudo install -m 0600 -o root -g root /opt/openmedia/deploy.env "$backup/deploy.env"
+sudo install -m 0600 -o root -g root /opt/openmedia/secrets/telegram_bot_token "$backup/telegram_bot_token"
+printf 'Protected backup directory: %s\n' "$backup"
+)
+```
+
+For a custom secret path substitute it explicitly. Copy the operator record with the
+backup tool's protected-file facility, then verify recoverability privately. Treat the
+entire backup as a credential, restrict readers and expire obsolete copies after rotation.
+Do not upload it as release or validation evidence.
+
+Restore on a supported host after installing Docker and checking capabilities. First
+stop and confirm the old host/project poller; do not boot a restored copy while the old
+one can still poll. Select one protected backup, review its Compose/settings privately,
+and verify the intended release against trusted evidence again. If the saved token is
+revoked or superseded, provision the **current valid credential**, not the saved one.
+The following file restore is for a stopped destination, using the default secret path:
+
+```bash
+(
+set -euo pipefail
+sudo install -d -m 0750 -o root -g root /opt/openmedia
+sudo install -d -m 0700 -o root -g root /opt/openmedia/secrets
+sudo install -m 0640 -o root -g root "$BACKUP_DIR/compose.yaml" /opt/openmedia/compose.yaml
+sudo install -m 0600 -o root -g root "$BACKUP_DIR/deploy.env" /opt/openmedia/deploy.env
+# CURRENT_TOKEN_INPUT is an absolute protected file containing the current valid token.
+sudo install -m 0640 -o root -g 10001 "$CURRENT_TOKEN_INPUT" /opt/openmedia/secrets/telegram_bot_token
+)
+```
+
+Set `BACKUP_DIR` and `CURRENT_TOKEN_INPUT` to actual protected paths before execution.
+Review any restored custom secret path or diagnostic mount: provision its permissions
+or deliberately disable diagnostics before preflight. Repeat GID membership checks,
+set `CANDIDATE_IMAGE` to the verified restored selection, and run the **complete**
+installation pull/preflight and first-activation blocks. Require selected/running digest
+agreement, real polling health and real delivery. If any prerequisite fails, keep the
+restored service stopped and correct it before activation. Clean temporary credential
+inputs under host storage practices. Users submit fresh requests; restoration resumes
+no old selections, downloads or uncertain sends.
+
+### Remove this deployment
+
+Inventory the fixed project's containers first, and retain a protected backup if recovery
+is intended. Run only against the reviewed `/opt/openmedia/compose.yaml` and env file:
+
+```bash
+(
+set -euo pipefail
+dc "$ACTIVE_IMAGE" ps -a
+stop_selected "$ACTIVE_IMAGE"
+dc "$ACTIVE_IMAGE" down --timeout 30
+remaining=$(sudo docker ps -aq --filter label=com.docker.compose.project=openmedia)
+test -z "$remaining"
+)
+```
+
+This removes the identified Compose containers/default network and their ephemeral work
+and console logs. It leaves `/opt/openmedia/compose.yaml`, `deploy.env`, `secrets/`,
+optional `diagnostics/`, migration/recovery files, private change records, encrypted
+backups and local images. Decide explicitly which to retain or delete, using exact
+owned paths and host credential/privacy practices. Remove an image by its exact reference
+only after confirming no deployment/recovery needs it. Do not use host-wide prune,
+`--remove-orphans`, `--volumes` or broad recursive deletion. Other projects are untouched.
+Restoration requires reviewed config, current credentials, a retrievable verified digest,
+correct host ownership and no other poller, followed by the restore/preflight/activation
+procedure above; retained files alone do not restart the bot.
+
+### Recovery and outage acceptance cases
+
+Run these **separately on an isolated acceptance host**, after installation acceptance.
+Use a real dedicated bot and record UTC, exact release/host/tool identities and actual
+outcomes in T065. These steps are acceptance procedures, not evidence that they ran.
+After reconnecting, redefine the runbook functions and `ACTIVE_IMAGE` from the protected
+record. Docker's [`unless-stopped` policy](https://docs.docker.com/engine/containers/start-containers-automatically/)
+recovers unexpected exits and running services across reboot, while preserving intentional
+stops. Keep it as the sole restart mechanism; add no autoheal agent or second process manager.
+
+**Unexpected process exit:** start healthy, let the service run for at least 10 seconds
+(Docker's restart-monitoring threshold), and record identity/restart count with the
+inspection block. Trigger an exit **inside** the container rather than an operator
+`docker stop`/`kill`, which is unsuitable for proving unexpected-exit recovery:
+
+```bash
+(
+set -euo pipefail
+confirm_selection "$ACTIVE_IMAGE"
+container=$(dc "$ACTIVE_IMAGE" ps -q openmedia)
+test -n "$container"
+sudo docker exec "$container" python -c 'import os, signal; os.kill(1, signal.SIGKILL)'
+)
+```
+
+The exec call can return nonzero because its container exits; record that result.
+Observe with the inspection block without running `up`/`start`: within an acceptance
+deadline of 180 seconds, require automatic restart, increased restart count, healthy
+polling and real delivery, with only one poller. If it does not recover, record failure
+and explicitly stop before manual repair. This forced-exit test does not prove graceful
+active-work shutdown (T064 covers that separately).
+
+**Running service across reboot:** start with `confirm_selection "$ACTIVE_IMAGE"`,
+record container/image identity, then execute:
+
+```bash
+sudo reboot
+```
+
+After reconnecting and Docker becoming available, inspect without running `up`/`start`.
+Require automatic recovery of the selected digest and fresh polling health within
+180 seconds of Engine availability, then real delivery and one poller. Record boot ID
+(`cat /proc/sys/kernel/random/boot_id`), observed recovery timing and any failure.
+
+**Intentional stop across reboot:** run the following as a separate case:
+
+```bash
+(
+set -euo pipefail
+stop_selected "$ACTIVE_IMAGE"
+dc "$ACTIVE_IMAGE" ps -a openmedia
+sudo reboot
+)
+```
+
+After reconnecting, `dc "$ACTIVE_IMAGE" ps --status running -q openmedia` must succeed
+with empty output; `ps -a` must show the retained stopped service. Observe for at least
+180 seconds after Engine availability without starting it, and confirm no polling.
+Only after recording the case, deliberately use `start_checked "$ACTIVE_IMAGE"` and
+`confirm_selection "$ACTIVE_IMAGE"` under `set -euo pipefail` to restore service.
+
+**Temporary upstream outage:** start healthy and record container ID, `StartedAt` and
+restart count. Disconnect only this service from its actual Compose network, preserving
+host SSH and unrelated services. First discover and record the single network:
+
+```bash
+(
+set -euo pipefail
+confirm_selection "$ACTIVE_IMAGE"
+container=$(dc "$ACTIVE_IMAGE" ps -q openmedia)
+network=$(sudo docker inspect --format '{{range $name, $settings := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' "$container")
+test -n "$network"
+[[ "$network" != *$'\n'* ]]
+printf 'Reconnect record: container=%s network=%s\n' "$container" "$network"
+restore_network() { sudo docker network connect "$network" "$container"; }
+trap restore_network EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+sudo docker network disconnect "$network" "$container"
+read -r -p 'Observe outage in a second session; press Enter to reconnect: ' _
+)
+```
+
+In the second session use only the inspection block. After poll freshness and health
+retry windows expire, require unhealthy status, unchanged restart count/StartedAt and
+the same single running container. Do not restart solely for unhealthy status. Press
+Enter to restore connectivity, then observe healthy polling within 180 seconds and
+successful delivery, without restart or a second poller. After terminal loss or a failed
+trap, execute `sudo docker network connect "$network" "$container"` using the exact
+recorded values; inspect attached networks before retrying a reported connect failure.
+Keep the record until reconnection is confirmed. A real source-only outage is a separate
+media limitation: it need not make Telegram health unhealthy. Record it in T066 without
+claiming a successful media capability or widening anonymous access.
 
 ## Maintainer release procedure
 

@@ -759,3 +759,132 @@ public source/index identity in T064; other host combinations stay pending. Do n
 this checkpoint as passing T062 publication, T063 installation, T064 update/shutdown,
 or later maintenance/media acceptance. Final integrated/native checks and inherited
 stable-readiness obligations remain required. No new support or stable-release claim.
+
+## Phase 6 maintenance and media case register (T056)
+
+These are required future execution cases, **not executed acceptance results**. Follow
+the [maintenance runbook](../../deploy/README.md#maintenance) and
+[quickstart walkthrough](quickstart.md#7-maintenance-walkthrough-t065).
+Every row starts `pending`: no accepted public digest/isolated real-host maintenance run
+has been recorded. Release/platform and environment are `not yet selected/recorded`;
+failure_class is `none` until an observed outcome is assessed. Each execution must append
+the full record format above: exact version/source/index/container/image identities,
+OS/architecture, Engine/Compose, UTC and observed timing, nonsecret network context,
+result/reason, evidence, limitations and next action. Record each tested host combination
+separately; no result here expands the supported-host evidence matrix.
+
+| Case | Gate / requirements | Required observation | Result |
+|---|---|---|---|
+| OP-INSPECT | F008-OPERATIONS; FR-016–FR-017, FR-019; SC-003 | Selected health/restart/time fields, bounded console logs and one-shot resource stats; no token/link/Telegram ID disclosure, no poller from inspection, memory includes tmpfs | pending |
+| OP-DIAGNOSTICS-OFF | F008-OPERATIONS; FR-017, FR-021; SC-003 | Default-off mode creates no diagnostic files, including local validation | pending |
+| OP-DIAGNOSTICS-ON | F008-OPERATIONS; FR-017, FR-021; SC-003 | Explicit protected writable mount, UID 10001 access, directory 0700/files 0600, private real trace/refusal, no console disclosure, 14 UTC-day files/50MB retention, persistence across recreation; healthcheck writes no logs | pending |
+| OP-ROTATE | F008-OPERATIONS; FR-008–FR-010, FR-015, FR-017; SC-003–SC-004 | Protected replacement, confirmed stop, atomic rename, local validation, forced mount recreation, real replacement authentication/health and one poller; transient/editor copies cleaned under host policy | pending |
+| OP-ROTATE-FAIL | F008-OPERATIONS; FR-009, FR-015, FR-017; SC-003–SC-004 | Local invalid input and remotely rejected credential leave attempts stopped; corrected current input recovers; no revoked-token restoration or restart-only mount renewal | pending |
+| OP-EXIT | F008-OPERATIONS; FR-016, FR-019; SC-007 | In-container unexpected exit after restart-monitoring threshold, automatic same-container recovery/increased restart count without up/start, health <=180s and delivery; no second poller | pending |
+| OP-REBOOT | F008-OPERATIONS; FR-016, FR-019; SC-007 | Running selected digest automatically recovers after isolated-host reboot, healthy <=180s after Engine availability, real delivery and one poller; record boot IDs/timing | pending |
+| OP-STOP | F008-OPERATIONS; FR-016, FR-019; SC-007 | Intentional stop persists across reboot; retained stopped container/no polling observed >=180s after Engine availability, followed by explicit healthy restart | pending |
+| OP-OUTAGE | F008-OPERATIONS; FR-016, FR-019; SC-007 | Isolated network loss exceeds freshness/retry windows; unhealthy with unchanged container/StartedAt/restart count, reconnect recovers healthy polling <=180s and delivery; no restart agent/additional poller | pending |
+| OP-BACKUP | F008-OPERATIONS; FR-017, FR-019; SC-003 | Operator verifies encrypted storage/access controls; consistent config/current credential/verified selection record, protected recoverability, no media/request/diagnostic backup | pending |
+| OP-REMOVE | F008-OPERATIONS; FR-017, FR-019; SC-003 | Only fixed project removed; explicit retained config/secret/diagnostic/migration/record/backup/image inventory and retention decisions; unrelated services unchanged | pending |
+| OP-RESTORE | F008-OPERATIONS; FR-015, FR-017, FR-019; SC-003 | Other pollers stopped; reviewed config, current credential and ownership/modes, verified digest and isolated preflight, real health/delivery; no request resumption | pending |
+
+All OP cases have gate_scope **Feature 008 acceptance**, class
+**Deployment-network/manual**, and belong to T065. F008-SHUTDOWN/T064 remains a separate
+real active-work <=20-second exit/child/upload/scratch/no-duplicate acceptance gate; a
+forced exit or successful maintenance restart does not pass it.
+
+T066 retains **every inherited gate** in the earlier register: I001-CONTROLLED,
+I001-SOURCES, I001-RUNTIME, I001-TELEGRAM, I001-TIMING, I002-DIAGNOSTICS, I003-UX,
+I004-SHORT-LINKS, I005-LIVE, I005-TELEGRAM, I005-CONTAINER, I006-CONTAINER and I006-TITLES.
+Keep inherited results separate even when one observation supports an OP case too.
+Use the [section 8 matrix](quickstart.md#8-representative-delivery-and-inherited-matrix-t066)
+for the five original source categories, music, two accounts, timing, short links,
+client UX, native bytes and caption/saved/forwarded filename checks. Representative real
+delivery is additionally required for feature-008 acceptance (F008-INSTALL/ASSESSMENT).
+No inherited gate is transitioned by this documentation update.
+
+For each failed case choose `deployment regression`, `evidenced pre-existing source
+limitation`, or `unclassified`, citing precise earlier validation or an independent
+comparable baseline before claiming a source limitation. A missing token/host/reboot
+capability is not a source limitation; record `blocked` with the actual missing
+prerequisite if an execution attempt establishes it. Otherwise keep unexecuted cases
+`pending`. Publish only sanitized case IDs/outcomes; private manifests/diagnostics stay
+outside Git and release assets. Do not record credential contents or hashes.
+
+Feature completion requires every feature-008 gate to pass, representative real delivery
+and an executed/assessed inherited matrix. Only evidenced pre-existing source limitations
+may remain open inherited stable-readiness blockers on a completed preview feature;
+missing execution/evidence, deployment regressions and unclassified failures still block
+completion. Reclassification never passes a failed gate. Stable promotion and capability
+claims still require the corresponding inherited gates to pass.
+
+## Phase 6 — operations documentation checkpoint (2026-11-01)
+
+- Tasks: T051–T058. Branch `008-public-docker-deployment`, parent revision
+  `60cef5468e5aaf8a62f05c86b37b14feaa2976e0`, documentation-only working changes.
+  No version/public digest selected and no runtime/container/workflow code changed.
+- gate_id / requirement_ids: F008-OPERATIONS/F008-ASSESSMENT documentation readiness;
+  FR-015–FR-021; SC-003, SC-007–SC-008. Class: Controlled. Scope: Feature 008 acceptance,
+  documentation checkpoint only. Result: **pass for the executed checks below**;
+  failure_class: none. Aggregate external gates remain pending.
+- Environment: local macOS workspace, Bash syntax validation, Python through the locked
+  uv environment; Docker Compose 5.6.1 used only for offline configuration rendering.
+  No polling, credential mutation, host reboot, network disconnection, live source access,
+  publication, or operator service modification performed.
+
+### Executed verification (T058)
+
+- Parsed all **43** Bash/sh blocks across `deploy/README.md`, `quickstart.md` and root
+  `README.md` with `bash -n`, plus 3 existing blocks in this validation record
+  (**46 total**); compiled embedded Python heredocs. All passed. Checked relative
+  Markdown file targets and heading anchors across all four documents. Reviewed paths
+  and CLI names manually
+  against Compose, token configuration and operations contracts. Corrected stale
+  quickstart inventory inputs to `inventory-amd64.json` / `inventory-arm64.json`, matching
+  the collector output; removed obsolete descriptions of already implemented tests.
+- Executed the actual rotation block plus the existing `start_checked` function with
+  temporary synthetic files and controlled sudo/Docker/editor boundaries. All four
+  scenarios passed: success orders stop → replace → preflight → start → confirmation;
+  failed stop prevents replacement/start; failed local preflight leaves stopped with
+  no start; failed health invokes explicit stop cleanup. Temporary input cleanup passed
+  in every scenario. Harness: `/tmp/openmedia-phase6-check.py` (local scratch evidence).
+  This checks command ordering and shell failure exits, not real root permissions,
+  mount renewal, Telegram authentication or host recovery.
+- Rendered the documented optional diagnostic bind mount merged into a temporary copy
+  of production Compose with synthetic digest/token and diagnostic flag enabled.
+  `docker compose ... config --format json` passed: writable log mount at
+  `/var/log/openmedia`, `create_host_path: false`, UID/GID 10001 and read-only root
+  retained. No container was started; actual log permissions/retention/persistence remain
+  OP-DIAGNOSTICS-ON/I002-DIAGNOSTICS.
+- `uv run --locked pytest tests/unit/test_config.py tests/unit/test_config_diagnostics.py
+  tests/unit/test_diagnostics.py tests/integration/test_diagnostic_trace.py
+  tests/integration/test_runtime.py -q`: **236 passed**, 2 existing PTB deprecation
+  warnings. These existing tests cover configuration privacy, diagnostics and local
+  heartbeat/lifecycle/child cleanup; no duplicate documentation-snapshot tests added.
+- Ignore verification: existing Git/Docker exclusions already cover host secrets,
+  deployment state/evidence, diagnostics/logs, live manifests, Python build/cache and
+  private staging outputs. No missing critical pattern found; neither ignore file changed.
+  No Node/ESLint/Prettier/Terraform/Helm setup requiring additional ignore files found.
+- Privacy/contract review: inspection prints selected state only; logs are bounded;
+  diagnostics stay default-off/private with explicit mount and retention; rotation never
+  prints/hashes credentials and recreates mounts; encrypted backup excludes media/request
+  state; restore uses current credentials; removal is project-scoped with retained-file
+  inventory. No autoheal/process manager, new runtime dependency or storage introduced.
+- Public claims reconciled with existing evidence: 001 historical feasibility and
+  Telegram results remain historical, 005's 2026-10-08 tested-track phone playback is
+  partial manual evidence, and 006 client title/filename/byte checks remain open.
+  No new live capability or tested Ubuntu/architecture combination claimed.
+- `git diff --check` passed. `.specify/extensions.yml` is absent; no before/after
+  implementation hooks are registered.
+
+Official Docker references checked for this runbook:
+[restart policy and monitoring threshold](https://docs.docker.com/engine/containers/start-containers-automatically/),
+[container signals](https://docs.docker.com/reference/cli/docker/container/kill/),
+[project removal defaults](https://docs.docker.com/reference/cli/docker/compose/down/).
+
+**US4 implementation checkpoint:** operations instructions and readiness reporting are
+ready for external execution. **T065–T066 remain pending**, as do all T059–T067 tasks.
+No real rotation, recovery/reboot/outage, backup/restore/removal, polling or delivery
+acceptance is claimed. Final-candidate controlled/native/public checks remain Phase 7;
+earlier CI images do not establish final-candidate acceptance. Other host combinations
+remain pending, and no inherited stable-readiness gate changed status.
