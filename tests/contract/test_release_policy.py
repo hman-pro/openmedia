@@ -27,6 +27,59 @@ def test_publisher_authorization_accepts_new_preview():
     release.authorize_publication(authority())
 
 
+def test_write_permission_does_not_authorize_publication():
+    with pytest.raises(release.ReleaseError, match='Maintainer'):
+        release.authorize_publication(authority(actor_permission='write'))
+
+
+@pytest.mark.parametrize('role,allowed', [(2, True), (5, True), (4, False), (1, False)])
+def test_tag_rule_bypass_uses_github_repository_role_ids(role, allowed):
+    import publish
+    rulesets = [{'target': 'tag', 'enforcement': 'active',
+                 'conditions': {'ref_name': {'include': ['refs/tags/v*', 'refs/tags/sources-v*'], 'exclude': []}},
+                 'rules': [{'type': kind} for kind in ('creation', 'update', 'deletion')],
+                 'bypass_actors': [{'actor_type': 'RepositoryRole', 'actor_id': role, 'bypass_mode': 'always'}]}]
+    if allowed:
+        assert publish.check_tag_rules('v0.1.0-preview.1', rulesets)
+    else:
+        with pytest.raises(release.ReleaseError, match='maintainers/admins'):
+            publish.check_tag_rules('v0.1.0-preview.1', rulesets)
+
+
+@pytest.mark.parametrize('permission,role_name,allowed', [
+    ('write', 'maintain', True), ('admin', 'admin', True),
+    ('write', 'write', False), ('write', None, False),
+])
+def test_actual_authority_uses_effective_role_before_registry_access(tmp_path, monkeypatch, permission, role_name, allowed):
+    import publish
+    version, revision = 'v0.1.0-preview.1', 'a' * 40
+    monkeypatch.setenv('GITHUB_ACTOR', 'controlled-maintainer')
+    monkeypatch.setenv('GITHUB_EVENT_NAME', 'push')
+    monkeypatch.setenv('GITHUB_REF_TYPE', 'tag')
+    monkeypatch.setattr(publish, 'release_identity', lambda: (version, revision))
+    monkeypatch.setattr(publish, 'peel_tag', lambda tag: revision)
+    def api(path):
+        if path == 'repos/' + release.REPOSITORY:
+            return {'id': release.REPOSITORY_ID, 'visibility': 'public'}
+        if '/collaborators/' in path:
+            return {'permission': permission, 'role_name': role_name}
+        assert path.endswith('/rulesets?includes_parents=true')
+        return []
+    monkeypatch.setattr(publish, 'api', api)
+    monkeypatch.setattr(publish, 'check_tag_rules', lambda *args: True)
+    monkeypatch.setattr(publish, 'audit_pins', lambda: True)
+    registry_calls = []
+    monkeypatch.setattr(publish, 'unused_version', lambda tag: registry_calls.append(tag))
+    if allowed:
+        publish.authority(tmp_path)
+        assert release.read_json(tmp_path / 'authority.json')['actor_permission'] == role_name
+        assert registry_calls == [version]
+    else:
+        with pytest.raises(release.ReleaseError, match='not a maintainer'):
+            publish.authority(tmp_path)
+        assert registry_calls == []
+
+
 @pytest.mark.parametrize('failed', ['authority', 'pins', 'controlled', 'amd64', 'arm64', 'coverage', 'sources_public', 'amd64_import', 'arm64_import'])
 def test_every_pre_push_gate_prevents_all_writes(failed):
     gates = dict.fromkeys(release.PRE_PUSH_GATES, True); gates[failed] = False

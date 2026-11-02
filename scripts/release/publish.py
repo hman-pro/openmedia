@@ -80,7 +80,9 @@ def check_tag_rules(version, rulesets):
         require({'creation', 'update', 'deletion'} <= types, 'Tag creation/mutation/deletion are not all restricted')
         for ruleset in applicable:
             for bypass in ruleset.get('bypass_actors', []):
-                require(bypass.get('actor_type') == 'RepositoryRole' and bypass.get('actor_id') in (4, 5) and bypass.get('bypass_mode') == 'always', 'Tag bypass must be restricted to maintainers/admins')
+                # GitHub role IDs are not ordered by privilege: 2 is Maintain,
+                # 4 is Write, and 5 is Admin.
+                require(bypass.get('actor_type') == 'RepositoryRole' and bypass.get('actor_id') in (2, 5) and bypass.get('bypass_mode') == 'always', 'Tag bypass must be restricted to maintainers/admins')
     return True
 
 
@@ -99,8 +101,10 @@ def authority(directory):
     repository = api('repos/' + REPOSITORY)
     require(repository['id'] == REPOSITORY_ID and repository['visibility'] == 'public', 'Wrong or nonpublic canonical repository')
     require(peel_tag(version) == revision and peel_tag('sources-' + version) == revision, 'Missing matching source/version tag pair')
-    permission = api('repos/' + REPOSITORY + '/collaborators/' + quote(os.environ['GITHUB_ACTOR'], safe='') + '/permission')['permission']
-    require(permission in ('admin', 'maintain', 'write'), 'Tag actor is not a maintainer')
+    actor = api('repos/' + REPOSITORY + '/collaborators/' + quote(os.environ['GITHUB_ACTOR'], safe='') + '/permission')
+    # The legacy permission field reports Write for the Maintain role.
+    permission = actor.get('role_name') or actor['permission']
+    require(permission in ('admin', 'maintain'), 'Tag actor is not a maintainer')
     rulesets = [api('repos/' + REPOSITORY + '/rulesets/' + str(x['id'])) for x in api('repos/' + REPOSITORY + '/rulesets?includes_parents=true')]
     check_tag_rules(version, rulesets); audit_pins(); unused_version(version)
     # Immutability is verified from the completed sources-only release before any

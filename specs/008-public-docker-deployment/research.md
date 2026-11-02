@@ -1,5 +1,17 @@
 # Research: Public Docker Deployment
 
+## Phase 7 release-authority correction — 2026-11-02
+
+The final audit found that RepositoryRole bypass IDs are not ordered by privilege:
+Maintain is **2**, Write is **4**, and Admin is **5**, as documented by the
+[GitHub Terraform provider](https://github.com/integrations/terraform-provider-github/blob/main/docs/resources/organization_ruleset.md).
+Reject Write bypasses and actor authorization; accept Maintain/Admin only. The
+collaborator API's legacy `permission` can report `write` for Maintain, so use its
+`role_name` when available, falling back to `permission` without broadening access.
+Controlled tests first reproduced acceptance of Write, rejection of Maintain ID 2,
+and rejection of the API's Maintain role; all are corrected before publication.
+No runtime, container input pin, or source-access behavior changes.
+
 **Date**: 2026-10-28
 **Input**: [spec.md](spec.md), [proposal.md](proposal.md), existing runtime and notices.
 **Result**: Design questions resolved. Findings below select the implementation approach;

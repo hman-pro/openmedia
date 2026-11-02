@@ -413,7 +413,7 @@ def authorize_publication(context):
     require(context.get('event') == 'push' and context.get('ref_type') == 'tag', 'Publication requires maintainer tag push')
     require(SEMVER.fullmatch(str(context.get('version', ''))) and '-' in context['version'], 'Only preview publication is currently enabled')
     require(COMMIT.fullmatch(str(context.get('revision', ''))) and context.get('source_revision') == context['revision'], 'Missing matching source tag')
-    require(context.get('actor_permission') in ('admin', 'maintain', 'write') and context.get('tag_rules_verified') is True, 'Maintainer tag authority not established')
+    require(context.get('actor_permission') in ('admin', 'maintain') and context.get('tag_rules_verified') is True, 'Maintainer tag authority not established')
     require(context.get('immutable_releases') is True, 'Immutable releases must be enabled')
     require(context.get('version_exists') is False, 'Exact image version already exists or availability is unknown')
     return context
