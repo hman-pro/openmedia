@@ -362,21 +362,30 @@ class TestRetention:
 
 class TestFailureIsolation:
     def test_unwritable_directory_never_raises_and_notices_once(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         now = [1000.0]
         directory = tmp_path / "logs"
         handler = DailyFileHandler(directory, clock=lambda: now[0])
         handler.setFormatter(JsonLineFormatter(secrets=()))
         handler.emit(lifecycle(at("2026-09-21T10:00:00")))
-        directory.chmod(0o500)
+        # Root can bypass directory permissions in the CI container. Inject the
+        # actual filesystem error so the outage/retry contract is tested there too.
+        original_open = diagnostics.os.open
+
+        def denied_open(path: Any, flags: int, mode: int = 0o777) -> int:
+            if Path(path).parent == directory:
+                raise PermissionError("controlled unwritable diagnostic directory")
+            return original_open(path, flags, mode)
+
+        monkeypatch.setattr(diagnostics.os, "open", denied_open)
         try:
             for index in range(5):
                 handler.emit(lifecycle(at("2026-09-22T10:00:00") + index))
             assert capsys.readouterr().err.count("diagnostic log unavailable") == 1
 
             # No retry before the reopen interval, even once the directory is healthy again.
-            directory.chmod(0o700)
+            monkeypatch.setattr(diagnostics.os, "open", original_open)
             now[0] += 59
             handler.emit(lifecycle(at("2026-09-22T10:01:00")))
             assert not (directory / "openmedia-2026-09-22.log").exists()
@@ -384,7 +393,6 @@ class TestFailureIsolation:
             now[0] += 2
             handler.emit(lifecycle(at("2026-09-22T10:02:00"), msg="back"))
         finally:
-            directory.chmod(0o700)
             handler.close()
         entries = [json.loads(line) for line in (directory / "openmedia-2026-09-22.log").read_text().splitlines()]
         assert [entry["stage"] for entry in entries] == ["log_recovered", "sweep"]
@@ -423,3 +431,25 @@ class TestFailureIsolation:
 
     def test_a_normal_entry_is_not_marked_truncated(self) -> None:
         assert "truncated" not in render(make_record(origin="lifecycle", stage="startup"))
+
+
+def test_file_loaded_token_redacted_in_console_and_enabled_diagnostics(tmp_path):
+    import io
+    from openmedia.config import Settings
+    from openmedia.__main__ import SafeLogFormatter
+    path = tmp_path / 'sentinel-private-path'
+    path.write_text(TOKEN)
+    settings = Settings.from_env({'TELEGRAM_BOT_TOKEN_FILE': str(path),
+        'OPENMEDIA_DIAGNOSTIC_LOG': '1', 'OPENMEDIA_DIAGNOSTIC_LOG_DIR': str(tmp_path / 'logs')})
+    output = io.StringIO()
+    console = logging.StreamHandler(output)
+    console.setFormatter(SafeLogFormatter('%(message)s', secrets=(settings.telegram_bot_token,)))
+    record = make_record(f'credential {TOKEN}')
+    console.handle(record)
+    stop = diagnostics.configure_diagnostics(settings)
+    try:
+        diagnostics.event('sentinel', origin='lifecycle', msg=f'credential {TOKEN}')
+    finally:
+        stop()
+    rendered = output.getvalue() + repr(settings) + ''.join(p.read_text() for p in (tmp_path / 'logs').glob('*'))
+    assert TOKEN not in rendered and str(path) not in rendered

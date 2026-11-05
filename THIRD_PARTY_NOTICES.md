@@ -64,3 +64,56 @@ ShareXtract 0.23.4's Apache-2.0 LinkedIn extractor informed the choice of Linked
 embed route: <https://github.com/wuaishare/sharextract/tree/v0.23.4>. OpenMedia's parser in
 `src/openmedia/sources/linkedin.py` is an independent standard-library implementation; no
 ShareXtract source text was copied or adapted, so ShareXtract is not a runtime dependency.
+
+## Feature 008 matching-source closure
+
+Public distribution remains pending the feature 008 acceptance gates. The release
+pipeline inventories the **actual final image** on native amd64 and arm64, including
+all installed Debian binaries and source versions, Debian `Built-Using` edges, application
+Python distributions, the separate system Python/pip environment, and unmanaged tools
+and base helpers. The reviewed identities and corresponding acquisition hashes are in
+[`release/source-policy.json`](release/source-policy.json); unknown components block
+publication. This table does not replace the individual component notices.
+
+Corresponding Debian `.dsc`, original and Debian patch archives are obtained through
+APT-authenticated metadata, retaining source versions independently of binary rebuild
+suffixes. The exact installed Python sdists come from `uv.lock`; system pip has its own
+reviewed sdist. CPython, uv/uvx, Deno, their recipes and embedded sources are retained,
+including each locked Rust crate, Rust standard-library source, TypeScript, and V8's
+bundled ICU/Chromium source and component notices. The V8 archive supplies ICU 77.1
+sources for the separately identified Deno ICU data component. Providing sources and
+recipes does not promise bit-for-bit binary reproducibility.
+
+The collector preserves original installed copyright/common-license files and packaged
+source notices. Some Rust packages omit a separate license file; their exact archived
+Cargo metadata and full source remain unchanged. Reviewed fallback cases supply full,
+checksum-pinned standard license texts for an explicitly declared supported license and
+record the missing separate notice/provenance. Authors are not inferred to be copyright
+holders, and template placeholders are not original copyright notices. The MIT-only
+archive audit and actual source-notice findings are recorded in
+[`release/notice-review.json`](release/notice-review.json). Unknown expressions, unsupported
+exceptions or missing required original notices block coverage.
+
+Before the first image push, the completed canonical `sources-VERSION` GitHub release
+must publicly provide `source-manifest.json`, exact per-platform inventories,
+`sources-*.tar.gz`, and `notices.tar.gz`. Its URLs and hashes are bound by the signed
+final image release manifest. These source materials remain available for distributed
+images even when later signing, access or acceptance checks fail. The public verifier
+checks every declared source, notice and build material inside the logical parts.
+
+The retained FFmpeg 5.1.9 Debian build was inspected on both native architectures during
+feature 008: its effective configuration enables GPL components (`--enable-gpl`, including
+libx264/libx265) and does not enable `--enable-nonfree`. Preserve the full FFmpeg and
+Debian component license texts and corresponding sources; the application's MIT license
+does not relicense those components. Actual final candidate build/source checks and
+public availability are recorded separately in feature 008 validation.
+
+The image also carries the reviewed unmanaged and embedded component notice texts at
+`/usr/local/share/doc/openmedia/RUNTIME_NOTICES.txt.gz`, generated from the exact
+checksum-verified source materials. Read them with
+`gzip -dc /usr/local/share/doc/openmedia/RUNTIME_NOTICES.txt.gz` inside the image.
+The deterministic compressed file and material provenance are retained in
+`release/runtime-notices.txt.gz` and `release/runtime-notices.provenance.json`; the
+collector checks the installed file against its reviewed checksum. This supplements
+Debian copyright/common-license files and Python dist-info licenses in their original
+installed locations. Public notice archives remain mandatory as well.

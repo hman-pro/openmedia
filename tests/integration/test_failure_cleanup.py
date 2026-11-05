@@ -291,39 +291,77 @@ async def test_music_failures_release_capacity_clean_files_and_never_resend(tmp_
         assert "Check this chat" in result.next_step
 
 
-async def test_shutdown_cancels_music_download_and_cleans_owned_file(tmp_path, monkeypatch):
+@pytest.mark.parametrize("stage", ["downloading", "sending"])
+async def test_shutdown_cancels_music_download_and_cleans_owned_file(tmp_path, monkeypatch, stage):
     import asyncio
     from unittest.mock import AsyncMock
-    from telegram.ext import Application, ApplicationBuilder
-    from openmedia.__main__ import ManagedApplication
+    import time
+    from telegram.ext import Application
+    from openmedia import __main__ as runtime
+    from openmedia.config import Settings
+    from openmedia.delivery import deliver_media
+    from openmedia.sources import DownloadResult
     from openmedia.models import FormatOption, MediaMetadata
     from openmedia.sources import InspectResult
 
-    app = ApplicationBuilder().application_class(ManagedApplication).token("123456789:offline").build()
-    registry = RequestRegistry(monotonic=lambda: 10)
+    secret = tmp_path / "credential"
+    secret.write_text("123456789:file-lifecycle-test\n")
+    work = tmp_path / "work"
+    work.mkdir()
+    settings = Settings.from_env({"TELEGRAM_BOT_TOKEN_FILE": str(secret),
+        "OPENMEDIA_WORK_DIR": str(work)})
+    app, registry = runtime.build_application(settings)
     url = "https://music.youtube.com/watch?v=abcDEF12345"
     metadata = MediaMetadata("youtube", url, "abcDEF12345", media_kind="audio")
     option = FormatOption(0, "yt_dlp", "140", "audio", "m4a", "audio/mp4")
     started = asyncio.Event()
-    path = tmp_path / "selected.m4a"
-    async def download(item, selected):
-        path.write_bytes(b"partial")
+    path = work / "selected.m4a"
+    uploads = []
+    async def send_document(self, **kwargs):
+        uploads.append(kwargs["document"])
         started.set()
         await asyncio.Event().wait()
+    monkeypatch.setattr(runtime.HealthTrackingBot, "send_document", send_document)
+    async def download(item, selected):
+        path.write_bytes(b"partial")
+        if stage == "downloading":
+            started.set()
+            await asyncio.Event().wait()
+        return DownloadResult(path, 7, item.media_id, "140", "audio", "m4a", "audio/mp4")
     async def cleanup(item):
         path.unlink(missing_ok=True)
-    deliver = AsyncMock()
+    async def upload(item, result):
+        return await deliver_media(app.bot, request=item, downloaded=result,
+            owned_directory=work, max_file_bytes=settings.max_file_bytes,
+            deadline=item.processing_deadline)
+    deliver = AsyncMock(side_effect=upload)
     workflow = MediaWorkflow(registry, inspect=AsyncMock(return_value=InspectResult(metadata, (option,))),
         publish_preview=AsyncMock(return_value=55), download=download, deliver=deliver,
         status=AsyncMock(), cleanup=cleanup, max_file_bytes=50_000_000)
     job = app.create_task(workflow.submit(user_id=7, chat_id=77, text=url, chat_type="private"))
-    await started.wait()
+    await asyncio.wait_for(started.wait(), 2)
+    request = next(iter(registry.requests_by_id.values()))
     monkeypatch.setattr(Application, "stop", AsyncMock())
-    await app.stop()
+    before = time.monotonic()
+    await asyncio.wait_for(app.stop(), 20)
+    assert time.monotonic() - before < 20 < 30
     assert job.cancelled()
     assert not path.exists()
     assert registry.active_work_count == registry.pending_count == 0
-    deliver.assert_not_awaited()
+    if stage == "downloading":
+        deliver.assert_not_awaited()
+    else:
+        assert len(uploads) == 1 and uploads[0].closed
+        assert request.delivery_result.status == "unknown"
+        from openmedia.coordinator import WorkflowBusy
+        with pytest.raises(WorkflowBusy):
+            await workflow.select(request_id=request.request_id, user_id=7, chat_id=77,
+                preview_message_id=55, option_id=0)
+        assert len(uploads) == 1
+    late = registry.new_request(user_id=8, chat_id=88, source_url=url,
+        platform="youtube", media_id="abcDEF12345")
+    from openmedia.coordinator import AdmissionOutcome
+    assert (await registry.admit(late)).outcome is AdmissionOutcome.WORK_BUSY
 
 
 def test_music_unknown_size_source_output_is_stopped_at_guarded_byte_cap(tmp_path, monkeypatch):

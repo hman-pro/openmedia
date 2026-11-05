@@ -1,0 +1,250 @@
+[
+  {
+    "crate": "plist-1.9.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [
+      {
+        "path": "plist-1.9.0/LICENCE",
+        "copyright_lines": [
+          "Copyright (c) 2015 Edward Barnard",
+          "The above copyright notice and this permission notice shall be included in all",
+          "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER"
+        ]
+      }
+    ],
+    "authors_metadata": [
+      "Ed Barnard <eabarnard@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice ebarnard/rust-plist@06a7be6505196c818fb489082886b689ccb0cb63",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "aead-gcm-stream-0.4.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Divy Srivastava <dj.srivastava23@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Unsupported notice repository ",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "seahash-4.1.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "ticki <ticki@users.noreply.github.com>",
+      "Tom Almeida <tom@tommoa.me>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Unsupported notice repository https://gitlab.redox-os.org/redox-os/seahash",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "lazy-regex-proc_macros-3.1.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Canop <cano.petrole@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Unsupported notice repository ",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "convert_case-0.4.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "David Purdum <purdum41@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice rutrum/convert-case@300d9eef9e8c970e15f324afbc3df8b6a4ebbf71",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "sys_traits_macros-0.1.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice dsherret/sys_traits@75cbf3ea478624cc78275b0264e78e9ae13ce3f5",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "deno_tunnel-0.8.1.crate",
+    "license": "MIT",
+    "original_copyright_notices": [
+      {
+        "path": "deno_tunnel-0.8.1/Cargo.toml.orig",
+        "copyright_lines": [
+          "# Copyright 2018-2025 the Deno authors. MIT license."
+        ]
+      },
+      {
+        "path": "deno_tunnel-0.8.1/src/lib.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2025 the Deno authors. MIT license."
+        ]
+      }
+    ],
+    "authors_metadata": [
+      "the Deno authors"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice denoland/deno_tunnel@c0572b46beac220e105e69317ff9e207babc7f09",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "rsqlite-vfs-0.1.1.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Unsupported notice repository ",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "dlopen2-0.6.1.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Szymon Wieloch <szymon.wieloch@gmail.com>",
+      "Ahmed Masud <ahmed.masud@saf.ai>",
+      "OpenByte <development.openbyte@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "No recorded VCS/tag identity OpenByteDev/dlopen2",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "fqdn-0.5.2.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Xophe <christophe.dousson@orange.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice Orange-OpenSource/fqdn@a23fef8570522a3b98a79afc45322d6487166cd9",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "sys_traits-0.1.28.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice dsherret/sys_traits@709e02e198721f81b485c078ccdf1835fa3e6a40",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "dlopen2_derive-0.4.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Szymon Wieloch <szymon.wieloch@gmail.com>",
+      "OpenByte <development.openbyte@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Unsupported notice repository ",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "difflib-0.4.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Dima Kudosh <dimakudosh@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "No recorded VCS/tag identity DimaKudosh/difflib",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "sacabase-2.0.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Amos Wenger <amoswenger@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice fasterthanlime/stringsearch@acd5846b959884a1d24247038e9c52b5cf900f67",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "deno_native_certs-0.3.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "Divy Srivastava <dj.srivastava23@gmail.com>"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice denoland/deno_native_certs@700f235fe029ea839f5a64eea251abf8116ddb4c",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "deno_core_icudata-0.77.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [],
+    "authors_metadata": [
+      "the Deno authors"
+    ],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice denoland/deno_core_icudata@83537ba16a4bf1645fc8322e81f7aaf0149a8922",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  },
+  {
+    "crate": "rustls-tokio-stream-0.8.0.crate",
+    "license": "MIT",
+    "original_copyright_notices": [
+      {
+        "path": "rustls-tokio-stream-0.8.0/src/adapter.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license."
+        ]
+      },
+      {
+        "path": "rustls-tokio-stream-0.8.0/src/connection_stream.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license."
+        ]
+      },
+      {
+        "path": "rustls-tokio-stream-0.8.0/src/handshake.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license."
+        ]
+      },
+      {
+        "path": "rustls-tokio-stream-0.8.0/src/lib.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license."
+        ]
+      },
+      {
+        "path": "rustls-tokio-stream-0.8.0/src/stream.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license."
+        ]
+      },
+      {
+        "path": "rustls-tokio-stream-0.8.0/src/system_test/fastwebsockets.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license."
+        ]
+      },
+      {
+        "path": "rustls-tokio-stream-0.8.0/src/system_test/mod.rs",
+        "copyright_lines": [
+          "// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license."
+        ]
+      }
+    ],
+    "authors_metadata": [],
+    "source_preserved_unmodified": true,
+    "separate_notice_absence": "Missing exact upstream notice denoland/rustls-tokio-stream@c8a9239c987dbfa7b1eaed78d27935fe8272319c",
+    "interpretation": "Authors are preserved as authors, not asserted to be copyright holders. Standard MIT text does not count as an original copyright notice."
+  }
+]

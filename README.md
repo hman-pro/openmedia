@@ -74,7 +74,7 @@ download-and-send stage has 10 minutes to finish.
 | Source | Accepted links | Media | Live verification |
 |---|---|---|---|
 | YouTube | `youtube.com/watch?v=…`, `youtu.be/…`, `youtube.com/shorts/…` | Single video | Feasibility pass; full live suite pending |
-| YouTube Music | `music.youtube.com/watch?v=…` with optional listening/sharing context | One complete native audio track, sent automatically as a document | Controlled checks pass; live verification pending |
+| YouTube Music | `music.youtube.com/watch?v=…` with optional listening/sharing context | One complete native audio track, sent automatically as a document | User confirmed tested-track phone playback; full live/manual matrix pending |
 | LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Video and image pass live through Telegram, including `lnkd.in` short links; full live suite pending |
 | Instagram | `instagram.com/p/…`, `instagram.com/reel/…` | Video or single image | Video passes live through the product transport; single image pending |
 
@@ -91,22 +91,40 @@ See [feature 005 validation](specs/005-youtube-music-download/validation.md) for
 or login-gated content, and any source not listed above. The bot explains each rejection, for
 example *"Only one finished media item is supported. Send a single-item link."*
 
-The "Live verification" column reflects recorded live runs, not what is expected to work.
-Sources change without notice, so a category counts as supported only after it passes live.
+The "Live verification" column reflects historical results in
+[001 validation](specs/001-media-download/validation.md),
+[004 validation](specs/004-linkedin-share-links/validation.md) and
+[005 validation](specs/005-youtube-music-download/validation.md#user-acceptance-update--2026-10-08).
+These results do not establish current deployment-network availability. Sources change
+without notice; feature 008 must repeat the matrix on its selected release/network.
 
 ## Project status
 
-OpenMedia is **pre-release**. The planned features are implemented, and the controlled tests
-cover them with the network disabled. YouTube Music live/manual/container acceptance
-remains pending. The release gates that need the real world are still open:
+OpenMedia is **pre-release**. Media behavior has controlled test coverage with the
+network disabled. Public Docker release/deployment implementation is in progress;
+native amd64/arm64 smoke and source collection passed for an earlier candidate, but
+final-candidate checks and public release acceptance remain open. No public image is
+advertised as accepted. See the [008 validation register](specs/008-public-docker-deployment/validation.md).
+The remaining external gates include:
 
 - [ ] Full live source suite, run through the product's own transport
-- [ ] Constrained read-only container run with a real bot token (currently on hold)
+- [ ] Public anonymous image/source retrieval and real signed-evidence verification
+- [ ] Clean-server polling/health and real delivery on the selected verified digest
+- [ ] Real-host update, rollback, shutdown, rotation, reboot and maintenance acceptance
 - [ ] Deployment-network source checks and two-account Telegram acceptance
 - [ ] Acceptance timing runs, 20 inspections plus 20 deliveries
+- [ ] Remaining YouTube Music context/collection checks and real-client title/filename checks
 
-No controlled test counts toward any of these gates. If you run the bot before they close,
-treat it as a preview.
+No controlled test closes these gates. Historical phone playback confirmation is partial
+music evidence; [006 validation](specs/006-media-delivery-titles/validation.md#external-acceptance-and-release-gaps)
+still leaves real-client titles, saved/forwarded filenames and received bytes unverified.
+Ubuntu 24.04/26.04 LTS on amd64/arm64 are deployment targets; none of the four host
+combinations has clean-server acceptance recorded yet. Treat use as a preview.
+
+Feature 008 can complete as a preview only after its own acceptance checks and
+representative real delivery pass and the inherited matrix is executed/assessed.
+Evidenced pre-existing source limitations may remain inherited stable-readiness blockers;
+missing evidence, deployment regressions and unclassified failures still block completion.
 
 ## Quick start
 
@@ -160,7 +178,8 @@ Settings come from environment variables. `.env.example` is the annotated templa
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | *(required)* | Bot API token. Never logged, never included in `repr` or error text. |
+| `TELEGRAM_BOT_TOKEN` | *(one token source required)* | Direct Bot API token; mutually exclusive with the file setting, even if either is empty. Never logged or included in `repr`. |
+| `TELEGRAM_BOT_TOKEN_FILE` | *(unset)* | Absolute readable regular file containing the runtime token; used by published-image deployment. See the [token contract](specs/008-public-docker-deployment/contracts/configuration.md#token-sources). |
 | `OPENMEDIA_WORK_DIR` | `/tmp/openmedia` | Root directory for per-request workspaces. |
 | `OPENMEDIA_MAX_FILE_BYTES` | `50000000` | Delivery cap. Telegram's hosted Bot API limits uploads to 50 MB. |
 | `OPENMEDIA_MAX_WORKERS` | `2` | Concurrent inspect and download slots. At most one Instagram job runs at a time. |
@@ -180,12 +199,25 @@ adds a second service, which this project deliberately does not run.
 
 ## Container
 
+For a server using a **published image**, follow the
+[single-server guide](deploy/README.md#install-on-a-single-server). It selects a verified
+immutable digest, supplies a read-only file secret and covers manual updates, rollback
+and [maintenance](deploy/README.md#maintenance). Public release acceptance is still
+pending; obtain a concrete accepted preview and complete
+[account-free verification](deploy/README.md#account-free-verification) before deploying.
+See [release/source distribution](deploy/README.md#maintainer-release-procedure) and
+[third-party notices](THIRD_PARTY_NOTICES.md) for matching materials and obligations.
+
+For **local builds**, retain the root [compose.yaml](compose.yaml) and `.env.example`
+workflow, or build and validate directly below. Stop any other poller using the same
+token before starting either deployment. Default diagnostics are off:
+
 ```sh
 docker build --tag openmedia:local .
 docker run --rm --env-file .env \
-  --read-only --cpus=2 --memory=2g \
+  --init --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --cpus=2 --memory=2g \
   --tmpfs /tmp:rw,noexec,nosuid,size=536870912,mode=1777 \
-  -e OPENMEDIA_DIAGNOSTIC_LOG=1 -v openmedia-logs:/var/log/openmedia \
   openmedia:local python -m openmedia --check-config
 ```
 
@@ -195,9 +227,9 @@ Drop `--check-config` to start the bot. The image:
 - bundles EJS, Deno, and FFmpeg, and downloads no executables at runtime;
 - defines a `HEALTHCHECK` that runs `python -m openmedia --healthcheck`.
 
-The last two flags in the example turn the diagnostic log on and mount a named volume for it,
-because the image filesystem is read-only. Drop both to run with the log off. Deployment,
-live-source, real-Telegram, and timing checks remain separate release gates (see
+If diagnostics are needed, explicitly provision the protected writable mount and retention
+described in the [maintenance guide](deploy/README.md#inspect-health-logs-and-resources).
+Deployment, live-source, real-Telegram, and timing checks remain separate release gates (see
 [Project status](#project-status)).
 
 > **Redistributing the image?** It contains a GPL-2.0-or-later FFmpeg build and other
