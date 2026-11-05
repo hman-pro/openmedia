@@ -446,8 +446,13 @@ root-only backup directory chosen by the operator; treat direct-token `.env` as 
 Do not print or put it in the nonsecret update record. Keep the original files protected
 and unchanged throughout migration; require another backup of any deliberate settings
 change. Recovery uses their **current** valid credentials/settings, not restored revoked
-credentials. Set the variables below to the actual paths/project; `OLD_PROJECT` must
-differ from `openmedia`. The old project wrapper clears inherited environment overrides.
+credentials. Set the variables below to the actual paths/project. `OLD_PROJECT` may
+already be `openmedia`, as it is when the root checkout directory has that name.
+In that case activation replaces the stopped service in the same Compose project;
+the preserved local image and old files provide recovery. Identify the running
+container by its recorded ID before stopping it, rather than treating a project name
+as proof of which deployment is running. The old project wrapper clears inherited
+environment overrides.
 
 ```bash
 OLD_PROJECT=REPLACE_ACTUAL_PROJECT
@@ -467,7 +472,6 @@ The override is a protected host-only file, not a repository edit.
 
 ```bash
 set -euo pipefail
-test "$OLD_PROJECT" != openmedia
 [[ "$OLD_COMPOSE" = /* && "$OLD_ENV" = /* ]]
 old_container=$(old_dc ps --status running -q openmedia)
 test -n "$old_container"
@@ -493,8 +497,10 @@ test "$(old_recovery config --images)" = "$OLD_PIN"
 ```
 
 Before stopping the old poller, complete verification, pull and isolated preflight for
-the new service. If these fail, the old project continues running. New project discovery
-must succeed and show no running poller. Retain the old configuration and pinned image.
+the new service. If these fail, the old project continues running. Project discovery
+must succeed: a separate project must have no running service; a shared `openmedia`
+project must contain exactly the recorded old container. Retain the old configuration
+and pinned image.
 
 ```bash
 (
@@ -507,7 +513,11 @@ dc "$CANDIDATE_IMAGE" pull openmedia
 dc "$CANDIDATE_IMAGE" run --rm --no-deps -T --pull never \
   openmedia python -m openmedia --check-config
 running=$(dc "$CANDIDATE_IMAGE" ps --status running -q openmedia)
-test -z "$running"
+if test "$OLD_PROJECT" = openmedia; then
+  test "$running" = "$old_container"
+else
+  test -z "$running"
+fi
 test "$(sudo docker inspect --format '{{.State.Running}}' "$old_container")" = true
 old_dc stop --timeout 30 openmedia
 test "$(sudo docker inspect --format '{{.State.Running}}' "$old_container")" = false
@@ -558,10 +568,13 @@ printf '%s\n' 'Old project recovered from pinned local content; verify delivery 
 )
 ```
 
-On return, the published project stays stopped; its selected env is retained for a future
-deliberate migration and does not describe the old project's local image. Record this
-explicitly. Real update/rollback/migration timing, active-work cleanup and actual Telegram
-recovery remain **T064**, separate from controlled shell/lifecycle checks.
+On return with separate projects, the published project stays stopped. With a shared
+project name, that project now runs the recovered local image using the old files.
+The published env is retained for a future deliberate migration and does not describe
+the recovered local image. Record the actual image and configuration explicitly;
+use the old recovery wrapper until remigrating. Real update/rollback/migration timing,
+active-work cleanup and actual Telegram recovery remain **T064**, separate from
+controlled shell/lifecycle checks.
 
 ## Maintenance
 

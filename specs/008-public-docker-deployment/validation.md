@@ -63,11 +63,11 @@ their pending rows are not a claim that the completed US1 checks were unexecuted
 |---|---|---|---|---|
 | F008-SETUP | FR-003, FR-009, FR-019 | Controlled | Official pin provenance/checksums; validation register; Git/Docker secret exclusions; execution record below | pass |
 | F008-CONFIG | FR-008–FR-010, FR-018; SC-004 | Controlled | Presence conflicts including empty keys, file/path/type/size/ASCII/newline/grammar errors, bounded nonblocking reads, direct compatibility, redacted chains/repr/logs/workers and CLI no-poll behavior | pass |
-| F008-REGRESSION | FR-014, FR-017–FR-021; SC-006, SC-008 | Controlled | Full locked controlled suite; native byte/stream-copy, source categories, titles, state/deadlines/limits, worker/child/upload cleanup, failure/refusal/retry and privacy regressions | pending |
-| F008-NATIVE-AMD64 | FR-007, FR-018; SC-004 | Native container | Native linux/amd64 build/import config identity; restricted offline smoke, tools/EJS, local stream-copy, bounded writable tmpfs, read-only root, UID/capabilities/init, secret permissions/negative cases, no runtime executable acquisition | pending |
-| F008-NATIVE-ARM64 | FR-007, FR-018; SC-004 | Native container | Same checks independently on native linux/arm64; retain runner/image/tool versions and exact checked image ID | pending |
+| F008-REGRESSION | FR-014, FR-017–FR-021; SC-006, SC-008 | Controlled | Full locked controlled suite; native byte/stream-copy, source categories, titles, state/deadlines/limits, worker/child/upload cleanup, failure/refusal/retry and privacy regressions | pass |
+| F008-NATIVE-AMD64 | FR-007, FR-018; SC-004 | Native container | Native linux/amd64 build/import config identity; restricted offline smoke, tools/EJS, local stream-copy, bounded writable tmpfs, read-only root, UID/capabilities/init, secret permissions/negative cases, no runtime executable acquisition | pass |
+| F008-NATIVE-ARM64 | FR-007, FR-018; SC-004 | Native container | Same checks independently on native linux/arm64; retain runner/image/tool versions and exact checked image ID | pass |
 | F008-COMPOSE | FR-005, FR-007–FR-011, FR-016, FR-018 | Controlled | Effective published Compose with fixture settings; fixed project and digest; explicit allowed environment, read-only secret, limits/logging, no ports/build/socket; retained local-build Compose path | pass |
-| F008-RELEASE-POLICY | FR-001–FR-004, FR-020; SC-002 | Controlled | Identity/manifest/source collectors and tamper/failure cases; both imported identities before either push; zero writes on pre-push failure; correct incomplete distribution behavior after push/finalization; immutable pins/least privilege/tag authority/preview | pending |
+| F008-RELEASE-POLICY | FR-001–FR-004, FR-020; SC-002 | Controlled | Identity/manifest/source collectors and tamper/failure cases; both imported identities before either push; zero writes on pre-push failure; correct incomplete distribution behavior after push/finalization; immutable pins/least privilege/tag authority/preview | pass |
 | F008-SOURCES | FR-002, FR-004; SC-002 | Public distribution | Both actual-image component closures, Debian Built-Using/system+application Python/unmanaged/embedded coverage and notices; exact source hashes/build materials; anonymous source-only release retrieval before first push; retain sources on later failure | pending |
 | F008-PUBLIC | FR-001, FR-003–FR-004, FR-020; SC-001–SC-002 | Public distribution | Actual preview: anonymous both-platform pull, exact child/index/config joins, local signed raw-index/manifest bundles with trusted numeric repo/workflow/source identity, negative proof, all final public assets redownloaded/hash verified; no rebuild promotion; immutable-release staging | pending |
 | F008-INSTALL | FR-005–FR-010, FR-018–FR-019; SC-003–SC-004 | Deployment-network/manual | Clean supported host guide walkthrough, secret ownership as UID 10001, local preflight vs remote token validity, exact digest polling/fresh health and representative native media delivery | pending |
@@ -90,7 +90,7 @@ outcomes as failure/refusal evidence, never as successful media support.
 
 | gate_id | requirement_ids / original gate | class | Required execution / earlier evidence index | result |
 |---|---|---|---|---|
-| I001-CONTROLLED | 001 FR/SC controlled acceptance; 008 FR-021 | Controlled | Full media/adapter/delivery/lifecycle regression suite; [001 validation](../001-media-download/validation.md) | pending |
+| I001-CONTROLLED | 001 FR/SC controlled acceptance; 008 FR-021 | Controlled | Full media/adapter/delivery/lifecycle regression suite; [001 validation](../001-media-download/validation.md) | pass |
 | I001-SOURCES | 001 FR-002, SC-001; T026/T074 | Deployment-network/manual | Full five-category inspect/download native formats, actual bytes, anonymous access and limitations; earlier 001 validation including 2026-09-21/22 attempts | pending |
 | I001-RUNTIME | 001 SC-007; T053/T075 | Native container | Constrained container build/start/config plus real dedicated-bot polling, fresh health, active-work shutdown/child cleanup; [001 runtime evidence](../001-media-download/validation.md) | pending |
 | I001-TELEGRAM | 001 SC-001, SC-005–SC-006; T054/T076 | Deployment-network/manual | Deployment-network five categories and two independent accounts; originating-chat isolation, repeated/forged/stale selections, available audio-only/absent-audio, native received output | pending |
@@ -888,3 +888,251 @@ No real rotation, recovery/reboot/outage, backup/restore/removal, polling or del
 acceptance is claimed. Final-candidate controlled/native/public checks remain Phase 7;
 earlier CI images do not establish final-candidate acceptance. Other host combinations
 remain pending, and no inherited stable-readiness gate changed status.
+
+### Phase 7 final-candidate checks — 2026-11-02 (T059 complete)
+
+- gate_id / requirement_ids: F008-REGRESSION, F008-NATIVE-AMD64,
+  F008-NATIVE-ARM64, F008-RELEASE-POLICY, F008-SOURCES; FR-001–FR-004,
+  FR-007–FR-010, FR-014, FR-017–FR-021; SC-002, SC-004, SC-006, SC-008.
+- class / gate_scope: Controlled and native container / Feature 008 acceptance;
+  matching-source acquisition here is a prepublication check, not public availability.
+- release / platform: reviewed candidate
+  `17c7d6df5dc9f86a8f5ebaad46b542e21d3d1ea2`, package 0.1.0;
+  development-labeled linux/amd64 and linux/arm64 images, not published images.
+- environment: local macOS 27.0.1 arm64, Python 3.13.15, uv 0.13.6;
+  native hosted Ubuntu 24.04 runners, Docker 28.0.4, Compose 2.38.2,
+  checksum-pinned Buildx 0.38.1 and Syft 1.55.0. Runtime Python 3.13.15,
+  uv 0.12.15, Deno 2.9.6 and FFmpeg/ffprobe 5.1.9-0+deb12u1 unchanged.
+- result / failure_class: **pass / none** for T059. Controlled, both native jobs,
+  full matching-source validation and material upload completed successfully.
+
+The final audit found an authority bug before publication: RepositoryRole ID 4 is
+Write, not Maintain. New tests first reproduced acceptance of Write, rejection of
+Maintain ID 2, and the collaborator API's legacy `permission=write` for Maintain.
+The committed correction accepts Maintain/Admin (IDs 2/5), uses effective `role_name`
+when supplied, and rejects Write in both initial authority and pre-push authorization.
+Nine new controlled cases cover these decisions. See the Phase 7 research entry.
+
+`uv run --locked pytest -q`: **1159 passed, 3 live tests deselected**, 32 existing
+PTB deprecation warnings. `uv build` produced the sdist and wheel; local uv 0.13.6
+warns that the existing build backend range targets uv-build 0.12. No pin changed.
+`python3 scripts/release/publish.py audit-pins` and `git diff --check` passed.
+The checklist gate remains read-only: requirements.md **16/16 checked**.
+Read-only artifact consistency review found task coverage for all 21 FRs and 8 SCs
+across 67 tasks, with no Phase 7 ordering or constitution conflict. Ignore files
+already cover the detected Python/Docker setup and protected deployment/staging paths.
+
+Authoritative exact-revision evidence is the **push** workflow
+[41495762383, attempt 2](https://github.com/hman-pro/openmedia/actions/runs/41495762383/attempts/2).
+Its controlled record explicitly identifies this full candidate SHA and attempt 2.
+Native jobs independently completed restricted/no-network smoke, full-image inventory,
+SPDX generation, archive/config identity validation and artifact upload:
+
+| Platform | Native runner image revision | OCI config ID | Docker archive SHA256 |
+|---|---|---|---|
+| linux/amd64 | 20261026.354.1 | `sha256:6c325d7c8e301bc207a090e8d9142786b33258e365aca20b0f36e3543cc4d5a6` | `16fa228c26333e59508f7db29923b017d140a217b153866d8dfb64ebeec69734` |
+| linux/arm64 | 20261026.166.1 | `sha256:5381aa9bbe49bc38b7f5f245c531b7260e792c0241b36d727b90449ff3544965` | `9ac62c5d94a4adc7ea61a8c865c30c44e0049c956ebf6f491191e1a6a698d62c` |
+
+Inventories contain **321 amd64 / 317 arm64 components**, with neither pytest nor
+pytest-asyncio installed. Retrieved native records pass prepromotion validation;
+both inventories identify the candidate SHA and match their recorded hashes.
+Architecture SPDX SHA256 values are respectively
+`bc881f1d96d286622cd80bf31840a2bcfc649b42045ddd14134dfc5b56ca0027` and
+`a4ba83b0cffea2561aacc03994ee12c8924f52d6cd9a993443b05293ddfdcd67`.
+These match the downloaded SPDX files. Archive hashes above were computed/checked
+by the native jobs; local metadata retrieval alone is not an independent archive import.
+Evidence is staged privately at `/tmp/openmedia-008-phase7/exact-{controlled,amd64,arm64}`.
+
+The earlier selected run 41495769136 is a **pull_request** run. Its controlled record
+uses synthetic merge SHA `747bdcf3f1b159ec197f84c1dc6f3dbce4f60ed8`; it is supplemental
+PR evidence only, even though the run API reports candidate head SHA 17c7d6d.
+After detecting this, reran the push workflow rather than promoting merge-SHA images.
+Cancelled/superseded attempts and earlier phase images do not establish T059 acceptance.
+
+Acceptance-host discovery is read-only: `ssh openmedia-server` reaches Ubuntu
+26.04.1 LTS amd64 after the operator corrected network settings. Existing Docker
+29.1.3 and Compose 2.40.3 come from Ubuntu packages, not the guide's official Docker
+repository. The Docker-group SSH user can inspect containers but has no noninteractive
+sudo; the operator will perform privileged steps. `/opt/openmedia` does not exist.
+An existing healthy root-Compose project `openmedia` runs `openmedia:local`, content ID
+`sha256:52520a82eb6b8259990f4e36c2111bcf388c9b7a84fb9bf5a565344519ce081b`,
+with no restart since 2026-10-19. Its protected environment is retained on the host;
+no token contents were read into evidence or transferred to CI. No deployment file,
+service or host package changed. Clean-host installation, migration/recovery and
+all other actual server/media cases remain unexecuted; host discovery does not pass them.
+
+The authoritative push attempt completed successfully at **18:30:39 UTC**. Its source
+job ran **18m 58s** (18:11:41–18:30:39 UTC), including full acquisition, safe archive
+checks, notice/recipe coverage, explicit source-bundle validation and upload.
+Downloaded diagnostics independently validate **1899 components, all complete**;
+both embedded inventories exactly equal the separately retrieved final native inventories.
+Progress receipt: `stage=source-bundle-validation`, `coverage=complete`, `result=pass`.
+Source-manifest SHA256:
+`ae0e915da7ac0be91d14193ed8f2b87f77b00f353021b4fbe4ec974875840a02`.
+
+| Exact-candidate source material | Bytes | SHA256 |
+|---|---|---|
+| sources-001.tar.gz | 1064438028 | `c2fb4219d29383a8a89b55d0447a8356a4631bd2f38b103e76ef0afb24ddfba3` |
+| sources-002.tar.gz | 918728135 | `a820f68eb6e591275f355324606e417d56d0c26f56f0629af55c99614f214195` |
+| notices.tar.gz | 16245613 | `b499f8bf2f2bd2b04ed3fd9872d1375ddcea0f05ae8fac605af321bce01f5d1a` |
+
+The matching-sources CI artifact is 2,009,003,934 bytes, artifact ID 13169260406,
+SHA256 `22564bcbac7749b19b5d57767656208aab7297587a1ac676378a686210340533`.
+CI rehashed/inspected the complete inner source and notice bundles. Local independent
+inspection here covers the manifest/schema/coverage/inventory joins, not a second
+download of every material byte. This is temporary CI evidence with one-day retention;
+F008-SOURCES public distribution and signed-release acceptance still require T062.
+The supplemental PR workflow also completed successfully, but is not the release identity.
+
+### T060 repository authority and first-package bootstrap — 2026-11-02
+
+- gate_id / requirement_ids: F008-RELEASE-POLICY, F008-PUBLIC; FR-001–FR-003,
+  FR-020; SC-001–SC-002. class: Public distribution configuration.
+  gate_scope: Feature 008 acceptance. result / failure_class: **pass / none**
+  for T060 configuration; this is not public image acceptance.
+- Canonical repository lookup: numeric ID **1380348601**, public, current actor
+  has admin/maintain/push. Before this invocation, the only ruleset was a disabled
+  branch rule; release immutability was disabled. Existing branch rules were retained.
+- Created active tag-creation ruleset
+  [26388931](https://github.com/hman-pro/openmedia/rules/26388931), matching
+  `refs/tags/v*` and `refs/tags/sources-v*`, with creation restricted and only
+  RepositoryRole **2 (Maintain)** / **5 (Admin)** allowed `always` bypass.
+  API readback confirms `current_user_can_bypass=always` for the current administrator.
+- Created separate active mutation ruleset
+  [26388932](https://github.com/hman-pro/openmedia/rules/26388932), matching the
+  same refs, prohibiting update and deletion with **no bypass actors**.
+  API readback confirms `current_user_can_bypass=never`, including the administrator.
+- `PUT repos/hman-pro/openmedia/immutable-releases` succeeded; independent GET
+  returned `enabled=true`, `enforced_by_owner=false`. Future releases are immutable
+  at publication. Existing tags/releases were not changed.
+- Actions are enabled, allowed actions currently `all`; workflow token defaults
+  are `read`, with pull-request approval disabled. Checked CI logs expose only
+  contents/metadata read. Reviewed full action pins provide the code-level allowlist.
+  Release job grants are explicit: authority contents/package read, source staging
+  contents write, promotion contents/package write, evidence contents/OIDC/attestation
+  write with storage-record creation disabled. Actual registry/OIDC execution is T062;
+  no claim that declared permissions alone prove successful publication.
+- Capability limitation: package enumeration returns **403: read:packages scope
+  required** for this local CLI credential. The earlier direct package lookup's 404
+  therefore did not prove absence. The owner separately checked and confirmed on
+  2026-11-02 that the OpenMedia package **does not exist yet**.
+- The existing [maintainer distribution runbook](../../deploy/README.md#maintainer-release-procedure)
+  documents first creation: publish complete source assets, promote checked images,
+  have the owner set the newly created canonical package public, require anonymous
+  both-platform retrieval before finalizing, and rerun only a failed evidence job
+  against unchanged promoted images after fixing visibility. Never rerun successful
+  promotion or move immutable tags. This bootstrap remains required in T062.
+  The bot credential remains on the acceptance host; no GitHub CI bot-token variable
+  is required or provisioned.
+
+### T061 final-candidate distribution audit — 2026-11-02
+
+- gate_id / requirement_ids: F008-RELEASE-POLICY, F008-SOURCES, F008-COMPOSE;
+  FR-001–FR-010, FR-018–FR-021; SC-002, SC-004, SC-008.
+  class: Controlled/material review; gate_scope: Feature 008 acceptance.
+  release / platform: candidate 17c7d6d and the exact native/source records above.
+  result / failure_class: **pass / none** for T061 audit, not public/live acceptance.
+- Reviewed Dockerfile, published Compose, both workflow files, source/verification
+  policies, build-tool installer, promotion/verifier boundaries and produced native
+  inventories/SPDX/source manifest. Runtime/base/collector images retain exact digests;
+  FFmpeg retains its exact Debian version; external actions use reviewed 40-hex commits,
+  and downloaded tools use exact versions and SHA256 values. No runtime pin changed.
+- CI remains read-only, without `pull_request_target` or bot credentials. Privileged
+  release jobs are serialized with cancellation disabled and require the canonical
+  repository, protected matching tags and preview syntax. Both imports/config IDs,
+  controlled/native results, full coverage and anonymous matching sources precede any
+  image push; provenance/anonymous image checks gate finalization, and public evidence
+  redownload gates acceptance. No application image rebuild occurs in promotion.
+- The observed authority-role defect was corrected and retested before tagging.
+  Independent policy pins numeric repository identity, workflow, issuer and hosted
+  builder; account-free verification uses established roots and stripped auth with
+  raw index/manifest subjects. Real own-release signatures remain T062, not supplied
+  by controlled certificate fixtures or this review.
+- Native jobs inventory the whole static filesystem and retain original notices,
+  including hidden application `.venv` paths. Complete 1899-component source closure
+  covers Debian/Built-Using, both Python environments and unmanaged/embedded materials.
+  CI validated original acquisition hashes, safe archives, original/declared notices,
+  exact source/recipe files and logical bundle hashes; locally checked manifest joins
+  and coverage agree with both exact native records. This is matching-source evidence,
+  not a binary reproducibility claim or public source availability.
+- Explicit Docker COPY inputs and Git-archive source allowlist exclude host deployment
+  configuration, live manifests, media and private staging. Git/Docker exclusions
+  remain in force; produced inventories have no development test tooling or runtime
+  token configuration. CI receives only fake smoke secrets, never the real bot token.
+  Upstream source archives/notices are retained unchanged under their reviewed hashes.
+- Published Compose retains UID/GID 10001, read-only root/secret, init, dropped caps,
+  no-new-privileges, bounded resources/logs and tmpfs; it has no application ports,
+  Docker socket, media volume or build directive. Diagnostics stay default-off.
+- Preview-only version checks, prerelease labels and pending external gate references
+  remain enabled. T062–T067 and actual supported-host/media combinations remain open;
+  no stable, publicly accepted or live deployment claim is made by this audit.
+
+### T062 preview attempt and host migration preparation — 2026-11-02
+
+Created annotated `sources-v0.1.0-preview.1` and `v0.1.0-preview.1`, both resolving
+to reviewed candidate `17c7d6df5dc9f86a8f5ebaad46b542e21d3d1ea2`. The actual pushes
+used the administrator's permitted creation bypass; no update/deletion bypass was
+used or granted. [Release run 41501886450](https://github.com/hman-pro/openmedia/actions/runs/41501886450)
+passed authority with actual contents/package **read** permissions, matching tag-pair
+and effective ruleset checks, pin audit and unused image-version authorization.
+The tag run also passed its repeated controlled suite and both native jobs.
+Source collection/publication, promotion and signed/public acceptance remain pending
+at this record's creation. T062 stays unchecked; tags are not acceptance evidence.
+
+Staged public verifier/deployment files from the exact reviewed Git commit under the
+operator's user-owned `openmedia-008-phase7-17c7d6d` directory. The pinned installer
+downloaded and checksum-verified Linux amd64 gh 2.103.3 and regctl 0.11.7 there.
+No real credentials entered this staging directory, local evidence or CI. No sudo,
+application start/stop, host package installation or production configuration occurred.
+
+Preparing the actual host exposed an operator-guide gap: its existing root Compose
+project is already `openmedia`, while the migration guide rejected that name.
+Updated the guide to support this ordinary default: after nonpolling preflight,
+same-project discovery must identify exactly the recorded old container; stop and
+confirm it before forced activation. Retain old files and pinned content for recovery.
+Recovery under shared labels is explicitly described as running the old local image,
+rather than incorrectly calling the whole project stopped. Unrecognized container
+identity aborts before stopping or starting a poller.
+
+The disposable same-project harness first reproduced the healthy migration failure
+against the former guide. After correction, **32 same-project scenarios** passed,
+including rejection of a foreign running container with old service undisturbed.
+The existing **31 distinct-project scenarios** also passed. Both harnesses exercise
+healthy/update/preflight/stop/startup/signal/persistence failures, rollback, migration
+and old-image return. Syntax checks passed for 31 guide and 6 quickstart shell blocks;
+actual protected-file persistence payload checks passed. Scratch harnesses live under
+`/tmp/openmedia-008-phase7/` and `/tmp/openmedia-008-phase5/`. They are controlled
+command-boundary checks, not real polling/migration acceptance.
+
+This is a deployment-guide-only correction: `deploy/README.md` is excluded from the
+runtime Docker context and is not an image COPY input. The already tagged image/workflow
+inputs are unchanged; no tag or distributed artifact is moved to include later evidence
+or guide corrections. Operators use the separately reviewed updated guide with the
+exact verified image. Actual T063–T066 host/media gates remain open.
+
+### Operator-requested stop / resume point — 2026-11-02, 19:00 UTC
+
+The operator explicitly requested stopping and continuing later. Requested normal
+cancellation of release run **41501886450** during `checks / sources`; because the
+run did not promptly stop, also submitted GitHub's force-cancel request (accepted).
+Final API readback confirmed **status=completed, conclusion=cancelled**, with
+`checks / sources` cancelled and no publication jobs created.
+At the stop request, authority, controlled and both native jobs had passed; source
+publication, promotion and evidence jobs had not started. No registry image or public
+release had been published. Preserve both preview/source tags at commit 17c7d6d;
+do not move or delete them.
+
+**Resume at T062.** T059–T061 are complete; T062–T067 remain unchecked. If candidate
+image/workflow inputs remain unchanged, rerun the complete cancelled tag workflow,
+including all checks, for the same unpublished version; its authority must recheck
+unused-version status. Do not reuse expired/partial CI artifacts or count the cancelled
+source job as passed. If image/workflow content changes, use a newly checked commit and
+new immutable tag pair. First-package public visibility still requires the owner's
+action, and a separately gated baseline/candidate pair is needed for rollback acceptance.
+
+The existing server bot, host packages and protected credential/configuration remain
+unchanged. The operator chose to perform privileged server steps manually; noninteractive
+sudo remains unavailable. Staged public verifier tools and anonymous acceptance helper
+are under `/home/homan/openmedia-008-phase7-17c7d6d`; no real token is staged there.
+The authority fix is committed/pushed as **17c7d6d**. Migration-guide, task-marker and
+validation edits are preserved **uncommitted** in the feature branch working tree.
