@@ -11,6 +11,10 @@ description: "Implementation tasks for public Docker releases and single-server 
 [release contract](contracts/release.md), [operations contract](contracts/operations.md),
 and [quickstart.md](quickstart.md). Retain [proposal.md](proposal.md) unchanged.
 
+**Resume handoff (2026-11-05)**: Read [follow-up.md](follow-up.md) before continuing
+Phase 7. T062–T067 remain open. Preserve all immutable tags/images/source releases;
+the operator requested leaving running CI jobs untouched when ending this session.
+
 **Tests**: Required by FR-018–FR-019 and the constitution. Include controlled configuration,
 release-policy and failure-path checks, native restricted-container checks, and separate
 public-distribution and real-server acceptance. Write new behavior/contract tests before

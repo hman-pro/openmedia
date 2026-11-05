@@ -20,8 +20,25 @@ Do not add a second process manager or another polling service.
 
 On a clean supported host, follow Docker's [official Ubuntu APT instructions](https://docs.docker.com/engine/install/ubuntu/).
 Review conflicting distribution packages there before using an existing Docker host;
-do not remove packages used by unrelated services. This clean-host block uses Docker's
-signed stable APT repository and stops at the first failure:
+do not remove packages used by unrelated services. The clean-host installation below
+uses Docker's signed stable APT repository and stops at the first failure.
+
+On an existing Ubuntu-packaged installation, review Docker's conflicting-package list
+before running the block. In particular, `docker-compose-v2` must be removed before
+installing `docker-compose-plugin`: both own
+`/usr/libexec/docker/cli-plugins/docker-compose`. If installation already stopped with
+that exact overwrite error, remove the old Compose package and finish the interrupted
+installation:
+
+```bash
+sudo dpkg --remove docker-compose-v2
+sudo apt-get --fix-broken install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+Then continue with `systemctl enable --now docker` and the capability checks below.
+Record the resulting Engine/Compose versions and existing-container status.
+
+For the clean-host installation:
 
 ```bash
 (

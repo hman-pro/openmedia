@@ -1300,3 +1300,117 @@ amd64, Docker 29.1.3, Compose 2.40.3+ds1-0ubuntu1, existing `openmedia:local` co
 healthy with two weeks' uptime. `/opt/openmedia` is absent and noninteractive sudo
 remains unavailable. No production file/service/credential changed. The earlier SSH
 blocker is resolved; manual privileged provisioning and actual acceptance remain pending.
+
+### Preview.3 corrected candidate and server staging — 2026-11-05
+
+Committed the two release-boundary fixes and their failing-before/passing-after
+checks as **083ea8fc3d1df7963383a5c011696c2ad31143a2**, then pushed the feature
+branch and new annotated `sources-v0.1.0-preview.3` / `v0.1.0-preview.3` tag pair.
+Both use the same reviewed commit and permitted maintainer creation bypass. Preserved
+all preview.1/preview.2 tags, incomplete drafts, image identities and immutable sources.
+[Release run 42084150441](https://github.com/hman-pro/openmedia/actions/runs/42084150441),
+attempt 1, passes authority, controlled tests and both native restricted builds/smokes;
+source/public gates remain pending while its source job runs. Local `uv build`, pin audit
+and diff checks passed after the fixes; uv 0.13.7 reports the existing uv-build range warning.
+
+Downloaded controlled receipt matches the exact tagged commit, run ID and attempt 1.
+Downloaded native metadata passes platform/source/version validation and actual inventory/
+SPDX hash checks. Same native runner image revisions and tool versions as preview.2.
+
+| Preview.3 platform | OCI config ID | Docker archive SHA256 |
+|---|---|---|
+| linux/amd64 | `sha256:f7127ac9572b2103fb81212dfca07567e967951d11c09e58904480a62fcd0847` | `26ce6d8b4bd0217263fa70e7d4fffb2fbd485203c076221b164a6b132a2e69cc` |
+| linux/arm64 | `sha256:f32b4973100c9cdebf9363753b96c0f4fd7cb92c9721e83bfbe4c2ca197838f4` | `994d43d7a8301fa72eed377ed404ee3d93386f7326b6b9f978a4de8417a8f602` |
+
+As a separate real-material compatibility check, reconstructed an **unsigned, local-only**
+preview.2 manifest from its actual retained index/children, checked native records and
+independently downloaded source bytes. Pure manifest assembly and full `validate_bundle`
+passed. This exercises the post-digest assembly path not reached by the failed workflow;
+it is not signed evidence, does not change any release, and does not accept preview.2.
+Scratch path: `/tmp/openmedia-008-phase7/preview2-offline-assembly`.
+
+Staged exact reviewed public verifier/deployment files and nonpolling anonymous helpers
+under `/home/homan/openmedia-008-phase7-083ea8f`. Pinned Linux amd64 gh 2.103.3 and
+regctl 0.11.7 installed there with checksum verification; no host package/root
+configuration or service changed. Host package discovery confirms `docker.io`
+29.1.3-0ubuntu4.1 and `docker-compose-v2` 2.40.3+ds1-0ubuntu1, rootful default
+security (AppArmor/seccomp/cgroupns), and no group 10001. No live manifest was found
+under the existing checkout. Asked the operator to perform the documented privileged
+official-Docker setup; verified the staged README path and supplied its exact location.
+Actual sudo provisioning, real polling/delivery, baseline/rollback and maintenance cases
+remain unexecuted. No earlier live gate or T062–T067 task is marked complete.
+
+The operator ran the privileged official-Docker installation. APT replaced the
+Ubuntu Engine/containerd/runc packages but initially stopped because the still-installed
+Ubuntu `docker-compose-v2` package owned the same Compose plugin path. Supplied the
+targeted removal/recovery commands; the operator completed them. Independent SSH
+readback confirms **Docker Engine/CLI 29.9.3**, **Compose 5.7.0**, containerd.io
+2.4.2-3~ubuntu.26.04~resolute, installed official docker-ce/CLI/Compose packages,
+removed docker-compose-v2, and an empty `dpkg --audit`. The existing local-build bot
+restarted during the package migration and is healthy again. This is observed host
+package recovery, not feature-008 release installation or unexpected-exit acceptance.
+
+All required Compose up/run flags pass capability checks (`--wait`, `--wait-timeout`,
+`--force-recreate`, `--no-build`, `--pull`, `--rm`, `--no-deps`, `--no-tty`).
+Docker remains rootful with default AppArmor/seccomp/cgroupns security. The guide now
+names the Compose-package collision and gives the exact targeted recovery command.
+All **32 guide / 6 quickstart** shell blocks pass `bash -n`. This guide-only update
+does not change the tagged runtime/workflow inputs or move preview.3's tags.
+
+### Preview.3 signed evidence failure / operator-requested handoff — 2026-11-05
+
+Preview.3 source collection, immutable source publication and **promotion all passed**.
+The completed immutable source release was published at **18:54:09 UTC** with all
+six assets. Independent credential-free downloads matched every expected size/hash;
+full `validate_sources` inspected the actual source/notices/build-material contents
+and passed. Source-manifest SHA256:
+`43a2d33f9ab0429681554ba415e8e91003697be143f1dc2623c2893976590f4f`.
+The successful source receipt binds the exact tagged commit and matching inventories.
+
+| Published preview.3 object | SHA256 digest |
+|---|---|
+| OCI index | `96a142370770804af0b515283597bc119c2a5041732e113412cd564d8901ee1a` |
+| linux/amd64 child | `079700a675219af4c27d47a6f38f7b2d4eb90b508bba3fb3ed4546370751c0f2` |
+| linux/arm64 child | `e704484dc38195f967f35d02f9f1bf9357ca77db9bab517148c7e7ba6a0641a7` |
+| release manifest | `117a77faea0c5b9cb401b151ad03592033533e8c420a0bff6366a548607d21ca` |
+
+Independent anonymous regctl exports retrieved all image bytes for both platforms,
+with empty HOME/Docker/regctl configuration and no inherited credentials. Exported
+config IDs match the exact native records; architecture/OS/version/revision labels
+match preview.3. Export sizes: amd64 **309216768**, arm64 **291030528** bytes.
+These exports are different tar objects from CI's Docker-save archives; their sizes
+are not archive-hash equality claims. No image was executed by this local check.
+
+Both `actions/attest` steps succeeded, uploaded their signatures to Rekor and GitHub,
+and signed the actual index and release manifest. Attestation records **64182594**
+(index) and **64182617** (manifest) remain obtainable through GitHub's attestation API.
+The evidence job failed during `finalize` at **19:11:06 UTC**, before final asset
+upload/publication. Draft **435600508** remains empty and explicitly **INCOMPLETE**.
+All images, source assets and tags remain intact; F008-PUBLIC/T062 do not pass.
+
+Reproduced the failure with real gh **2.103.3**: the verifier supplies both
+`--cert-identity` and `--signer-workflow`, but those selectors are mutually exclusive.
+The CLI exits before checking either signature. Its own help documents using one
+selector. Independently reran the actual two bundles with **only the exact
+`--cert-identity` selector**, retaining `--repo`, source ref/digest, issuer,
+GitHub-hosted-runner restriction, established roots, local bundles and stripped auth.
+Both cryptographic verifications **pass**, and the existing additional numeric-repo,
+repository-URI, source/ref, workflow-SAN, issuer, runner and subject checks **pass**.
+The required correction is known but **not yet applied** to `validate_release.py`.
+Last full controlled result remains **1167 passed / 3 live deselected** for 083ea8f.
+
+The operator requested saving follow-up for a new session tomorrow, explicitly without
+stopping running pipelines. At handoff, release run **42084150441** has already completed
+failure, supplemental CI **42083688507** completed success, and supplemental CI
+**42083680165** remains in progress. **No cancellation was requested or issued.**
+No preview.4 tag or new release workflow was started. See [follow-up.md](follow-up.md)
+for the exact pending fix, immutable-release recovery, evidence paths and next actions.
+
+At the operator's request, created a private nine-case source manifest on the server
+(mode 0600, parent 0700) using original feature-004 LinkedIn examples, selected public
+YouTube/music inputs and unverified Instagram candidates. Both original LinkedIn HEAD
+requests returned the expected one-hop targets, including the real hyphen-code URL.
+No media/Telegram acceptance execution occurred. The operator will perform Telegram
+tests manually; bot reference and source URLs remain in private staging, outside Git.
+Private manifest: `/home/homan/openmedia-008-phase7-083ea8f/private/live-sources.json`;
+local worksheet: `/tmp/openmedia-008-phase7/private-manual-tests.md`.
