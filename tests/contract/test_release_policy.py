@@ -190,7 +190,7 @@ def saved_image(path, arch, version, revision):
     return 'sha256:'+hashlib.sha256(config).hexdigest(), json.loads(config)
 
 
-@pytest.mark.parametrize('fault', ['amd64_archive','arm64_archive','arm64_import','missing_arm64','failed_controlled','success'])
+@pytest.mark.parametrize('fault', ['amd64_archive','arm64_archive','arm64_import','missing_arm64','failed_controlled','stale_controlled_attempt','stale_controlled_run','stale_controlled_source','success'])
 def test_real_promotion_command_boundary_checks_both_archives_before_first_push(tmp_path, monkeypatch, fault):
     import copy, json, subprocess
     import publish
@@ -200,6 +200,11 @@ def test_real_promotion_command_boundary_checks_both_archives_before_first_push(
     for directory in ('authority','controlled','public-source-receipt','matching-sources'): (tmp_path/directory).mkdir()
     release.write_json(tmp_path/'authority/authority.json',authority())
     release.write_json(tmp_path/'controlled/controlled.json',{'result':'fail' if fault=='failed_controlled' else 'pass','source_revision':revision,'run_id':'1','run_attempt':'1'})
+    if fault.startswith('stale_controlled_'):
+        receipt = release.read_json(tmp_path/'controlled/controlled.json')
+        field = {'attempt': 'run_attempt', 'run': 'run_id', 'source': 'source_revision'}[fault.removeprefix('stale_controlled_')]
+        receipt[field] = '2' if field != 'source_revision' else 'b' * 40
+        release.write_json(tmp_path/'controlled/controlled.json', receipt)
     (tmp_path/'matching-sources/source-manifest.json').write_text('controlled')
     release.write_json(tmp_path/'public-source-receipt/public-sources.json',{'version':version,'source_revision':revision,'immutable':True,'source_manifest_hash':release.digest(tmp_path/'matching-sources/source-manifest.json'),'assets':[]})
     configs={}; inventories=[]

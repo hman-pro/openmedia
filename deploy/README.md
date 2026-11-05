@@ -935,6 +935,14 @@ publication; signing uses contents write, OIDC and attestations write. All exter
 actions use reviewed full commits, and downloaded tools use reviewed exact checksums.
 No workflow deploys or updates an operator's server.
 
+Before promotion, the controlled receipt must match the current source, workflow run
+and attempt. After a cancelled pre-push run, rerun **all jobs**, rather than only failed
+jobs: reusing an earlier attempt's successful controlled job is rejected before image
+writes. If immutable sources have already been published and the checked artifacts
+have expired, use a new preview version and matching source tag, and run the complete
+pipeline. Retain the earlier source release and incomplete image draft. Rebuilt
+inventories and source assets must never replace the earlier immutable materials.
+
 At the first package creation, the owner must open the canonical
 [OpenMedia package settings](https://github.com/hman-pro/openmedia/pkgs/container/openmedia)
 and set GHCR visibility to **public**. Repository visibility does not set package

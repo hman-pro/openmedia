@@ -1136,3 +1136,35 @@ sudo remains unavailable. Staged public verifier tools and anonymous acceptance 
 are under `/home/homan/openmedia-008-phase7-17c7d6d`; no real token is staged there.
 The authority fix is committed/pushed as **17c7d6d**. Migration-guide, task-marker and
 validation edits are preserved **uncommitted** in the feature branch working tree.
+
+### T062 resumed: partial rerun rejected before image writes — 2026-11-05
+
+Live GitHub readback supersedes the cancelled-run resume snapshot above. Run
+[41501886450, attempt 2](https://github.com/hman-pro/openmedia/actions/runs/41501886450/attempts/2)
+completed with failure on November 2. Only the cancelled source job and its downstream
+jobs reran: controlled/native/authority execution timestamps still match attempt 1
+(18:34–18:36 UTC), while source collection restarted at 19:01:41 UTC. Promotion's
+current-attempt controlled-receipt guard therefore rejects the reused receipt.
+The promotion log ends before Docker archive imports, publication-stage receipt creation
+or any image push. This is an enforced pre-push identity gate, not a runtime failure.
+
+Source staging succeeded: `sources-v0.1.0-preview.1` was published at
+19:23:25 UTC, is immutable, and retains both inventories, source manifest, two source
+parts and notices. The image release `v0.1.0-preview.1` remains an empty, unpublished
+draft. All temporary run artifacts have expired (artifact listing is empty).
+Retain both tags, the source release and the draft. No preview.1 acceptance is claimed.
+
+Recovery uses a new preview.2 tag pair and a complete pipeline, rather than attempting
+to replace immutable materials with rebuilt inventories. The maintainer guide now
+explains whole-run retries before promotion and new-version recovery after artifact
+expiry with already-published sources. Added three controlled promotion cases for stale
+attempt/run/source receipts; each rejects before any image push. No production code,
+runtime dependency, image input pin or workflow changed.
+
+Validation: release-policy suite **60 passed**; full locked suite **1162 passed,
+3 live tests deselected**, 32 existing PTB deprecation warnings. Pin audit and
+`git diff --check` pass. Requirements checklist remains **16/16** checked. Read-only
+artifact review retains the existing 21-FR/8-SC coverage across 67 tasks and sequential
+Phase 7 gates; no specification/plan/constitution change is needed for this retry.
+T062–T067 remain unchecked pending actual acceptance. The earlier migration/evidence
+changes were committed as 958d855 before this session; the worktree was initially clean.
