@@ -140,7 +140,17 @@ def get_release(tag):
     try: return api('repos/' + REPOSITORY + '/releases/tags/' + quote(tag, safe=''))
     except subprocess.CalledProcessError as error:
         require('404' in (error.stderr or ''), 'Could not establish release state')
-        return None
+    # GitHub's tag endpoint omits unpublished drafts even for an authenticated
+    # maintainer. The releases listing includes them; exhaust its pages so a
+    # duplicate draft cannot silently select the wrong staging object.
+    matches = []; page = 1
+    while True:
+        releases = api('repos/' + REPOSITORY + '/releases?per_page=100&page=' + str(page))
+        matches.extend(value for value in releases if value.get('tag_name') == tag)
+        require(len(matches) <= 1, 'Ambiguous release drafts')
+        if len(releases) < 100: break
+        page += 1
+    return matches[0] if matches else None
 
 
 def create_draft(tag, revision, directory, title):
@@ -247,7 +257,7 @@ def promote(directory):
     raw = raw_manifest(IMAGE + ':' + version)
     (final / 'release-index.json').write_bytes(raw)
     index_digest = 'sha256:' + digest(final / 'release-index.json')
-    require(run(['regctl', 'manifest', 'head', IMAGE + ':' + version, '--format', '{{.Digest}}']).strip() == index_digest, 'Registry/raw index digest mismatch')
+    require(run(['regctl', 'manifest', 'head', IMAGE + ':' + version]).strip() == index_digest, 'Registry/raw index digest mismatch')
     artifacts = list(source_receipt['assets'])
     for name in ['release-index.json', 'sbom-amd64.spdx.json', 'sbom-arm64.spdx.json', 'manifest-amd64.json', 'manifest-arm64.json']:
         path = final / name

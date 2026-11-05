@@ -228,7 +228,10 @@ def test_real_promotion_command_boundary_checks_both_archives_before_first_push(
     commands=[]
     def execute(command,**kwargs):
         commands.append(command)
-        if command[:3]==['regctl','manifest','head']: return 'sha256:'+release.digest(tmp_path/'final/release-index.json')
+        if command[:3]==['regctl','manifest','head']:
+            if '--format' in command and command[command.index('--format')+1] == '{{.Digest}}':
+                raise subprocess.CalledProcessError(1, command, stderr="can't evaluate field Digest in type *manifest.oci1Index")
+            return 'sha256:'+release.digest(tmp_path/'final/release-index.json')
         return ''
     monkeypatch.setattr(release,'run',execute);monkeypatch.setattr(publish,'run',execute)
     monkeypatch.setattr(release,'image_config',lambda image:configs[image])
@@ -252,6 +255,51 @@ def test_real_promotion_command_boundary_checks_both_archives_before_first_push(
     else:
         with pytest.raises((release.ReleaseError,OSError)): publish.promote(tmp_path)
         assert not any(c[:3]==['docker','image','push'] for c in commands)
+
+
+@pytest.mark.parametrize('draft_page', [1, 2, None])
+def test_release_lookup_finds_authenticated_drafts_after_tag_endpoint_404(monkeypatch, draft_page):
+    import subprocess
+    import publish
+    tag = 'v0.1.0-preview.3'
+    draft = {'id': 7, 'tag_name': tag, 'draft': True, 'assets': []}
+    calls = []
+    def api(path):
+        calls.append(path)
+        if '/releases/tags/' in path:
+            raise subprocess.CalledProcessError(1, ['gh', 'api'], stderr='HTTP 404: Not Found')
+        page = int(path.rsplit('=', 1)[1])
+        if page == draft_page:
+            return [draft]
+        if page == 1 and draft_page == 2:
+            return [{'tag_name': 'unrelated-' + str(i)} for i in range(100)]
+        return []
+    monkeypatch.setattr(publish, 'api', api)
+    assert publish.get_release(tag) == (draft if draft_page else None)
+    assert len(calls) == (3 if draft_page == 2 else 2)
+
+
+def test_release_lookup_does_not_treat_permission_failure_as_missing(monkeypatch):
+    import subprocess
+    import publish
+    def api(path):
+        raise subprocess.CalledProcessError(1, ['gh', 'api'], stderr='HTTP 403: Forbidden')
+    monkeypatch.setattr(publish, 'api', api)
+    with pytest.raises(release.ReleaseError, match='release state'):
+        publish.get_release('v0.1.0-preview.3')
+
+
+def test_release_lookup_rejects_ambiguous_drafts(monkeypatch):
+    import subprocess
+    import publish
+    tag = 'v0.1.0-preview.3'
+    def api(path):
+        if '/releases/tags/' in path:
+            raise subprocess.CalledProcessError(1, ['gh', 'api'], stderr='HTTP 404: Not Found')
+        return [{'tag_name': tag, 'draft': True}, {'tag_name': tag, 'draft': True}]
+    monkeypatch.setattr(publish, 'api', api)
+    with pytest.raises(release.ReleaseError, match='Ambiguous'):
+        publish.get_release(tag)
 
 
 @pytest.mark.parametrize('fault', ['write_permission','unreviewed_action'])

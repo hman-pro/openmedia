@@ -68,7 +68,7 @@ their pending rows are not a claim that the completed US1 checks were unexecuted
 | F008-NATIVE-ARM64 | FR-007, FR-018; SC-004 | Native container | Same checks independently on native linux/arm64; retain runner/image/tool versions and exact checked image ID | pass |
 | F008-COMPOSE | FR-005, FR-007–FR-011, FR-016, FR-018 | Controlled | Effective published Compose with fixture settings; fixed project and digest; explicit allowed environment, read-only secret, limits/logging, no ports/build/socket; retained local-build Compose path | pass |
 | F008-RELEASE-POLICY | FR-001–FR-004, FR-020; SC-002 | Controlled | Identity/manifest/source collectors and tamper/failure cases; both imported identities before either push; zero writes on pre-push failure; correct incomplete distribution behavior after push/finalization; immutable pins/least privilege/tag authority/preview | pass |
-| F008-SOURCES | FR-002, FR-004; SC-002 | Public distribution | Both actual-image component closures, Debian Built-Using/system+application Python/unmanaged/embedded coverage and notices; exact source hashes/build materials; anonymous source-only release retrieval before first push; retain sources on later failure | pending |
+| F008-SOURCES | FR-002, FR-004; SC-002 | Public distribution | Both actual-image component closures, Debian Built-Using/system+application Python/unmanaged/embedded coverage and notices; exact source hashes/build materials; anonymous source-only release retrieval before first push; retain sources on later failure | pass |
 | F008-PUBLIC | FR-001, FR-003–FR-004, FR-020; SC-001–SC-002 | Public distribution | Actual preview: anonymous both-platform pull, exact child/index/config joins, local signed raw-index/manifest bundles with trusted numeric repo/workflow/source identity, negative proof, all final public assets redownloaded/hash verified; no rebuild promotion; immutable-release staging | pending |
 | F008-INSTALL | FR-005–FR-010, FR-018–FR-019; SC-003–SC-004 | Deployment-network/manual | Clean supported host guide walkthrough, secret ownership as UID 10001, local preflight vs remote token validity, exact digest polling/fresh health and representative native media delivery | pending |
 | F008-UPDATE | FR-011–FR-015, FR-019; SC-003, SC-005–SC-006 | Deployment-network/manual | Failed pull/preflight leaves old poller uninterrupted; successful update; timeout/failure/interruption stops candidate; finite 180s health wait; protected selection persistence; explicit current-settings rollback incl unavailable/incompatible failure; migration/recovery of local image ID; one poller | pending |
@@ -1168,3 +1168,135 @@ artifact review retains the existing 21-FR/8-SC coverage across 67 tasks and seq
 Phase 7 gates; no specification/plan/constitution change is needed for this retry.
 T062–T067 remain unchecked pending actual acceptance. The earlier migration/evidence
 changes were committed as 958d855 before this session; the worktree was initially clean.
+
+### Preview.2 full release gates — 2026-11-05
+
+- gate_id / requirement_ids: F008-REGRESSION, F008-NATIVE-AMD64,
+  F008-NATIVE-ARM64, F008-RELEASE-POLICY, F008-SOURCES, F008-PUBLIC;
+  FR-001–FR-004, FR-007, FR-018–FR-021; SC-001–SC-002, SC-004, SC-008.
+  class: Controlled/native container/public distribution.
+  gate_scope: Feature 008 acceptance.
+- release / platform: annotated `sources-v0.1.0-preview.2` and
+  `v0.1.0-preview.2`, both at `4f693c5a1fb0d675524c1752f2424552fc57944e`.
+  Both tag pushes used the permitted administrator creation bypass; no mutation
+  or deletion rule was bypassed. Release
+  [42074124949](https://github.com/hman-pro/openmedia/actions/runs/42074124949).
+- environment: native Ubuntu 24.04 hosted runners, image revisions
+  `20261101.360.1` amd64 / `20261101.172.1` arm64; Docker 28.0.4,
+  Compose 2.38.2, Python 3.13.15, Deno 2.9.6, FFmpeg/ffprobe
+  5.1.9-0+deb12u1, retained reviewed Buildx/Syft pins. CI uses fake secrets only.
+- result / failure_class: controlled, authority and both native checks **pass / none**;
+  source/public acceptance remains **pending** during attempt 2. Attempt 1
+  **failed** during the first component's authenticated APT index refresh, before
+  source publication or any image writes. Two independent branch/PR source jobs
+  also failed at that boundary. The preserved diagnostic identifies
+  `debian:adduser@3.134`, stage `acquisition-and-notices`, coverage `missing`;
+  its truncated traceback does not establish the underlying APT cause.
+  Do not classify this as a media-source limitation or bypass authentication.
+- evidence / limitations: public Debian current and selected historical InRelease
+  endpoints independently returned HTTP 200 from the local network. Started a
+  **whole-run** retry, not failed-jobs-only, while no preview.2 source assets or
+  images had been published. Attempt 2 again passed authority, the controlled suite
+  and both restricted offline native checks. Its downloaded controlled receipt
+  explicitly matches run `42074124949`, attempt `2`, and the tagged full commit.
+  Separately retrieved platform records pass schema/source/version validation;
+  actual inventory/SPDX file hashes match their records. These metadata checks
+  do not independently import the Docker archives or prove public access.
+
+| Attempt 2 platform | OCI config ID | Docker archive SHA256 |
+|---|---|---|
+| linux/amd64 | `sha256:8e7ddb825c6295e7d139037ed83cd5272703a6d57e490a8bda3749884997c288` | `12e032bddf85aefe7c593a324bb87f81a84b9902db1d674781459bb90c283a2a` |
+| linux/arm64 | `sha256:52116dcba88f83d10937b3249353d04c1b3241f645d98819e790c09ca40b96c7` | `841f5c0e4e3fe0d70d22bbe383460759df7006e6e8eaf5df6dc3a6e9ca17d3ca` |
+
+Private staging: `/tmp/openmedia-008-phase7/preview2-attempt2-{controlled,amd64,arm64}`;
+the superseded first-attempt records use separate `preview2-*` directories.
+First-attempt source diagnostics remain under `preview2-sources`.
+
+Actual server acceptance is blocked on connectivity: both sandboxed and approved
+direct SSH attempts to the configured `openmedia-server` address timed out before
+authentication. Requested restored connectivity or an updated SSH address. No host
+configuration, package, credential or polling service changed. Local Docker is also
+unavailable (daemon socket absent). T063–T066 remain unexecuted; existing successful
+CI offline probes do not pass those gates. The operator's prior preference to perform
+privileged server steps manually remains in force.
+
+Attempt 2 source collection completed successfully at **17:54:10 UTC**, after
+**23m 17s**. Its coverage receipt reports `source-bundle-validation`, `complete`,
+`pass`, **1899 components**. The source manifest validates independently and its
+two embedded inventories exactly equal the downloaded native inventories.
+Source-manifest SHA256:
+`8139316b9da03c4fd6fec1c8efe2334c6936d50117d949a5d30de6b20dc79580`.
+
+The completed [sources-v0.1.0-preview.2 release](https://github.com/hman-pro/openmedia/releases/tag/sources-v0.1.0-preview.2)
+was published immutable at **17:58:27 UTC**. The source-release job passed its
+anonymous downloads before promotion began. Independent local Python HTTPS downloads
+used no GitHub token or authenticated client; every public source/notice/inventory
+asset matched the exact expected size/hash. `validate_sources` then inspected the
+downloaded source bundles and verified their full source/notice/build-material joins.
+This establishes **F008-SOURCES pass**, while image/signature acceptance remains open.
+
+| Public matching material | Bytes | SHA256 |
+|---|---|---|
+| sources-001.tar.gz | 1064436573 | `137c762a98347dbee7e052d9fa3e224b76d66d2f3e2f38b94391ee7dc988b1e6` |
+| sources-002.tar.gz | 918727883 | `5c665660520b40d755c4f6e0171402c70644d0fc5c25115df333983003577e04` |
+| notices.tar.gz | 16245613 | `b499f8bf2f2bd2b04ed3fd9872d1375ddcea0f05ae8fac605af321bce01f5d1a` |
+
+Full independent public material bytes are retained outside Git at
+`/tmp/openmedia-008-phase7/preview2-public-sources`. For independent registry
+retrieval on this Mac without Docker, downloaded official regctl **0.11.7**
+`regctl-darwin-arm64`, SHA256
+`8ac077a1eeb834d3053714e86ccbd838d0da46567df8cd7c2695d1a19135bf60`.
+The official GitHub release API supplied this digest; actual downloaded bytes match.
+It reports source revision `36abda84830dae07db00bf9e5cec95d97b78222a`.
+This adds only a temporary host acceptance tool, with no repository/runtime pin change.
+
+### Preview.2 post-push failure and corrected release boundaries — 2026-11-05
+
+Run 42074124949 attempt 2 completed **failure** at 18:07:01 UTC. Authority,
+controlled, both native jobs, source collection and immutable public-source staging
+passed. Promotion validated/imported both checked archives before image writes,
+pushed both children, and wrote the exact OCI version index; evidence/signing was skipped.
+The preserved `publication-stage.json` says `images_published`. The final release
+remains draft **435539850**, explicitly titled **INCOMPLETE preview**, with no assets.
+No image/source/tag was moved, overwritten or deleted.
+
+| Published incomplete object | SHA256 digest |
+|---|---|
+| OCI index | `71b89d6132ee04de9c55c44d718862bc71242f40b67e73e9cf0baa93573cae2b` |
+| linux/amd64 child | `529e3ccd09de3de9ca53127fd70d6b445cb168b9be7606a97abd9a2cefb54207` |
+| linux/arm64 child | `44d357b590ba584753cf4ecba6c6130b3676b3bae04d2b9e7a8cbb1f30628e74` |
+
+Both child config digests match the exact attempt-2 native records above. The raw
+index is OCI format and maps precisely these two platforms. Independently reproduced
+the post-push error with actual pinned regctl 0.11.7: `manifest head --format
+'{{.Digest}}'` fails because the OCI-index template has no `Digest` field. Its default
+output is the correct digest and matches SHA256 of the retained raw index. Promotion
+now uses that default output. This is a **deployment/release regression**, corrected
+in the next candidate; the incomplete preview.2 is not accepted or selected for startup.
+
+Also verified a latent finalization issue against GitHub: the tag lookup endpoint
+returns HTTP 404 for this authenticated maintainer's unpublished draft, while the
+authenticated release listing and ID lookup return it. `get_release` now falls back
+to the paginated authenticated listing only after 404, finds the exact tag, rejects
+ambiguous drafts, and retains fail-closed behavior for permission/network errors.
+It never creates or replaces an existing populated release.
+
+Controlled reproduction before fixes: **5 failed, 60 passed** in release-policy tests.
+After fixes: **65 release-policy tests passed**, full locked suite **1167 passed,
+3 live tests deselected**, 32 existing PTB warnings. Real-service checks using the
+fixed helper found draft ID 435539850 and anonymously retrieved the correct index digest.
+No runtime/source-access behavior, image input pin or workflow permission changed.
+The changed publisher requires a new candidate/tag pair and complete release checks.
+
+The signed-in owner browser visibly reports the newly created canonical GHCR package
+as **Public**, with preview.2 and both auxiliary architecture versions. Independent
+regctl access used an empty HOME, Docker/regctl configurations and no inherited
+credentials; index retrieval succeeds. No visibility setting was changed by this
+session. Package visibility/bootstrap is established, while full signed-release
+acceptance is still open.
+
+After the operator restored connectivity, SSH discovery succeeded: Ubuntu 26.04.1
+amd64, Docker 29.1.3, Compose 2.40.3+ds1-0ubuntu1, existing `openmedia:local` container
+healthy with two weeks' uptime. `/opt/openmedia` is absent and noninteractive sudo
+remains unavailable. No production file/service/credential changed. The earlier SSH
+blocker is resolved; manual privileged provisioning and actual acceptance remain pending.
