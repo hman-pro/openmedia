@@ -576,3 +576,31 @@ inventories, notices, SBOM, reports and archive. Never upload the checkout whole
 After download, validate every declared installed notice before source acquisition;
 missing transfer content remains a hard failure. The offline regression covers the
 actual hidden Python notice path. Existing credential/context exclusions remain.
+
+
+### Reviewed SRT transitive security update — 2026-11-17
+
+Preview.4's native inventories contain Debian `libsrt1.5-gnutls`
+`1.5.1-1+deb12u2` on both architectures. The policy previously reviewed only
+`1.5.1-1+deb12u1`, so source collection correctly rejected it before any publication.
+This was the sole component/version mismatch across the 321 amd64 / 317 arm64
+inventory entries; the explicit Python/uv/Deno/FFmpeg and application pins did not
+change. Debian's normal APT dependency resolution selected the transitive update.
+
+Reviewed [DLA-4890-1](https://lists.debian.org/debian-lts-announce/2026/11/msg00015.html)
+and the [exact Debian source](https://packages.debian.org/source/bookworm/srt).
+The update fixes CVE-2026-55868 and CVE-2026-55869. Downloaded the exact `.dsc`
+and Debian patch archive over HTTPS; SHA256 values are respectively
+`271ee93c123b21a5b4a64c1348c3f38413466102b752a87260c8c3e1245a8b7a` and
+`c126363da0f5ecfb9f60cc589f2acab7e11275a8cde9971c26fc8c0399ff44cc`.
+The patch archive hash matches the `.dsc` and Debian's package page. Comparing
+previous/current Debian packaging found only changelog, patch-series and three
+security-patch changes. Copyright and build rules are unchanged; copyright SHA256
+is `19a171090dcc1ec97a7f74e0db49cc769359333fde3ca5c5d8c0cf9fd1b3092d`.
+
+Add this exact binary/source version to `release/source-policy.json`, retaining
+the earlier reviewed version. Do not accept wildcards or bypass source collection.
+The complete collector must still authenticate APT source metadata, acquire all
+original/patch/source-control materials and installed notices, and validate their
+hashes. No new runtime dependency or architecture change is introduced. Repeat
+the complete gated workflow with a new immutable tag pair.

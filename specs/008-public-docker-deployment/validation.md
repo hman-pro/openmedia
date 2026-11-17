@@ -1445,3 +1445,31 @@ The next preview tag pair is unused and no release workflow is active. A new ful
 preview.4 pipeline is required; rerunning preview.3's evidence job would use the old
 invalid command. T062 and public acceptance remain open until the new workflow and
 anonymous verification actually pass. Server/manual T063–T067 remain unexecuted.
+
+
+### Preview.4 pre-push source-policy rejection — 2026-11-17
+
+Committed verifier fix `b4d087d8e9c8eb254f5435e68de488f25f77b809`, pushed
+the feature branch and created the new matching `sources-v0.1.0-preview.4` /
+`v0.1.0-preview.4` tags at that commit. The tag-pair availability API returned no
+existing refs; an anonymous GHCR manifest HEAD returned 404 for preview.4.
+The authenticated package API lacked read:packages scope; no token scope changed.
+
+[Release run 44148163691](https://github.com/hman-pro/openmedia/actions/runs/44148163691)
+completed failure: authority, controlled and both native build/smoke/inventory jobs
+passed. Source collection rejected `debian:libsrt1.5-gnutls@1.5.1-1+deb12u2`
+at policy resolution, before source publication or any image push. Source-release,
+promotion and evidence jobs were skipped. The corrected signature command was not
+reached; do not claim public acceptance from this run. Tags remain preserved.
+
+Retrieved source-diagnostics artifact 14358450532 to
+`/tmp/openmedia-008-preview4-diagnostics`. Both complete inventories show only
+one previously unreviewed component/version, the SRT security revision released
+November 10. Reviewed exact Debian source/patch/copyright changes and documented
+the compatibility adjustment in plan.md and research.md. Added only that exact
+additional binary/source policy identity, retaining the earlier reviewed revision
+and fail-closed checks. Both actual inventories now resolve against the policy
+(**321 amd64 / 317 arm64 components**); targeted release suites **135 passed**.
+`git diff --check` passed. This is controlled policy resolution, not complete source
+acquisition. A fresh preview.5 candidate must repeat the complete gated workflow.
+T062 and server/live acceptance remain open.

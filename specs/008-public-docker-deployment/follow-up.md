@@ -2,7 +2,17 @@
 
 The operator requested continuing tomorrow in a new session and explicitly requested
 **not stopping running pipelines**. Do not cancel existing jobs. Check their actual
-status before doing anything with a workflow. No preview.4 workflow has been started.
+status before doing anything with a workflow. Preview.4 has now run; see the update below.
+
+## Latest pipeline state — 2026-11-17
+
+Verifier fix committed/pushed as `b4d087d`. Preview.4 run **44148163691** passed
+authority, controlled and both native checks, then rejected the sole new inventory
+version `libsrt1.5-gnutls 1.5.1-1+deb12u2` before publication. No preview.4 source
+release or image was published; preserve its tags. The exact Debian security update
+has been reviewed and added to source policy; see plan/research/validation. The
+complete preview.5 pipeline is next. Public verification remains unproved on the
+corrected workflow until a full new run passes. Server state below is historical.
 
 ## Start here
 
@@ -180,4 +190,4 @@ disruptive host/manual steps and token rotation with the operator.
 ## Suggested first prompt tomorrow
 
 “Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md`.
-Preserve running CI and immutable releases; start with the known gh verifier flag fix.”
+Preserve running CI and immutable releases; check the latest preview pipeline state and continue public verification.”

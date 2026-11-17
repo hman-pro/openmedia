@@ -252,3 +252,16 @@ regctl OCI-index creation boundary if both promoted children are Docker media ty
 Buildx otherwise deliberately emits a Docker list, conflicting with the required OCI
 index contract. Select the format before the first version write, with both exact
 child digests/configs preserved. See the source-level compatibility evidence in research.
+
+
+### Phase 7 transitive security compatibility adjustment
+
+The November 17 preview.4 rebuild selected Debian's `libsrt1.5-gnutls` security
+revision `1.5.1-1+deb12u2` through APT, while all explicit runtime pins remained
+unchanged. The exact source-policy gate correctly stopped publication. After
+reviewing Debian DLA-4890-1 and comparing the exact source packaging, approve this
+additional exact binary/source identity in the policy. Preserve the previous
+reviewed identity, authenticated source acquisition and notice obligations. This
+records the transitive security update explicitly; it does not permit unreviewed
+versions or broader runtime upgrades. See research.md for source hashes and review.
+Both native checks and all publication gates must run again on the new candidate.

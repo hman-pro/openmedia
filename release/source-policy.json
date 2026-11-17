@@ -2145,6 +2145,17 @@
       "incorporated_sources": [],
       "kind": "debian",
       "license": "Debian package copyright and common-license texts",
+      "name": "libsrt1.5-gnutls",
+      "source_identity": {
+        "name": "srt",
+        "version": "1.5.1-1+deb12u2"
+      },
+      "version": "1.5.1-1+deb12u2"
+    },
+    {
+      "incorporated_sources": [],
+      "kind": "debian",
+      "license": "Debian package copyright and common-license texts",
       "name": "libss2",
       "source_identity": {
         "name": "e2fsprogs",
