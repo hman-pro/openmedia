@@ -1,10 +1,10 @@
 # Public release distribution
 
-Release tooling and operator runbooks are implemented through Phase 6. Public preview
-distribution, real signed index proof, and server acceptance remain pending in
-[feature 008 validation](../specs/008-public-docker-deployment/validation.md). A local
-build, a controlled certificate fixture, or a successful offline smoke is not public
-release acceptance. The existing root Compose file remains the local-build entry point.
+[v0.1.0-preview.5](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.5)
+passed the full public distribution pipeline, including anonymous image/source retrieval
+and real signed index/manifest verification. Server and inherited live acceptance remain
+open in [feature 008 validation](../specs/008-public-docker-deployment/validation.md).
+The existing root Compose file remains the local-build entry point.
 
 ## Install on a single server
 
@@ -85,8 +85,9 @@ and [up](https://docs.docker.com/reference/cli/docker/compose/up/) references de
 
 From a separately reviewed checkout, verify the selected release with the
 [account-free verification procedure](#account-free-verification) before selecting its
-literal index digest. No public release is accepted yet; do not invent a digest to
-bypass that prerequisite. Install the reviewed files, then replace the image placeholder
+literal index digest. Preview.5's accepted public index is
+`sha256:2262f99c6580a2b2c4d60911febb5bb4180b4330329ae39878f5115e7d4b6b81`;
+verify it before use. Install the reviewed files, then replace the image placeholder
 in `deploy.env` with that exact verified digest:
 
 ```bash

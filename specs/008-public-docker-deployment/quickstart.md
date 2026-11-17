@@ -2,7 +2,7 @@
 
 Deployment, release tooling and operator runbooks through Phase 6 are implemented. Execute the checks
 below against a concrete candidate; record actual results in [validation.md](validation.md).
-Public distribution and real-server acceptance remain pending. Update/rollback and
+Public distribution passed for preview.5; real-server acceptance remains pending. Update/rollback and
 maintenance procedures are ready for the separate T064–T066 real-host acceptance runs.
 
 ## 1. Controlled configuration and regression checks

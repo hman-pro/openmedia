@@ -101,14 +101,13 @@ without notice; feature 008 must repeat the matrix on its selected release/netwo
 ## Project status
 
 OpenMedia is **pre-release**. Media behavior has controlled test coverage with the
-network disabled. Public Docker release/deployment implementation is in progress;
-native amd64/arm64 smoke and source collection passed for an earlier candidate, but
-final-candidate checks and public release acceptance remain open. No public image is
-advertised as accepted. See the [008 validation register](specs/008-public-docker-deployment/validation.md).
+network disabled. [v0.1.0-preview.5](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.5)
+passed the complete public Docker pipeline: native amd64/arm64 checks, matching sources,
+anonymous retrieval and real signed-evidence verification. Server deployment acceptance
+remains open. See the [008 validation register](specs/008-public-docker-deployment/validation.md).
 The remaining external gates include:
 
 - [ ] Full live source suite, run through the product's own transport
-- [ ] Public anonymous image/source retrieval and real signed-evidence verification
 - [ ] Clean-server polling/health and real delivery on the selected verified digest
 - [ ] Real-host update, rollback, shutdown, rotation, reboot and maintenance acceptance
 - [ ] Deployment-network source checks and two-account Telegram acceptance
@@ -202,9 +201,10 @@ adds a second service, which this project deliberately does not run.
 For a server using a **published image**, follow the
 [single-server guide](deploy/README.md#install-on-a-single-server). It selects a verified
 immutable digest, supplies a read-only file secret and covers manual updates, rollback
-and [maintenance](deploy/README.md#maintenance). Public release acceptance is still
-pending; obtain a concrete accepted preview and complete
-[account-free verification](deploy/README.md#account-free-verification) before deploying.
+and [maintenance](deploy/README.md#maintenance). Public distribution checks passed for
+[v0.1.0-preview.5](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.5);
+complete [account-free verification](deploy/README.md#account-free-verification) before deploying.
+Real-server acceptance remains open.
 See [release/source distribution](deploy/README.md#maintainer-release-procedure) and
 [third-party notices](THIRD_PARTY_NOTICES.md) for matching materials and obligations.
 

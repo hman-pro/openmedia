@@ -11,8 +11,10 @@ description: "Implementation tasks for public Docker releases and single-server 
 [release contract](contracts/release.md), [operations contract](contracts/operations.md),
 and [quickstart.md](quickstart.md). Retain [proposal.md](proposal.md) unchanged.
 
-**Resume handoff (2026-11-05)**: Read [follow-up.md](follow-up.md) before continuing
-Phase 7. T062–T067 remain open. Preserve all immutable tags/images/source releases;
+**Resume handoff (2026-11-17)**: Read [follow-up.md](follow-up.md) before continuing
+Phase 7. Preview.5 passed the complete pipeline and public acceptance. T062 remains
+open for the separately gated compatible baseline/candidate pair; T063–T067 remain
+open for server/live acceptance and final reconciliation. Preserve all immutable tags/images/source releases;
 the operator requested leaving running CI jobs untouched when ending this session.
 
 **Tests**: Required by FR-018–FR-019 and the constitution. Include controlled configuration,

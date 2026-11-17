@@ -2,7 +2,7 @@
 
 The operator requested continuing tomorrow in a new session and explicitly requested
 **not stopping running pipelines**. Do not cancel existing jobs. Check their actual
-status before doing anything with a workflow. Preview.4 has now run; see the update below.
+status before doing anything with a workflow. Preview.5 is accepted for public distribution; see the update below.
 
 ## Latest pipeline state — 2026-11-17
 
@@ -11,8 +11,24 @@ authority, controlled and both native checks, then rejected the sole new invento
 version `libsrt1.5-gnutls 1.5.1-1+deb12u2` before publication. No preview.4 source
 release or image was published; preserve its tags. The exact Debian security update
 has been reviewed and added to source policy; see plan/research/validation. The
-complete preview.5 pipeline is next. Public verification remains unproved on the
-corrected workflow until a full new run passes. Server state below is historical.
+complete preview.5 pipeline **44149181265** **passed every job**, finishing at
+19:29:23 UTC on November 17 at `c84a16802505cb9074995fbdcdf40e65363eecfa`.
+Immutable source release **449074148** and image release **449075641** are public.
+Both platforms, source closure, source publication, no-rebuild promotion, signed
+index/manifest verification, negative proofs, anonymous image pulls and final public
+asset downloads passed. Independent local anonymous gh 2.103.3 signature checks
+also passed for both subjects; tampered bytes and wrong workflow identities failed.
+
+Accepted index: `sha256:2262f99c6580a2b2c4d60911febb5bb4180b4330329ae39878f5115e7d4b6b81`.
+Source manifest SHA256: `f0bb5b777321d07c68e825a7f8c40d7e66828a83666e7ec8ba89a26c5e2539e7`.
+Release manifest SHA256: `2c173a1ce350a0c14d6f533ae1639baddcd80a79298b122355ceabe1cb468359`.
+Local independent evidence/tools: `/tmp/openmedia-008-preview5/` (temporary).
+
+F008-PUBLIC passes. T062 stays open only for its separately gated compatible
+baseline/candidate pair: preview.5 can now serve as the accepted baseline; a new
+candidate must complete its own gates before update/rollback acceptance. No extra
+release or server deployment was started after preview.5. T063–T067 remain open.
+Server and private-manifest state below is historical; recheck it before acting.
 
 ## Start here
 
@@ -33,25 +49,28 @@ corrected workflow until a full new run passes. Server state below is historical
 | preview.1 | 17c7d6df5dc9f86a8f5ebaad46b542e21d3d1ea2 | Immutable sources published; empty image draft; promotion rejected a stale-attempt controlled receipt; temporary CI artifacts expired |
 | preview.2 | 4f693c5a1fb0d675524c1752f2424552fc57944e | Both images/index pushed, immutable sources retained; empty INCOMPLETE draft; regctl digest-template failure |
 | preview.3 | 083ea8fc3d1df7963383a5c011696c2ad31143a2 | All pre-push checks and promotion passed; both signatures created; evidence verification failed on mutually exclusive CLI flags; empty INCOMPLETE draft |
+| preview.4 | b4d087d8e9c8eb254f5435e68de488f25f77b809 | Source policy rejected unreviewed SRT revision before any publication; tags preserved |
+| preview.5 | c84a16802505cb9074995fbdcdf40e65363eecfa | Accepted immutable public preview; every release job and independent signature checks passed |
 
 Never move/delete tags, overwrite published image versions, replace immutable assets,
-or remove required sources. These incomplete versions are not accepted releases.
+or remove required sources. Preview.1–3 remain incomplete; preview.4 is unpublished. Only preview.5 is accepted.
 
-Release run [42084150441](https://github.com/hman-pro/openmedia/actions/runs/42084150441)
+Historical preview.3 release run [42084150441](https://github.com/hman-pro/openmedia/actions/runs/42084150441)
 is completed/failure. All jobs except `evidence` passed, including native amd64/arm64,
 full sources, public source retrieval and no-rebuild promotion. Both signing actions
 inside `evidence` succeeded. Draft ID **435600508**, zero assets, title INCOMPLETE.
 
-At the last check, supplemental CI **42083680165** was still running; leave it alone.
-Supplemental CI **42083688507** succeeded. Inspect live state; do not rely on stale notes.
+Supplemental CI **42083680165** is now completed/cancelled and **42083688507**
+is completed/success. No run was cancelled by this session. Inspect live state before
+acting; new branch/PR checks can be running independently.
 
 ## Verifier fix applied — 2026-11-17
 
 The correction below is now applied with a failing-before/passing-after regression
 test. Targeted release suites: 135 passed; full controlled suite: 1167 passed,
-3 live deselected. Build, release pin audit and diff checks pass. Preview.4 is the
-next unused version; its complete pipeline and public acceptance remain required.
-See the latest validation entry before resuming.
+3 live deselected. Build, release pin audit and diff checks pass. Preview.5 now
+proves the corrected verifier through the complete pipeline and independent public
+signature checks. The following failure/recovery description is historical.
 
 ### Original failure and recovery requirements
 
@@ -183,8 +202,8 @@ After T062, continue T063 protected configuration/preflight, one polling owner a
 representative real delivery; T064 update/rollback/migration/shutdown; T065 isolated-host
 maintenance/rotation/reboot/removal; T066 full inherited matrix assessment; T067 final
 claims/evidence reconciliation. T062 additionally requires a separately gated compatible
-baseline/candidate pair if no usable previous accepted published image exists. Current
-preview.1–3 incomplete versions do not silently become accepted baselines. Coordinate
+baseline/candidate pair if no usable previous accepted published image exists. Preview.5
+is now an accepted public baseline; preview.1–3 remain incomplete. Coordinate
 disruptive host/manual steps and token rotation with the operator.
 
 ## Suggested first prompt tomorrow

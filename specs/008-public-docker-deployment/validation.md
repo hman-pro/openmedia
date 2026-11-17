@@ -69,7 +69,7 @@ their pending rows are not a claim that the completed US1 checks were unexecuted
 | F008-COMPOSE | FR-005, FR-007–FR-011, FR-016, FR-018 | Controlled | Effective published Compose with fixture settings; fixed project and digest; explicit allowed environment, read-only secret, limits/logging, no ports/build/socket; retained local-build Compose path | pass |
 | F008-RELEASE-POLICY | FR-001–FR-004, FR-020; SC-002 | Controlled | Identity/manifest/source collectors and tamper/failure cases; both imported identities before either push; zero writes on pre-push failure; correct incomplete distribution behavior after push/finalization; immutable pins/least privilege/tag authority/preview | pass |
 | F008-SOURCES | FR-002, FR-004; SC-002 | Public distribution | Both actual-image component closures, Debian Built-Using/system+application Python/unmanaged/embedded coverage and notices; exact source hashes/build materials; anonymous source-only release retrieval before first push; retain sources on later failure | pass |
-| F008-PUBLIC | FR-001, FR-003–FR-004, FR-020; SC-001–SC-002 | Public distribution | Actual preview: anonymous both-platform pull, exact child/index/config joins, local signed raw-index/manifest bundles with trusted numeric repo/workflow/source identity, negative proof, all final public assets redownloaded/hash verified; no rebuild promotion; immutable-release staging | pending |
+| F008-PUBLIC | FR-001, FR-003–FR-004, FR-020; SC-001–SC-002 | Public distribution | Actual preview: anonymous both-platform pull, exact child/index/config joins, local signed raw-index/manifest bundles with trusted numeric repo/workflow/source identity, negative proof, all final public assets redownloaded/hash verified; no rebuild promotion; immutable-release staging | pass |
 | F008-INSTALL | FR-005–FR-010, FR-018–FR-019; SC-003–SC-004 | Deployment-network/manual | Clean supported host guide walkthrough, secret ownership as UID 10001, local preflight vs remote token validity, exact digest polling/fresh health and representative native media delivery | pending |
 | F008-UPDATE | FR-011–FR-015, FR-019; SC-003, SC-005–SC-006 | Deployment-network/manual | Failed pull/preflight leaves old poller uninterrupted; successful update; timeout/failure/interruption stops candidate; finite 180s health wait; protected selection persistence; explicit current-settings rollback incl unavailable/incompatible failure; migration/recovery of local image ID; one poller | pending |
 | F008-SHUTDOWN | FR-014, FR-019, FR-021; SC-006 | Deployment-network/manual | Real active-work shutdown <=20s, child termination/reaping and scratch/upload cleanup, no duplicate uncertain/canceled sends; fresh request after recovery | pending |
@@ -1473,3 +1473,73 @@ and fail-closed checks. Both actual inventories now resolve against the policy
 `git diff --check` passed. This is controlled policy resolution, not complete source
 acquisition. A fresh preview.5 candidate must repeat the complete gated workflow.
 T062 and server/live acceptance remain open.
+
+
+### Preview.5 accepted public distribution — 2026-11-17
+
+- gate_id / requirement_ids: F008-PUBLIC, F008-SOURCES, F008-NATIVE-AMD64,
+  F008-NATIVE-ARM64, F008-REGRESSION, F008-RELEASE-POLICY; FR-001–FR-004,
+  FR-007, FR-018–FR-020; SC-001–SC-002, SC-004.
+- class: Controlled, native container and public distribution.
+  gate_scope: Feature 008 acceptance. result / failure_class: **pass / none**
+  for these gates. Server/live gates remain pending.
+- release / source: `v0.1.0-preview.5`, matching `sources-v0.1.0-preview.5`,
+  commit `c84a16802505cb9074995fbdcdf40e65363eecfa`.
+- environment: native hosted Ubuntu 24.04 amd64/arm64 runners; reviewed pinned
+  tools and production-restricted smoke checks. Runner image revisions and exact
+  tool versions are preserved in the signed release manifest's platform records.
+  Additional independent verification ran on the local macOS arm64 host with
+  checksum-verified gh 2.103.3 and empty authentication/configuration.
+
+[Release run 44149181265](https://github.com/hman-pro/openmedia/actions/runs/44149181265)
+completed **success** at **19:29:23 UTC**. Every job passed: authority, controlled,
+both native builds/smokes/inventories, complete source collection, source publication,
+no-rebuild promotion and signed evidence/public acceptance. The source collector
+reported **1899 component records, all coverage complete**, with 321 amd64 and
+317 arm64 installed inventory components. Source-only release **449074148** is
+public and immutable; its anonymous full-material retrieval passed before image
+promotion. Final image release **449075641** is public, immutable and a prerelease:
+[v0.1.0-preview.5](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.5).
+
+The evidence job verified the real raw-index and manifest bundles with the corrected
+exact certificate selector, executed tampering/identity rejection proofs and anonymous
+both-platform pulls, uploaded all final evidence before immutable finalization, then
+redownloaded every public material/evidence asset and verified signatures, identities
+and hashes again. The successful workflow closes the formerly failing evidence stage.
+
+Accepted index / selected deployment image:
+
+```text
+ghcr.io/hman-pro/openmedia@sha256:2262f99c6580a2b2c4d60911febb5bb4180b4330329ae39878f5115e7d4b6b81
+```
+
+Release manifest SHA256:
+`2c173a1ce350a0c14d6f533ae1639baddcd80a79298b122355ceabe1cb468359`.
+Source manifest SHA256:
+`f0bb5b777321d07c68e825a7f8c40d7e66828a83666e7ec8ba89a26c5e2539e7`.
+
+| Platform | Child digest | Checked/imported config ID | Docker archive SHA256 |
+|---|---|---|---|
+| `linux/amd64` | `sha256:f026602740c27e85683634262ade1d20a547ec7764dfaae10a0833d3e944ace7` | `sha256:644e44bc218146f23943a316c925210a2a2c0acfb1d78d00f254379fa2a8bb21` | `21359be4e6e3c109e8bef4279fa5ddd4a5953728deedb19b71c09dad5580c734` |
+| `linux/arm64` | `sha256:8c28e583d763bc5855ca1c053def3cd5a4912c2a2b4ab74d7098a96059fe35c6` | `sha256:7e6b3c16fbf50717e8e2495f8f0310c97f3b5d6ae1c43b76778f0b3b6d287e52` | `a50d0980e5b41738c9482372263b85c7e8c6be36607cdee6239e25bf0dc5c379` |
+
+Independent local verification downloaded the four public signed-evidence files
+without credentials into `/tmp/openmedia-008-preview5/public`. The official macOS
+arm64 gh 2.103.3 archive SHA256
+`d700207eae9ae98fe2b89535c2c087c07823d4628c56364695a5a07ef311c062`
+matched both GitHub's release digest and its checksum file. For **both index and
+manifest**, actual gh verification and `check_verified_attestations` passed the
+repository/workflow/tag/revision/issuer/hosted-builder/subject checks; modifying the
+bytes or selecting a wrong workflow caused rejection. The raw-index hash also
+matched the published selected digest. Temporary verification JSON and the helper
+are retained under that scratch root; permanent originals remain public release assets.
+This independent check covers signatures and identities; the successful pipeline
+provides complete source/material download and both-image acceptance evidence.
+
+README, deployment guide, quickstart and handoff now reflect accepted public
+distribution. **T062 remains open for its separately gated compatible baseline/candidate
+pair**: preview.5 can serve as the accepted baseline, but no additional candidate
+release was started. T063–T067 and all server/live obligations remain open. No server
+configuration, credential, poller or running service was changed in this session.
+Preview.1–3 remain incomplete, preview.4 remains unpublished, and all old tags,
+images and required source releases were preserved. No CI run was cancelled.
