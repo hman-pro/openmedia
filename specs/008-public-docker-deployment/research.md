@@ -94,8 +94,12 @@ that their SHA256 equals the published digest. Also attest `release-manifest.jso
 which binds architecture digests, image/config IDs, SBOMs, and source-asset hashes.
 
 Operators use checksum-verified GitHub CLI 2.103.3 local-file verification with `--bundle`,
-`--repo`, `--signer-workflow`, `--source-ref`, `--source-digest`, and
-`--deny-self-hosted-runners`. Check the numeric repository identity from the certificate
+`--repo`, `--cert-identity`, `--source-ref`, `--source-digest`, and
+`--deny-self-hosted-runners`. The exact certificate identity includes the repository,
+release workflow path and version tag. GitHub CLI 2.103.3 makes `--cert-identity`
+and `--signer-workflow` mutually exclusive; use only the exact identity selector.
+Retain the additional parsed-certificate workflow, issuer and hosted-builder checks.
+Check the numeric repository identity from the certificate
 against the canonical repository ID recorded in the reviewed verification guide. Obtain
 trusted roots through the verifier's established trust path, not arbitrary release assets.
 Local bundle verification bypasses the CLI's authentication requirement. Verify the raw

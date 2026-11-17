@@ -401,7 +401,7 @@ def verify(directory, image, version, revision, policy):
         require(output.startswith('gh version ' + policy['gh_version'] + ' '), 'Incorrect GitHub CLI version')
         for name, bundle in [('release-index.json', 'provenance.sigstore.json'), ('release-manifest.json', 'release-manifest.sigstore.json')]:
             command = ['gh', 'attestation', 'verify', str(root / name), '--bundle', str(root / bundle), '--repo', policy['repository'],
-                       '--signer-workflow', 'github.com/' + policy['repository'] + '/' + policy['workflow'], '--source-digest', revision,
+                       '--source-digest', revision,
                        '--source-ref', 'refs/tags/' + version, '--cert-identity', SOURCE + '/' + policy['workflow'] + '@refs/tags/' + version,
                        '--cert-oidc-issuer', policy['issuer'], '--deny-self-hosted-runners', '--format', 'json']
             check_verified_attestations(json.loads(run(command, env=environment)), policy, version, revision, digest(root / name), IMAGE if name == 'release-index.json' else 'release-manifest.json')

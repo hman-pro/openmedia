@@ -140,6 +140,9 @@ def signed_boundary(tmp_path, monkeypatch):
     def verifier(command, **kwargs):
         calls.append((command, kwargs))
         if command == ['gh','--version']: return 'gh version 2.103.3 (2026-10-27)\n'
+        selectors = ('--cert-identity', '--cert-identity-regex', '--signer-repo', '--signer-workflow')
+        if sum(selector in command for selector in selectors) > 1:
+            raise subprocess.CalledProcessError(1, command, stderr='mutually exclusive certificate selectors')
         path = Path(command[3])
         if release.digest(path) != trusted[path.name]: raise subprocess.CalledProcessError(1, command, stderr='injected signature mismatch')
         result = verified_result()
@@ -160,6 +163,13 @@ def test_operator_verifies_raw_index_and_manifest_with_local_bundles_and_no_auth
         assert 'SENTINEL-AUTH' not in str(kwargs['env'])
         assert '--custom-trusted-root' not in command
     assert all('--bundle' in c and '--deny-self-hosted-runners' in c for c in commands)
+    for command in commands:
+        assert command[command.index('--cert-identity') + 1] == (
+            release.SOURCE + '/' + release.default_policy()['workflow'] + '@refs/tags/' + manifest['version'])
+        assert command[command.index('--source-ref') + 1] == 'refs/tags/' + manifest['version']
+        assert command[command.index('--source-digest') + 1] == manifest['source_revision']
+        assert command[command.index('--repo') + 1] == release.default_policy()['repository']
+        assert command[command.index('--cert-oidc-issuer') + 1] == release.default_policy()['issuer']
     assert not any('oci://' in part for c in commands for part in c)
 
 

@@ -1,4 +1,4 @@
-# Resume feature 008 — saved 2026-11-05
+# Resume feature 008 — updated 2026-11-17
 
 The operator requested continuing tomorrow in a new session and explicitly requested
 **not stopping running pipelines**. Do not cancel existing jobs. Check their actual
@@ -35,7 +35,15 @@ inside `evidence` succeeded. Draft ID **435600508**, zero assets, title INCOMPLE
 At the last check, supplemental CI **42083680165** was still running; leave it alone.
 Supplemental CI **42083688507** succeeded. Inspect live state; do not rely on stale notes.
 
-## First required fix — not applied yet
+## Verifier fix applied — 2026-11-17
+
+The correction below is now applied with a failing-before/passing-after regression
+test. Targeted release suites: 135 passed; full controlled suite: 1167 passed,
+3 live deselected. Build, release pin audit and diff checks pass. Preview.4 is the
+next unused version; its complete pipeline and public acceptance remain required.
+See the latest validation entry before resuming.
+
+### Original failure and recovery requirements
 
 `scripts/release/validate_release.py::verify` builds a gh 2.103.3 command containing
 both `--cert-identity` and `--signer-workflow`. The actual CLI rejects this combination:

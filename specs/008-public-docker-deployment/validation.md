@@ -1414,3 +1414,34 @@ No media/Telegram acceptance execution occurred. The operator will perform Teleg
 tests manually; bot reference and source URLs remain in private staging, outside Git.
 Private manifest: `/home/homan/openmedia-008-phase7-083ea8f/private/live-sources.json`;
 local worksheet: `/tmp/openmedia-008-phase7/private-manual-tests.md`.
+
+
+### Preview.4 verifier correction — 2026-11-17
+
+Resumed Phase 7/T062 on `008-public-docker-deployment`. Confirmed release run
+42084150441 remains completed/failure with only `evidence` failing; all earlier
+checks, source publication and promotion succeeded. No existing run was cancelled
+and no immutable tag, image or source asset was changed.
+
+Extended the controlled signed verifier boundary to reject GitHub CLI 2.103.3's
+mutually exclusive certificate selectors. Before the production fix, the release-policy
+suite reproduced the defect: **1 failed, 64 passed**. Removed `--signer-workflow`
+from the positive verifier command, retaining the exact `--cert-identity` SAN with
+repository/workflow/version, repository selector, source ref/revision, issuer,
+hosted-builder restriction, local bundles and parsed-certificate/subject checks.
+The separate wrong-workflow negative proof still uses its valid workflow selector.
+Updated research guidance to match this command.
+
+Validation: **135 passed** across release-policy, release-manifest and release-tool
+tests; full controlled suite **1167 passed, 3 live deselected**, 32 existing PTB
+warnings. The initial sandboxed full suite had one real child-process shutdown
+failure (1166 passed); the complete unsandboxed suite above passed. `uv build`
+produced the source distribution and wheel; it warned that the host uv 0.13.9 is
+outside the build-system's 0.12 range. Runtime/build pins were unchanged, and
+`publish.audit_pins()` passed. `git diff --check` passed. Requirements checklist
+remains 16/16 checked; no extension hooks are configured.
+
+The next preview tag pair is unused and no release workflow is active. A new full
+preview.4 pipeline is required; rerunning preview.3's evidence job would use the old
+invalid command. T062 and public acceptance remain open until the new workflow and
+anonymous verification actually pass. Server/manual T063–T067 remain unexecuted.
