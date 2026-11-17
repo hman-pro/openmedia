@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import stat
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +36,47 @@ _LOG_LEVELS = frozenset(
 
 class ConfigError(ValueError):
     """A configuration error whose text is safe to show without redaction."""
+
+
+def _file_token(raw_path: str) -> str:
+    """Load one bounded regular-file secret without printable filesystem errors."""
+    if not raw_path or "\x00" in raw_path or not Path(raw_path).is_absolute():
+        raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: invalid path") from None
+    try:
+        descriptor = os.open(raw_path, os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: nonregular file") from None
+            chunks: list[bytes] = []
+            remaining = 4097
+            while remaining:
+                chunk = os.read(descriptor, remaining)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            content = b"".join(chunks)
+        finally:
+            os.close(descriptor)
+    except UnicodeEncodeError:
+        raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: invalid path") from None
+    except OSError:
+        raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: unreadable file") from None
+    if len(content) > 4096:
+        raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: oversized file") from None
+    try:
+        token = content.decode("ascii")
+    except UnicodeDecodeError:
+        raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: invalid encoding") from None
+    if token.endswith("\r\n"):
+        token = token[:-2]
+    elif token.endswith("\n"):
+        token = token[:-1]
+    if not token:
+        raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: empty content") from None
+    if re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", token) is None:
+        raise ConfigError("TELEGRAM_BOT_TOKEN_FILE: invalid token shape") from None
+    return token
 
 
 def _positive_integer(values: Mapping[str, str], name: str, default: int) -> int:
@@ -85,11 +128,18 @@ class Settings:
                 "the specification and cannot be configured"
             )
 
-        token = values.get("TELEGRAM_BOT_TOKEN", "")
-        if not token or not token.strip():
-            raise ConfigError("TELEGRAM_BOT_TOKEN is required")
-        if "\x00" in token or "\n" in token or "\r" in token:
-            raise ConfigError("TELEGRAM_BOT_TOKEN has an invalid shape")
+        if "TELEGRAM_BOT_TOKEN" in values and "TELEGRAM_BOT_TOKEN_FILE" in values:
+            raise ConfigError("TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN_FILE are mutually exclusive")
+        if "TELEGRAM_BOT_TOKEN_FILE" in values:
+            token = _file_token(values["TELEGRAM_BOT_TOKEN_FILE"])
+        elif "TELEGRAM_BOT_TOKEN" in values:
+            token = values["TELEGRAM_BOT_TOKEN"]
+            if not token or not token.strip():
+                raise ConfigError("TELEGRAM_BOT_TOKEN is required")
+            if "\x00" in token or "\n" in token or "\r" in token:
+                raise ConfigError("TELEGRAM_BOT_TOKEN has an invalid shape")
+        else:
+            raise ConfigError("TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN_FILE is required")
 
         raw_work_dir = values.get("OPENMEDIA_WORK_DIR", "/tmp/openmedia")
         work_dir = Path(raw_work_dir)

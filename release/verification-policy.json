@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "repository": "hman-pro/openmedia",
+  "repository_id": 1380348601,
+  "workflow": ".github/workflows/release.yml",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "runner_environment": "github-hosted",
+  "gh_version": "2.103.3",
+  "asset_origin": "https://github.com/hman-pro/openmedia/releases/download/"
+}

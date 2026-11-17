@@ -1,0 +1,170 @@
+name: Immutable public preview release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: openmedia-public-release
+  cancel-in-progress: false
+jobs:
+  authority:
+    if: github.repository_id == '1380348601'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Canonical maintainer tag pair and effective tag rules
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release/install_tools.py --output "$RUNNER_TEMP/tools" gh regctl
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/tools:$PATH"
+          printf '%s' "$GH_TOKEN" | regctl registry login ghcr.io --user "$GITHUB_ACTOR" --pass-stdin
+          python3 scripts/release/publish.py authority --directory authority
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: authority
+          path: authority/
+          if-no-files-found: error
+          retention-days: 1
+  checks:
+    needs: authority
+    uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ github.ref_name }}
+    permissions:
+      contents: read
+  source-release:
+    needs: [authority, checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: matching-sources
+          path: materials
+      - name: Publish completed matching sources before any image write
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release/install_tools.py --output "$RUNNER_TEMP/tools" gh
+          export PATH="$RUNNER_TEMP/tools:$PATH"
+          python3 scripts/release/publish.py stage-sources --directory materials
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: public-source-receipt
+          path: materials/public-sources.json
+          if-no-files-found: error
+          retention-days: 1
+  promote:
+    needs: [authority, checks, source-release]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      digest: ${{ steps.promote.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: checked
+      - name: Check both imports before either push; promote without rebuild
+        id: promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release/install_tools.py --output "$RUNNER_TEMP/tools" gh regctl
+          export PATH="$RUNNER_TEMP/tools:$PATH"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          python3 scripts/release/install_tools.py --output "$HOME/.docker/cli-plugins" buildx
+          python3 scripts/release/publish.py promote --directory checked
+      - name: Retain incomplete distribution status after any attempted push
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if test -f checked/publication-stage.json; then
+            export PATH="$RUNNER_TEMP/tools:$PATH"
+            python3 scripts/release/publish.py incomplete --directory checked/final
+          fi
+      - name: Preserve partial identities after every promotion attempt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: promotion-state
+          path: |
+            checked/publication-stage.json
+            checked/final/
+          if-no-files-found: ignore
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: final-evidence
+          path: checked/final/
+          if-no-files-found: error
+          retention-days: 1
+  evidence:
+    needs: [promote]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: final-evidence
+          path: final
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: provenance
+        with:
+          subject-name: ghcr.io/hman-pro/openmedia
+          subject-digest: ${{ needs.promote.outputs.digest }}
+          create-storage-record: false
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: manifest
+        with:
+          subject-path: final/release-manifest.json
+          create-storage-record: false
+      - name: Verify signed raw bytes and anonymous images before finalization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          MANIFEST_BUNDLE: ${{ steps.manifest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release/install_tools.py --output "$RUNNER_TEMP/tools" gh regctl
+          export PATH="$RUNNER_TEMP/tools:$PATH"
+          cp "$PROVENANCE_BUNDLE" final/provenance.sigstore.json
+          cp "$MANIFEST_BUNDLE" final/release-manifest.sigstore.json
+          python3 scripts/release/publish.py finalize --directory final
+      - name: Mark any post-push failure incomplete; retain all images and sources
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/tools:$PATH"
+          python3 scripts/release/publish.py incomplete --directory final

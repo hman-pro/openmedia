@@ -1,0 +1,141 @@
+{
+  "artifacts": [
+    {
+      "media_type": "application/json",
+      "name": "sbom-amd64.spdx.json",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "size": 7,
+      "url": "https://github.com/hman-pro/openmedia/releases/download/v0.1.0-preview.1/sbom-amd64.spdx.json"
+    },
+    {
+      "media_type": "application/json",
+      "name": "inventory-amd64.json",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "size": 7,
+      "url": "https://github.com/hman-pro/openmedia/releases/download/sources-v0.1.0-preview.1/inventory-amd64.json"
+    },
+    {
+      "media_type": "application/json",
+      "name": "sbom-arm64.spdx.json",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "size": 7,
+      "url": "https://github.com/hman-pro/openmedia/releases/download/v0.1.0-preview.1/sbom-arm64.spdx.json"
+    },
+    {
+      "media_type": "application/json",
+      "name": "inventory-arm64.json",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "size": 7,
+      "url": "https://github.com/hman-pro/openmedia/releases/download/sources-v0.1.0-preview.1/inventory-arm64.json"
+    },
+    {
+      "media_type": "application/json",
+      "name": "release-index.json",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "size": 7,
+      "url": "https://github.com/hman-pro/openmedia/releases/download/v0.1.0-preview.1/release-index.json"
+    },
+    {
+      "media_type": "application/json",
+      "name": "source-manifest.json",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "size": 7,
+      "url": "https://github.com/hman-pro/openmedia/releases/download/sources-v0.1.0-preview.1/source-manifest.json"
+    }
+  ],
+  "gates": [
+    {
+      "gate_id": "F008-PUBLIC",
+      "gate_scope": "feature-008",
+      "result": "pending"
+    },
+    {
+      "gate_id": "I001-SOURCES",
+      "gate_scope": "inherited-stable-readiness",
+      "result": "pending"
+    }
+  ],
+  "index_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "package_version": "0.1.0",
+  "platforms": [
+    {
+      "archive_hash": "7777777777777777777777777777777777777777777777777777777777777777",
+      "base_digests": {
+        "python": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "component_inventory": {
+        "name": "inventory-amd64.json",
+        "platform": "linux/amd64",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "v0.1.0-preview.1"
+      },
+      "image_config_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "platform": "linux/amd64",
+      "platform_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "runner": {
+        "architecture": "amd64",
+        "image_revision": "20261028.1",
+        "label": "ubuntu-24.04"
+      },
+      "sbom": {
+        "name": "sbom-amd64.spdx.json",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "smoke_result": {
+        "image_config_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "result": "pass"
+      },
+      "tool_versions": {
+        "docker": "29.1.3"
+      },
+      "version": "v0.1.0-preview.1"
+    },
+    {
+      "archive_hash": "8888888888888888888888888888888888888888888888888888888888888888",
+      "base_digests": {
+        "python": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "component_inventory": {
+        "name": "inventory-arm64.json",
+        "platform": "linux/arm64",
+        "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "v0.1.0-preview.1"
+      },
+      "image_config_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "platform": "linux/arm64",
+      "platform_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "runner": {
+        "architecture": "arm64",
+        "image_revision": "20261028.1",
+        "label": "ubuntu-24.04-arm"
+      },
+      "sbom": {
+        "name": "sbom-arm64.spdx.json",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "smoke_result": {
+        "image_config_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "result": "pass"
+      },
+      "tool_versions": {
+        "docker": "29.1.3"
+      },
+      "version": "v0.1.0-preview.1"
+    }
+  ],
+  "preview": true,
+  "repository_id": 1380348601,
+  "schema_version": 1,
+  "source_release_tag": "sources-v0.1.0-preview.1",
+  "source_release_url": "https://github.com/hman-pro/openmedia/releases/tag/sources-v0.1.0-preview.1",
+  "source_repository": "https://github.com/hman-pro/openmedia",
+  "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "version": "v0.1.0-preview.1",
+  "workflow": ".github/workflows/release.yml",
+  "workflow_run": {
+    "attempt": 1,
+    "id": 1
+  }
+}
