@@ -70,7 +70,7 @@ their pending rows are not a claim that the completed US1 checks were unexecuted
 | F008-RELEASE-POLICY | FR-001–FR-004, FR-020; SC-002 | Controlled | Identity/manifest/source collectors and tamper/failure cases; both imported identities before either push; zero writes on pre-push failure; correct incomplete distribution behavior after push/finalization; immutable pins/least privilege/tag authority/preview | pass |
 | F008-SOURCES | FR-002, FR-004; SC-002 | Public distribution | Both actual-image component closures, Debian Built-Using/system+application Python/unmanaged/embedded coverage and notices; exact source hashes/build materials; anonymous source-only release retrieval before first push; retain sources on later failure | pass |
 | F008-PUBLIC | FR-001, FR-003–FR-004, FR-020; SC-001–SC-002 | Public distribution | Actual preview: anonymous both-platform pull, exact child/index/config joins, local signed raw-index/manifest bundles with trusted numeric repo/workflow/source identity, negative proof, all final public assets redownloaded/hash verified; no rebuild promotion; immutable-release staging | pass |
-| F008-INSTALL | FR-005–FR-010, FR-018–FR-019; SC-003–SC-004 | Deployment-network/manual | Clean supported host guide walkthrough, secret ownership as UID 10001, local preflight vs remote token validity, exact digest polling/fresh health and representative native media delivery | pending |
+| F008-INSTALL | FR-005–FR-010, FR-018–FR-019; SC-003–SC-004 | Deployment-network/manual | Clean supported host guide walkthrough, secret ownership as UID 10001, local preflight vs remote token validity, exact digest polling/fresh health and representative native media delivery | pass (operator host Ubuntu 26.04 amd64, 2026-11-23); other host combinations pending in the supported-host matrix |
 | F008-UPDATE | FR-011–FR-015, FR-019; SC-003, SC-005–SC-006 | Deployment-network/manual | Failed pull/preflight leaves old poller uninterrupted; successful update; timeout/failure/interruption stops candidate; finite 180s health wait; protected selection persistence; explicit current-settings rollback incl unavailable/incompatible failure; migration/recovery of local image ID; one poller | pending |
 | F008-SHUTDOWN | FR-014, FR-019, FR-021; SC-006 | Deployment-network/manual | Real active-work shutdown <=20s, child termination/reaping and scratch/upload cleanup, no duplicate uncertain/canceled sends; fresh request after recovery | pending |
 | F008-OPERATIONS | FR-015–FR-017, FR-019; SC-003, SC-007 | Deployment-network/manual | Token rotation/recreated file mount, console privacy/status/resources, optional 002 diagnostics, unexpected process exit, reboot and intentional stop, upstream outage/recovery with no health restart loop/additional poller, backup/restore/removal | pending |
@@ -619,7 +619,7 @@ Official documentation consulted 2026-10-31:
 |---|---|---|---|
 | Ubuntu 24.04 LTS | amd64 | pending | pending |
 | Ubuntu 24.04 LTS | arm64 | pending | pending |
-| Ubuntu 26.04 LTS | amd64 | pending | pending |
+| Ubuntu 26.04 LTS | amd64 | pass (2026-11-23, T063 record) | pass (2026-11-23, T063 record) |
 | Ubuntu 26.04 LTS | arm64 | pending | pending |
 
 Each row has gate_id F008-INSTALL; requirement_ids FR-005–FR-010, FR-018–FR-019,
@@ -1543,3 +1543,76 @@ release was started. T063–T067 and all server/live obligations remain open. No
 configuration, credential, poller or running service was changed in this session.
 Preview.1–3 remain incomplete, preview.4 remains unpublished, and all old tags,
 images and required source releases were preserved. No CI run was cancelled.
+
+### T063 clean-server installation and real delivery — 2026-11-23
+
+- gate_id / requirement_ids: F008-INSTALL (and the root-Compose migration case of
+  F008-UPDATE, recorded here as partial T064 evidence only); FR-005–FR-010,
+  FR-011–FR-013, FR-018–FR-019; SC-003–SC-004.
+- class: Deployment-network/manual. gate_scope: Feature 008 acceptance.
+  result / failure_class: **pass / none** for F008-INSTALL on this host combination.
+- release / platform: `v0.1.0-preview.5`, source commit
+  `c84a16802505cb9074995fbdcdf40e65363eecfa`, selected index
+  `ghcr.io/hman-pro/openmedia@sha256:2262f99c6580a2b2c4d60911febb5bb4180b4330329ae39878f5115e7d4b6b81`,
+  linux/amd64 child `sha256:f026602740c27e85683634262ade1d20a547ec7764dfaae10a0833d3e944ace7`.
+  Running container `9554be020b6385a978983cce05a13ade1c370a4dfa92c499a97d495a08e98657`,
+  `.Config.Image` = `.Image` = the selected index digest.
+- environment: operator-owned host, Ubuntu 26.04.1 LTS, amd64 (x86_64), rootful
+  Docker Engine client/server 29.10.0 (official Docker APT repository, installed earlier
+  by the operator), containerd 2.4.2, runc 1.5.3, Compose v5.8.0. Security options:
+  apparmor, seccomp builtin, cgroupns; no rootless/userns. Outbound residential
+  network; no inbound ports. Runbook inputs came from reviewed checkout
+  `43cdc37e7910a6d2b486b3b5b48072aac11f96f4` staged on the host.
+
+**Method.** Every shell block ran verbatim from that checkout's `deploy/README.md`,
+extracted mechanically into separate files and executed by a logging runner the
+operator started interactively (sudo is operator-only on this host). Two
+operator inputs replaced the guide's interactive steps: the `sudoedit` calls were
+satisfied non-interactively (image line set to the verified digest; the existing
+credential piped from the old protected root-Compose `.env` into the new secret
+file, never in arguments, history or output), and the old-project placeholders were
+set to the inspected project `openmedia`, `/home/homan/openmedia/compose.yaml` and
+its `.env`. Docker was already installed, so only the capability portion of the
+installation block ran.
+
+**Account-free verification (on the deployment host).** Pinned gh 2.103.3 was
+installed through `install_tools.py` (archive checksum verified). With empty
+GitHub/Docker configuration and no auth variables, all public preview.5 materials
+(1.9 GB) were downloaded anonymously and `validate_release.py verify` passed against
+the real local bundles; SHA256SUMS matched. Negative proofs all exited 1: one-byte
+modification of `release-index.json`, `release-manifest.json` and `sbom-amd64.spdx.json`
+(each in a disposable same-filesystem copy), a wrong index digest, and a wrong
+source commit. The migration block repeated the positive verification before stop.
+
+**Results (UTC).**
+
+| Step | Outcome |
+|---|---|
+| Capability (18:15:46) | Version checks and every required `up`/`run` flag present; exit 0 |
+| Provision (18:15:46) | `/opt/openmedia` root:root 0750; `compose.yaml` 0640; `deploy.env` root:root 0600 with defaults identical to the old deployment's nonsecret settings; `secrets/` root 0700; secret `root:10001` 0640, shape valid; no group 10001 and no user with primary GID 10001 |
+| Pull + isolated preflight (18:16:02) | Selected env image equals candidate; anonymous pull; `--check-config` as UID 10001 with the mounted real secret: `configuration valid (token=<redacted> …)`; no poller |
+| First-activation guard (18:16:03) | Refused with exit 1 because the old root-Compose service was running in project `openmedia`; old bot verified still running |
+| Migration preservation (18:16:04) | Old container `6bafc9a8da21…`, content `sha256:52520a82eb6b8259990f4e36c2111bcf388c9b7a84fb9bf5a565344519ce081b` pinned as `openmedia-recovery:52520a82…`; old compose/env copied to root-only `/opt/openmedia/migration`; recovery override renders the pin |
+| Verify + pull + preflight before stop (to 18:18:46) | Pass; old bot served throughout |
+| Old stop | Signal 18:18:47.07, clean exit 18:18:50.30 (3.2 s, within 30 s grace) |
+| Candidate start / health | Started 18:18:50.75; **healthy 18:19:02.27** (real Telegram poll with real credential); outage ≈15.2 s |
+| Persistence | `persist_selected` + `confirm_selection` passed; selected env, running image and health agree |
+| One poller | Only `openmedia-openmedia-1` in project; no `409 Conflict`/poll errors in console and no OpenMedia process on the maintainer workstation; both test requests reached this container |
+
+**Representative real delivery (operator, private chat).** Two confirmed deliveries
+received and opened by the operator; console `delivery` events:
+
+| Case | UTC | Outcome | Bytes | Total / after selection |
+|---|---|---|---|---|
+| T063-LI-1 LinkedIn short link | 18:20:12 | confirmed | 4,500,310 | 6.21 s / 3.79 s |
+| T063-YT-1 YouTube video | 18:22:28 | confirmed | 15,432,171 | 9.19 s / 4.39 s |
+
+Console privacy: a scan of the complete container log found 0 URLs, 0 source host
+names, 0 Telegram-ID-like or token-shaped strings. Post-delivery: healthy, restart
+count 0, 45.8 MiB of 2 GiB, 3 PIDs. Diagnostics off; no diagnostic files.
+
+**Limitations / next action.** Only Ubuntu 26.04 amd64 is accepted; the other three
+supported combinations remain pending. The two deliveries are representative cases,
+not the inherited I001–I006 matrix (T066). The migration case passed its forward
+path only; the return path, update, rollback, failure and shutdown cases remain T064.
+The previous local image and migration files are retained for that return path.
