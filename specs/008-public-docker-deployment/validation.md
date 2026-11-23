@@ -1616,3 +1616,52 @@ supported combinations remain pending. The two deliveries are representative cas
 not the inherited I001–I006 matrix (T066). The migration case passed its forward
 path only; the return path, update, rollback, failure and shutdown cases remain T064.
 The previous local image and migration files are retained for that return path.
+
+### T062 preview.6 candidate release — 2026-11-23
+
+- gate_id / requirement_ids: F008-PUBLIC, F008-SOURCES, F008-NATIVE-AMD64,
+  F008-NATIVE-ARM64, F008-RELEASE-POLICY (candidate of the baseline/candidate pair);
+  FR-001–FR-004, FR-020; SC-001–SC-002.
+- class: Controlled, native container and public distribution. gate_scope: Feature 008
+  acceptance. result / failure_class: **pass / none** for the candidate release.
+- release / source: `v0.1.0-preview.6` and matching `sources-v0.1.0-preview.6`, both
+  annotated tags at commit `d938409fab897b6b0d42555fb769fb70b2911d7f` (T063 record on top
+  of the preview.5 code; no runtime or release-tool change). Tag creation went through
+  the maintainer ruleset bypass; no other actor can create these refs.
+
+**Pre-tag checks (maintainer workstation, macOS arm64, Docker 29.9.3).** Controlled suite
+**1167 passed, 3 live deselected** at `43cdc37` (the candidate adds only validation
+records); `uv build`, `publish.audit_pins()` and `git diff --check` passed. To avoid a
+repeat of preview.4's pre-push rejection, a native arm64 build of the candidate was
+inventoried and every one of its **317 components resolved** against
+`release/source-policy.json` (0 unreviewed). amd64-only components were left to the
+pipeline's own gate. The tag pair was confirmed unused (no refs, no releases, anonymous
+GHCR manifest 404) before creation.
+
+[Release run 45238239957](https://github.com/hman-pro/openmedia/actions/runs/45238239957)
+completed **success** (18:25:34–19:14:28 UTC): authority, controlled, native amd64 and
+arm64, sources, source-release, promote and evidence all passed. Source-only release
+**455845510** and image release **455847579** are published, immutable; the image
+release is a prerelease.
+
+| Identity | Value |
+|---|---|
+| Index | `ghcr.io/hman-pro/openmedia@sha256:1a500b068166d0f0ad80e73bb6b8a559fb75f476e20fba2c7cbd861c2a52700f` |
+| linux/amd64 child / config | `sha256:84fd2ddf3ff045c25bb6170d3a779111406b841f3fa0e71b6c77a8e7eeeff0c7` / `sha256:c000c702410fa407385b5f867f026a627b63cedbc9686434169d18ff5489cfef` |
+| linux/arm64 child / config | `sha256:c3e5e74041883ce18642b97dfec9d486aad07457c124fa0bd0b5eb2ddf6835e1` / `sha256:4aa114d4cc56f12e8c0eea0ea58789d6927fe319ae46d78fa712504df7b44c74` |
+| Release manifest SHA256 | `03fa9388288642ff452b0737edd410533fe49ebe9e891e2c007429f7d84bf1dc` |
+| Source manifest SHA256 | `cf477ae15109b12e5f9084a8411dab6582e47e03080d64d3efc31dff8fe42530` (1899 component records) |
+
+**Independent verification on the deployment host** (Ubuntu 26.04 amd64, checksum-pinned
+gh 2.103.3, empty GitHub/Docker configuration, no auth variables) against reviewed
+checkout `d938409`: every public material and evidence asset downloaded anonymously
+(files whose hashes exactly matched preview.5's were hard-linked rather than
+re-downloaded), `validate_release.py verify` passed on the real local bundles and
+SHA256SUMS matched.
+
+**Pair status.** preview.5 (accepted 2026-11-17) is the baseline and preview.6 the
+candidate; each passed its own complete gated pipeline. Earlier boundary evidence is
+unchanged: preview.4's pre-push rejection wrote zero images; preview.2/3 post-push
+failures kept their drafts INCOMPLETE with sources retained. T062 is completed by this
+record together with the T064 update/rollback between the pair, which shows they are
+compatible on the real host.
