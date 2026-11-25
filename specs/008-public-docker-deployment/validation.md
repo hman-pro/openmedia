@@ -1665,3 +1665,87 @@ unchanged: preview.4's pre-push rejection wrote zero images; preview.2/3 post-pu
 failures kept their drafts INCOMPLETE with sources retained. T062 is completed by this
 record together with the T064 update/rollback between the pair, which shows they are
 compatible on the real host.
+
+### T064 run 1 — real-host update, rollback, failure and shutdown — 2026-11-24
+
+- gate_id / requirement_ids: F008-UPDATE, F008-SHUTDOWN (and the return path of the T063
+  root-Compose migration); FR-011–FR-015, FR-019, FR-021; SC-003, SC-005–SC-006.
+- class: Deployment-network/manual. gate_scope: Feature 008 acceptance.
+- result / failure_class: **F008-UPDATE fail** (run 1) — one deployment regression
+  (console token leak) and one unclassified failure (interrupted start left a container
+  running). **F008-SHUTDOWN pending** — the executed cases passed, stale-callback reuse
+  was not exercised. Register rows stay pending; T064 stays open.
+- release / platform: baseline `v0.1.0-preview.5` index
+  `ghcr.io/hman-pro/openmedia@sha256:2262f99c6580a2b2c4d60911febb5bb4180b4330329ae39878f5115e7d4b6b81`;
+  candidate `v0.1.0-preview.6` index
+  `ghcr.io/hman-pro/openmedia@sha256:1a500b068166d0f0ad80e73bb6b8a559fb75f476e20fba2c7cbd861c2a52700f`
+  (source `d938409fab897b6b0d42555fb769fb70b2911d7f`); old root-Compose content
+  `sha256:52520a82eb6b8259990f4e36c2111bcf388c9b7a84fb9bf5a565344519ce081b` pinned as
+  `openmedia-recovery:52520a82…`. linux/amd64.
+- environment: the T063 host (Ubuntu 26.04.1 LTS amd64, Docker Engine 29.10.0, Compose
+  v5.8.0), residential outbound network, no inbound ports. Runbook inputs from a staged
+  copy of `d938409`; its `deploy/README.md` is byte-identical to the current tree
+  (SHA256 `9e13ddeb…73ba2b`).
+
+**Method.** One interactive runner (`t064.sh`, operator-started because sudo is
+operator-only) sourced the guide's extracted shell blocks verbatim: 03/08 (functions),
+09 (update), 11 (rollback), 13/15/16 (old-project migration and return). Each case logged
+Docker container events, the running/selected identity and the console delivery events.
+The operator performed the real Telegram requests in a private chat. Fake credentials for
+the incompatible-previous cases lived in separate secret files; the real token file was
+never modified. Log retained on the host outside Git:
+`~/openmedia-008-acceptance/logs/t064-20261124T182619Z.log` (18:26:19–18:53:56 UTC).
+
+**Results (UTC).** Outage = old container `kill` event to new `health_status: healthy`.
+
+| Case | Contract transition | Outcome | Evidence |
+|---|---|---|---|
+| N1 failed verification | Update refused before stop | **pass** | Block 09 with preview.6 digest under preview.5 identity: `Release check failed`, exit 1; same container running; selection unchanged |
+| N2 non-digest selection | Refused before any Docker call | **pass** | `dc` with a tag reference: exit 2, `Select a verified digest-qualified OpenMedia image first`; same container running |
+| N3 unavailable digest | Failed pull leaves old running | **pass** | Config + pull of a nonexistent digest: `not found`, exit 1; same container running; selection unchanged |
+| U1 update 5 → 6 | Verify, pull, preflight, stop old, start, persist | **pass** | Exit 0; preflight `configuration valid (token=<redacted> …)` before stop; kill 18:31:20.390 → healthy 18:31:32.641, outage **12.25 s**; selected = running = preview.6 |
+| SD active-work shutdown | Stop ≤20 s, no children, no repeated uncertain send | **pass** (stale callback not exercised) | Stop issued at app stage `sending`; kill 18:34:00.472 → exit 0 at 18:34:03.621 (**3.15 s**, wall 3.4 s); console ends `openmedia: stopped (reason=signal)`; host scan for yt-dlp/ffmpeg/ffprobe/deno: none; interrupted file arrived: **none** |
+| RB rollback 6 → 5 | Explicit rollback with current settings/credential | **pass** | Block 11 exit 0; kill 18:38:48.550 → healthy 18:39:02.131, outage **13.58 s**; selected = running = preview.5 |
+| MP missing previous | Fails clearly, nothing running | **pass** | Block 11 to an unpublished digest: `No such image` then pull `not found`, exit 1; nothing running; selection still preview.5. Explicit recovery start of preview.5: exit 0, confirmed |
+| IC-a malformed credential | Local preflight prevents start | **pass** | `configuration error: TELEGRAM_BOT_TOKEN_FILE: invalid token shape`, exit 2; nothing running |
+| IC-b Telegram-rejected credential | Failed start stopped explicitly | **stop: pass; privacy: fail** | Preflight passes, Telegram rejects at startup, `start_checked` stops the unhealthy container and exits 1 after 3 s; nothing running; selection unchanged. **Console printed the full fake token** (scan count 1) — see defect 1 |
+| IS interrupted start | Interrupted start stopped explicitly | **fail** | TERM to `start_checked` and its descendants ~2 s after container start: exit 143 as expected, but a preview.6 container was left running (`health=starting`, started 18:40:41.382) — see defect 2 |
+| IR migration return | Return to the pinned old local image | **pass** | Blocks 13/16 exit 0; healthy 18:40:57.682 on `openmedia-recovery:52520a82…`. Starting state was the leftover IS preview.6 container, not preview.5; the block's stop removed it |
+| MR remigration old → 6 | Old local project to selected preview.6 | **pass** | Block 15 exit 0; kill 18:46:44.127 → healthy 18:46:56.431, outage **12.30 s**; selection persisted |
+
+**Real deliveries after each transition** (console `delivery` events, all `confirmed`):
+
+| Case ID | After | Platform | Bytes | Total / after selection |
+|---|---|---|---|---|
+| T064-U1-YT | U1 (preview.6) | YouTube | 19,753,883 | 9.82 s / 4.97 s |
+| T064-SD-YT | SD restart (preview.6) | YouTube | 20,484,732 | 12.05 s / 6.99 s |
+| T064-RB-YT | RB (preview.5) | YouTube | 4,290,348 | 8.02 s / 3.99 s |
+| T064-IR-YT | IR (old image) | YouTube | 12,128,982 | 55.42 s / 3.84 s (operator delay before selection) |
+| T064-MR-LI | MR (preview.6) | LinkedIn | 12,421,583 | 6.94 s / 3.49 s |
+
+**Defect 1 — console token leak (deployment regression, blocks completion).** When
+Telegram rejects the token at startup, `run_with_diagnostics` re-raises the exception
+(`src/openmedia/__main__.py:565`, bare `raise`). Python's default excepthook then prints
+the chained traceback to stderr, bypassing the redacting console handler. PTB's own
+`InvalidToken` message embeds the token, so the console shows it unredacted. The logged
+copy from PTB's retry loop is correctly `<redacted>`. Only the fake test token was
+exposed. preview.5 and preview.6 carry the same code. Fix needs a code change and a new
+release (preview.7), then a rerun of the update/rollback pair and IC-b.
+
+**Defect 2 — interrupted start left a container (unclassified).** After TERM, Compose
+began `Gracefully Stopping`; events show stop/die 18:40:41.060, destroy 41.363, then a
+new start 41.500. The guide's next `start_checked` refused to start preview.5 because a
+container was running (exit 1), so no second poller ran. Cause unproven: the runner
+sent TERM to every descendant (sudo and Compose) at once, which is harsher than an
+operator's single Ctrl-C to the foreground process group. Next action: reproduce with a
+real interactive Ctrl-C before changing the guide's traps.
+
+**Not executed in run 1.** Update-path preflight failure with the old bot still running
+(IC-a used the rollback block, which stops first by design); timed-out start (180 s
+health wait); persistence failure (duplicate `OPENMEDIA_IMAGE` line); stale-callback tap
+after restart (the interrupted YouTube card was automatic, with no buttons); explicit
+scratch/upload leakage inspection after SD (scratch is container tmpfs, removed on
+recreate, but not separately inspected).
+
+**End state.** preview.6 running and selected (container `abcffc39f6be`, healthy); old
+migration files and the recovery pin retained for later reruns.
