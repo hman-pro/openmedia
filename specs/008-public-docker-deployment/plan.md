@@ -265,3 +265,8 @@ reviewed identity, authenticated source acquisition and notice obligations. This
 records the transitive security update explicitly; it does not permit unreviewed
 versions or broader runtime upgrades. See research.md for source hashes and review.
 Both native checks and all publication gates must run again on the new candidate.
+
+The November 25 preview.7 pre-tag check found the same situation for Debian
+`librsvg2-2`: APT selected the security revision `2.54.7+dfsg-1~deb12u2` (DLA-4936-1,
+CVE-2026-96889) as an `ffmpeg` dependency, with every explicit pin unchanged. Its exact
+binary/source identity is approved the same way, retaining `~deb12u1`; see research.md.

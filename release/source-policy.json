@@ -1865,6 +1865,17 @@
       "incorporated_sources": [],
       "kind": "debian",
       "license": "Debian package copyright and common-license texts",
+      "name": "librsvg2-2",
+      "source_identity": {
+        "name": "librsvg",
+        "version": "2.54.7+dfsg-1~deb12u2"
+      },
+      "version": "2.54.7+dfsg-1~deb12u2"
+    },
+    {
+      "incorporated_sources": [],
+      "kind": "debian",
+      "license": "Debian package copyright and common-license texts",
       "name": "librubberband2",
       "source_identity": {
         "name": "rubberband",

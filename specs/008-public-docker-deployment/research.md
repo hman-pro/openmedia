@@ -604,3 +604,41 @@ The complete collector must still authenticate APT source metadata, acquire all
 original/patch/source-control materials and installed notices, and validate their
 hashes. No new runtime dependency or architecture change is introduced. Repeat
 the complete gated workflow with a new immutable tag pair.
+
+### Reviewed librsvg transitive security update — 2026-11-25
+
+The preview.7 pre-tag check built the candidate natively for linux/arm64 without the
+build cache and resolved its inventory against the source policy. Debian `librsvg2-2`
+`2.54.7+dfsg-1~deb12u2` was the sole unresolved entry of 317; the policy reviewed only
+`2.54.7+dfsg-1~deb12u1`. It arrives through APT dependency resolution for the pinned
+`ffmpeg`; no explicit Python/uv/Deno/FFmpeg or application pin changed. The amd64
+inventory exists only in CI and is expected to carry the same revision.
+
+Reviewed [DLA-4936-1](https://lists.debian.org/debian-lts-announce/2026/11/msg00063.html)
+(Debian LTS, 2026-11-25), which fixes CVE-2026-96889 (use-after-free on a duplicate XML
+entity declaration) in bookworm at exactly this version, and the
+[Debian security tracker](https://security-tracker.debian.org/tracker/CVE-2026-96889).
+Downloaded the `.dsc` and Debian archives of both revisions over HTTPS from
+`deb.debian.org/debian-security`:
+
+| File | SHA256 |
+|---|---|
+| `librsvg_2.54.7+dfsg-1~deb12u2.dsc` | `1d7f01cf4f09f1bdb3b38241ff47e6c19a7ed4f5dc920f1759a9ca52f1452efe` |
+| `librsvg_2.54.7+dfsg-1~deb12u2.debian.tar.xz` | `6468f75fe8e58e12fe34fdbc4ecabee7ae3fd3646dfda5874d8f1d54c6b75526` |
+| `librsvg_2.54.7+dfsg-1~deb12u1.debian.tar.xz` (previous) | `ce0db15bd6a2633fbfcfacce894a81ad5c0056628ad176f00ddaa648d462e5fb` |
+
+The Debian archive hash matches the signed `.dsc`, which names the unchanged upstream
+`librsvg_2.54.7+dfsg.orig.tar.xz` (SHA256
+`799f93b73ed24c03efda1c707d8c40630fdee18c7e7532dda4ad1ce9671e98c2`). Comparing the
+previous and current Debian packaging found only a changelog entry, one added line in
+`patches/series` and the new `patches/CVE-2026-96889.patch` (SHA256
+`b8aeb6e11d8d4a9b5322eedcac8f52667bdb09e65b11c1daad8109c47f74183c`), an upstream GNOME
+fix backported from v2.56.6 that touches only `src/xml/mod.rs`, `src/xml/xml2.rs` and
+`src/xml/xml2_load.rs`. `debian/copyright` (SHA256
+`c72d6d0af195217a13dab66d03e3f9d420effae437f4633e9d03cb4cd63cbb65`) and `debian/rules`
+are byte-identical, so license and notice obligations are unchanged.
+
+Add this exact binary/source version to `release/source-policy.json`, retaining the
+earlier reviewed version, under the same rules as the SRT update above: no wildcards,
+no bypass of authenticated source collection, and a complete gated workflow on a new
+immutable tag pair.

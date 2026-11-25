@@ -1798,3 +1798,32 @@ called from an `&&` list, which skips every `test` in `start_checked`. The guide
 forbids this form (`deploy/README.md`, before the function definitions). The standalone
 form refused correctly in run 1 (IS recovery exit 1). One container ran throughout; end
 state is preview.6 healthy and selected.
+
+### Preview.7 pre-tag checks and librsvg policy review — 2026-11-25
+
+- gate_id / requirement_ids: F008-RELEASE-POLICY, F008-SOURCES (pre-tag, controlled);
+  FR-002, FR-004; SC-002.
+- class: Controlled. gate_scope: Feature 008 acceptance. result / failure_class:
+  **pre-tag checks pass after one reviewed policy addition / none**. This is not a
+  release run; preview.7 publication gates remain pending.
+- release / platform: candidate source = this branch after the T064 token-redaction fix
+  `1f00ea4`; native linux/arm64 image built locally without cache
+  (`docker build --no-cache --pull`), image `sha256:7156998b…`, inventoried config
+  `sha256:d2842f275b0d177aacfb9efbe382cebd8e8fe50cc660de70bb1a7dc6b68706f7`.
+- environment: maintainer workstation, macOS arm64, Docker 29.9.3.
+
+**Checks.** Controlled suite **1168 passed, 3 live deselected**; `uv build`,
+`publish.audit_pins()` and `git diff --check d938409..HEAD` passed; no
+`*-v0.1.0-preview.7` tags exist. A first arm64 build reused cached APT layers and was
+discarded, because cached layers would report package versions from an earlier build,
+not the ones CI installs. The no-cache inventory resolved **316 of 317** components;
+the sole unresolved entry was `debian:librsvg2-2@2.54.7+dfsg-1~deb12u2`, a Debian LTS
+security revision published the same day (DLA-4936-1, CVE-2026-96889). After the
+packaging review in research.md and the exact policy addition (retaining `~deb12u1`),
+the same inventory resolves **317 of 317**; `tests/integration/test_release_tools.py`
+**32 passed** and the full controlled suite still **1168 passed**.
+
+**Limitations / next action.** Only arm64 was inventoried; amd64 resolution is first
+proved by the release pipeline's native job. Tag the preview.7 pair only after this
+record and the fix are pushed; a newer Debian revision before tagging would need the
+same review.
