@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import logging
 import io
 from pathlib import Path
@@ -635,6 +636,29 @@ def test_file_loaded_token_redacted_during_fixture_runtime(tmp_path, monkeypatch
     assert token not in output.out + output.err + logs
     if diagnostics == "1":
         assert "startup" in logs and "shutdown" in logs
+
+
+def test_rejected_token_at_startup_is_redacted_on_console_and_exits_nonzero(tmp_path, monkeypatch, capsys):
+    """T064 IC-b: PTB embeds the rejected token in InvalidToken; it must not reach stderr."""
+    from telegram.error import InvalidToken
+
+    token = "123456789:rejected-token-sentinel"
+    monkeypatch.setattr(runtime.os, "environ", environment(tmp_path / "work", token))
+    monkeypatch.setattr(runtime.shutil, "which", lambda name: f"/fixture/{name}")
+    class RejectedApplication:
+        def run_polling(self, **kwargs):
+            raise InvalidToken(f"The token `{token}` was rejected by the server.")
+    monkeypatch.setattr(runtime, "build_application", lambda settings: (RejectedApplication(), None))
+    try:
+        status = runtime.main([])
+    except Exception:
+        # What the interpreter does with an exception that escapes `raise SystemExit(main())`.
+        sys.__excepthook__(*sys.exc_info())
+        status = 1
+    output = capsys.readouterr()
+    assert status == 1
+    assert token not in output.out + output.err
+    assert "InvalidToken" in output.err, "the operator still sees why startup failed"
 
 
 def test_check_config_keeps_workspaces_but_polling_startup_sweeps_them(

@@ -728,7 +728,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         application, _registry = build_application(settings)
         application.run_polling(drop_pending_updates=True, close_loop=True)
 
-    run_with_diagnostics(settings, poll)
+    try:
+        run_with_diagnostics(settings, poll)
+    except Exception:
+        # The interpreter's traceback printer bypasses the redacting console formatter, and
+        # PTB's InvalidToken message embeds the token (T064 IC-b); log through it instead.
+        logging.getLogger("openmedia").critical("openmedia: fatal error", exc_info=True)
+        return 1
     return 0
 
 
