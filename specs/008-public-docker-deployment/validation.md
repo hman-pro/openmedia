@@ -1749,3 +1749,52 @@ recreate, but not separately inspected).
 
 **End state.** preview.6 running and selected (container `abcffc39f6be`, healthy); old
 migration files and the recovery pin retained for later reruns.
+
+### T064 interrupted-start reproduction (IS) — 2026-11-25
+
+- gate_id / requirement_ids: F008-UPDATE (interrupted start); FR-012–FR-013, FR-019; SC-005.
+- class: Deployment-network/manual. gate_scope: Feature 008 acceptance.
+- result / failure_class: **pass / none** for the guide's interrupted-start cleanup.
+  Run 1's IS failure is reclassified as a test-runner artifact; its record is kept
+  unchanged. F008-UPDATE stays failed until the preview.7 rerun (defect 1).
+- release / platform: `v0.1.0-preview.6` index
+  `ghcr.io/hman-pro/openmedia@sha256:1a500b068166d0f0ad80e73bb6b8a559fb75f476e20fba2c7cbd861c2a52700f`,
+  linux/amd64. Guide functions (blocks 03, 08) from the staged `d938409` checkout.
+- environment: the T063/T064 host (Ubuntu 26.04.1 LTS amd64, Docker Engine 29.10.0,
+  Compose v5.8.0, sudo-rs 0.2.13), operator interactive SSH shell.
+
+**Method.** The operator sourced blocks 03 and 08 in an interactive shell and ran
+`stop_selected "$P6"; start_checked "$P6"; echo "exit=$?"`, pressing Ctrl-C once,
+about 1 s after the new container started. This is the operator action the guide's traps
+are designed for, unlike run 1's runner, which sent TERM to `start_checked` and to all of
+its descendants (sudo and Compose) at once.
+
+**Result (UTC).** Console: `^CGracefully Stopping...`, container stopped, then the
+EXIT trap's `stop_selected` ran (`[+] stop … Stopped`), **`exit=130`**. Docker events:
+
+| UTC | Event |
+|---|---|
+| 17:45:46.204 → 17:45:49.426 | kill, stop, die (`stop_selected` of the running bot) |
+| 17:45:49.720 → 17:45:49.882 | create, destroy, rename, start (`up --force-recreate`) |
+| 17:45:50.826 → 17:45:50.983 | kill, stop, die (interrupt cleanup) |
+| 17:45:50.983 → 17:47:05.520 | **no container event** — nothing left running |
+| 17:47:05.520 → 17:47:17.200 | create, destroy, rename, start, healthy (operator recovery, standalone `start_checked`) |
+
+Two earlier attempts (17:42:52 and 17:45:23) reached `healthy` before the interrupt
+landed and are not counted. Service outage for the counted attempt: 17:45:46.2 → 17:47:17.2
+(91 s, operator-paced).
+
+**Run 1 comparison.** Run 1's events continued after the interrupt stop with destroy
+(18:40:41.363) and a new start (18:40:41.500), leaving a container. A single Ctrl-C ends
+at `die`. The double delivery (direct TERM plus sudo's relay) made Compose take its
+second-signal force path. Next action: in the preview.7 rerun, IS becomes an operator
+prompt with a real Ctrl-C instead of a scripted descendant kill.
+
+**Errexit restriction observed.** During recovery the operator twice ran
+`start_checked "$P6" && confirm_selection "$P6" && …` (shortly after 17:43:08, and at 17:48:54). Both times
+Compose force-recreated the running, healthy bot (create before kill) instead of the
+guard refusing. This is the documented behavior: Bash disables errexit inside a function
+called from an `&&` list, which skips every `test` in `start_checked`. The guide already
+forbids this form (`deploy/README.md`, before the function definitions). The standalone
+form refused correctly in run 1 (IS recovery exit 1). One container ran throughout; end
+state is preview.6 healthy and selected.
