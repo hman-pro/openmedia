@@ -1799,6 +1799,17 @@ forbids this form (`deploy/README.md`, before the function definitions). The sta
 form refused correctly in run 1 (IS recovery exit 1). One container ran throughout; end
 state is preview.6 healthy and selected.
 
+**Correction — 2026-11-26.** The end state above held only until 17:50:39. The operator
+session then ran the interrupted-start sequence a fourth time (`stop` at 17:50:39,
+`up --force-recreate` at 17:50:40, interrupt cleanup `stop` at 17:50:41, container exit
+143) without a recovery start afterwards. The guide again behaved as designed (nothing
+left running), but the bot was **down from 17:50:41 until 2026-11-26 07:23 UTC**
+(about 13.5 h), unnoticed until preview.7 staging found no running container. Recovered
+with a standalone `start_checked` and `confirm_selection` (exit 0): preview.6 healthy and
+selected. The T064 runner now refuses to start unless the base image is running healthy,
+and its "same container running" check no longer treats "nothing before and after" as
+a match. Unattended host monitoring remains an open operations follow-up.
+
 ### Preview.7 pre-tag checks and librsvg policy review — 2026-11-25
 
 - gate_id / requirement_ids: F008-RELEASE-POLICY, F008-SOURCES (pre-tag, controlled);
