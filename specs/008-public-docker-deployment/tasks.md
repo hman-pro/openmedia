@@ -14,7 +14,7 @@ and [quickstart.md](quickstart.md). Retain [proposal.md](proposal.md) unchanged.
 **Resume handoff (2026-11-26)**: Read [follow-up.md](follow-up.md) before continuing
 Phase 7. T059–T064 are complete: preview.6 and preview.7 each passed the complete
 pipeline, and T064 run 2 passed update/rollback between them on the operator's host.
-T065–T067 remain open. Preserve all immutable tags/images/source releases and leave
+T065–T067 remain open; T065 runs on the production host by operator choice (plan.md). Preserve all immutable tags/images/source releases and leave
 running CI jobs untouched.
 
 **Tests**: Required by FR-018–FR-019 and the constitution. Include controlled configuration,
@@ -294,7 +294,8 @@ file work without requiring agents or overriding that agreement.
   pre-push checks. Source availability and both import identities precede every image
   push; post-push signing/image checks precede finalization; public evidence checks after
   finalization precede accepted-public-release claims. T064 requires a recoverable previous image
-  and old local installation; T065 uses a dedicated acceptance host for disruptive cases.
+  and old local installation; T065 uses a dedicated acceptance host for disruptive cases
+  (2026-11-26: the operator chose the production host instead; see plan.md, T065 host adjustment).
 
 ### User Story Dependencies and Independence
 

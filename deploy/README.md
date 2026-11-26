@@ -827,11 +827,14 @@ set -euo pipefail
 confirm_selection "$ACTIVE_IMAGE"
 container=$(dc "$ACTIVE_IMAGE" ps -q openmedia)
 test -n "$container"
-sudo docker exec "$container" python -c 'import os, signal; os.kill(1, signal.SIGKILL)'
+sudo docker exec "$container" python -c 'import os, signal; os.kill(-1, signal.SIGKILL)'
 )
 ```
 
-The exec call can return nonzero because its container exits; record that result.
+PID 1 is Compose's init (`init: true`), and the kernel ignores SIGKILL sent to a
+namespace's init from inside it, so the command kills every other process instead
+(`-1`): the application dies abruptly, the init exits with its status and the container
+stops. The exec call can return nonzero because its container exits; record that result.
 Observe with the inspection block without running `up`/`start`: within an acceptance
 deadline of 180 seconds, require automatic restart, increased restart count, healthy
 polling and real delivery, with only one poller. If it does not recover, record failure

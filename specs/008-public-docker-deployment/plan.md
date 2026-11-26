@@ -270,3 +270,27 @@ The November 25 preview.7 pre-tag check found the same situation for Debian
 `librsvg2-2`: APT selected the security revision `2.54.7+dfsg-1~deb12u2` (DLA-4936-1,
 CVE-2026-96889) as an `ffmpeg` dependency, with every explicit pin unchanged. Its exact
 binary/source identity is approved the same way, retaining `~deb12u1`; see research.md.
+
+### Phase 7 maintenance acceptance host adjustment (T065)
+
+On November 26 the operator chose to run T065 on the production host already used by
+T063/T064 (Ubuntu 26.04 amd64) instead of a dedicated acceptance host: one small bot,
+a tolerated outage, and a second host's setup cost not justified. This supersedes the
+"isolated/dedicated acceptance host" wording in tasks.md (T065) and quickstart.md §7
+for T065 only. Requirements, runtime and the runbook are unchanged. Each case keeps
+the isolation its observation needs:
+
+- OP-OUTAGE disconnects only the bot container from its Compose network (the runbook's
+  own procedure), so the host and other services keep their network.
+- OP-ROTATE-FAIL uses separate fake secret files for the invalid and remotely rejected
+  inputs; the current credential is never corrupted or restored after revocation.
+- OP-ROTATE is a real rotation of the production credential. Revocation invalidates
+  every other copy (the retired root-Compose migration settings and the maintainer's
+  development copy); this is accepted.
+- OP-REBOOT and OP-STOP reboot the whole host, which also restarts unrelated services.
+  Their recovery is observed, not assessed; the bot's outage is accepted.
+- OP-REMOVE and OP-RESTORE are project-only; unrelated services are inventoried before
+  and after removal and must be unchanged.
+
+Results count for this one host combination. T067 reports the host choice alongside
+the results.

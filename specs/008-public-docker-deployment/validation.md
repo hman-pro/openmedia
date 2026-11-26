@@ -1951,6 +1951,6 @@ separately.
 event log; no `409 Conflict` appeared in any console excerpt.
 
 **End state.** preview.7 running and selected (container `392f8b22020d`, healthy since
-08:40:58). The IS recovery's `confirm_selection` output was not captured; the running
-image is preview.7, and no step after the PE recovery's confirm (0) writes the protected
-settings. Migration files and the recovery pin are retained until T065.
+08:40:58); a separate `confirm_selection` with the preview.7 digest after the IS
+recovery returned 0 (selected = running). Migration files and the recovery pin are
+retained until T065.

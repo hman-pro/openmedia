@@ -234,7 +234,8 @@ Controlled shell stubs do not pass real-host rollback, polling or migration acce
 ## 7. Maintenance walkthrough (T065)
 
 Use the executable [maintenance runbook](../../deploy/README.md#maintenance) on an
-isolated acceptance host after T062/T063. Define `dc`, `stop_selected`, `start_checked`,
+isolated acceptance host after T062/T063. (For T065 the operator chose the production
+host instead; see the T065 host adjustment in plan.md for the isolation each case keeps.) Define `dc`, `stop_selected`, `start_checked`,
 `confirm_selection` and `ACTIVE_IMAGE` in one Bash change session. Use the actual verified
 selected digest after any rollback. Require selection/running agreement before maintenance;
 for stopped recovery, confirm absence before starting. Keep current credentials protected.
@@ -256,7 +257,7 @@ publish tokens/hashes, real URLs, Telegram identifiers or diagnostic contents.
 | OP-DIAGNOSTICS-ON | Provision protected optional bind mount, edit flag, quiet config and isolated preflight, stop then checked recreation | Writable UID 10001 directory mode 0700/files 0600, private real trace/refusal, no console disclosure, UTC file rotation/14-file and 50MB retention, persistence across recreation; healthcheck never writes diagnostics. Disable/recreate afterward and inventory retained logs. |
 | OP-ROTATE | Rotate the runtime credential | Protected temporary input, confirmed stop, same-filesystem rename, isolated validation, forced recreation and real replacement authentication/health; one poller. Remove transient/editor copies under host policy. |
 | OP-ROTATE-FAIL | Failed-rotation recovery on dedicated bot only | Invalid input fails locally while stopped; rejected remote credential fails startup with stopped cleanup. Correct current input, repeat from stopped state without initial healthy-selection check. No restart-only mount renewal or revoked-token restoration. |
-| OP-EXIT | Unexpected process exit | After healthy runtime >10s, trigger in-container PID1 exit; do not use operator stop/kill as unexpected-exit evidence. Observe automatic recovery without up/start within 180s, increased restart count, one poller, health and real delivery. |
+| OP-EXIT | Unexpected process exit | After healthy runtime >10s, kill the application inside the container (PID 1 is the init, which ignores SIGKILL from inside); do not use operator stop/kill as unexpected-exit evidence. Observe automatic recovery without up/start within 180s, increased restart count, one poller, health and real delivery. |
 | OP-REBOOT | Running service across reboot | Record pre-reboot identity, reboot isolated host, reconnect/redefine functions; automatic same-digest recovery within 180s of Engine availability, one poller and real delivery. |
 | OP-STOP | Intentional stop across reboot | Stop/confirm, reboot, observe retained stopped container and no polling for >=180s after Engine availability. Only then deliberately start/confirm and verify recovery. |
 | OP-OUTAGE | Temporary upstream outage | Record actual single network/container before disconnect; observe beyond poll freshness/retry windows using second session. Unhealthy without changed restart count/StartedAt or another poller. Reconnect with trap or recorded manual command; healthy polling within 180s and delivery, without restart. Source-only outage need not make polling unhealthy. |
