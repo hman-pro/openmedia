@@ -71,8 +71,8 @@ their pending rows are not a claim that the completed US1 checks were unexecuted
 | F008-SOURCES | FR-002, FR-004; SC-002 | Public distribution | Both actual-image component closures, Debian Built-Using/system+application Python/unmanaged/embedded coverage and notices; exact source hashes/build materials; anonymous source-only release retrieval before first push; retain sources on later failure | pass |
 | F008-PUBLIC | FR-001, FR-003–FR-004, FR-020; SC-001–SC-002 | Public distribution | Actual preview: anonymous both-platform pull, exact child/index/config joins, local signed raw-index/manifest bundles with trusted numeric repo/workflow/source identity, negative proof, all final public assets redownloaded/hash verified; no rebuild promotion; immutable-release staging | pass |
 | F008-INSTALL | FR-005–FR-010, FR-018–FR-019; SC-003–SC-004 | Deployment-network/manual | Clean supported host guide walkthrough, secret ownership as UID 10001, local preflight vs remote token validity, exact digest polling/fresh health and representative native media delivery | pass (operator host Ubuntu 26.04 amd64, 2026-11-23); other host combinations pending in the supported-host matrix |
-| F008-UPDATE | FR-011–FR-015, FR-019; SC-003, SC-005–SC-006 | Deployment-network/manual | Failed pull/preflight leaves old poller uninterrupted; successful update; timeout/failure/interruption stops candidate; finite 180s health wait; protected selection persistence; explicit current-settings rollback incl unavailable/incompatible failure; migration/recovery of local image ID; one poller | pending |
-| F008-SHUTDOWN | FR-014, FR-019, FR-021; SC-006 | Deployment-network/manual | Real active-work shutdown <=20s, child termination/reaping and scratch/upload cleanup, no duplicate uncertain/canceled sends; fresh request after recovery | pending |
+| F008-UPDATE | FR-011–FR-015, FR-019; SC-003, SC-005–SC-006 | Deployment-network/manual | Failed pull/preflight leaves old poller uninterrupted; successful update; timeout/failure/interruption stops candidate; finite 180s health wait; protected selection persistence; explicit current-settings rollback incl unavailable/incompatible failure; migration/recovery of local image ID; one poller | pass (operator host Ubuntu 26.04 amd64, preview.6 ↔ preview.7, T064 run 2 2026-11-26); other host combinations pending |
+| F008-SHUTDOWN | FR-014, FR-019, FR-021; SC-006 | Deployment-network/manual | Real active-work shutdown <=20s, child termination/reaping and scratch/upload cleanup, no duplicate uncertain/canceled sends; fresh request after recovery | pass (operator host Ubuntu 26.04 amd64, preview.6 ↔ preview.7, T064 run 2 2026-11-26); other host combinations pending |
 | F008-OPERATIONS | FR-015–FR-017, FR-019; SC-003, SC-007 | Deployment-network/manual | Token rotation/recreated file mount, console privacy/status/resources, optional 002 diagnostics, unexpected process exit, reboot and intentional stop, upstream outage/recovery with no health restart loop/additional poller, backup/restore/removal | pending |
 | F008-ASSESSMENT | FR-019–FR-021; SC-008 | Deployment-network/manual | Execute/assess full inherited matrix, classify every failure from evidence, reconcile actual release/README/deployment capability claims; distinguish feature completion from stable readiness | pending |
 
@@ -1838,3 +1838,119 @@ the same inventory resolves **317 of 317**; `tests/integration/test_release_tool
 proved by the release pipeline's native job. Tag the preview.7 pair only after this
 record and the fix are pushed; a newer Debian revision before tagging would need the
 same review.
+
+### T062 preview.7 candidate release — 2026-11-25
+
+- gate_id / requirement_ids: F008-PUBLIC, F008-SOURCES, F008-NATIVE-AMD64,
+  F008-NATIVE-ARM64, F008-RELEASE-POLICY (candidate of the preview.6/preview.7 pair);
+  FR-001–FR-004, FR-020; SC-001–SC-002.
+- class: Controlled, native container and public distribution. gate_scope: Feature 008
+  acceptance. result / failure_class: **pass / none** for the candidate release.
+- release / source: `v0.1.0-preview.7` and matching `sources-v0.1.0-preview.7`, both
+  annotated tags at commit `80c72fa21a05746c8b622886b53ca5fa3ae56c05` (token-redaction fix
+  `1f00ea4` plus the reviewed librsvg policy entry).
+
+**Before tagging.** The branch was pushed first. Branch CI built both native
+architectures and collected sources from both inventories: PR run
+[45684760327](https://github.com/hman-pro/openmedia/actions/runs/45684760327) passed every
+job, which first proved amd64 resolution (no further policy entry needed). The push run
+[45684744235](https://github.com/hman-pro/openmedia/actions/runs/45684744235) of the same
+commit failed `sources` on a `RemoteDisconnected` while downloading the last component
+(`unmanaged:deno@2.9.6`); `download_url` makes a single attempt, so one dropped
+connection fails the job. A bounded retry is a release-code change and is left as a
+follow-up.
+
+[Release run 45687934499](https://github.com/hman-pro/openmedia/actions/runs/45687934499)
+completed **success** (19:43:05–20:29:37 UTC, attempt 1): authority, controlled, native
+amd64 and arm64, sources, source-release, promote and evidence all passed. Source-only
+release **458596790** and image prerelease **458598906** are published and immutable.
+
+| Identity | Value |
+|---|---|
+| Index | `ghcr.io/hman-pro/openmedia@sha256:8c27c75f1808ca97de8aeb0b0ab726d0b008f918ec43b1a1c979247f0b578cc6` |
+| linux/amd64 child / config | `sha256:b9a8141074dbe71e8a0cc1f6dd0d4914425b9b18256308d860848a4411f2c835` / `sha256:ea06b8358c4ddbfb78ff3bd5d3230f95ee93aa0c34a60de565c1d2f391bfa31d` |
+| linux/arm64 child / config | `sha256:31fbe11c7790eb1c63e1e695fb782d6bd4f4ea91a1b4cfd0cbf94b23d9bcbfaa` / `sha256:cac9890d46e5d725f16117f459eadf4d5fcadeedf825a1b03bad2c97871ade03` |
+| Release manifest SHA256 | `6ffb085a3022a5e22099e2a35d11383219e5f241702746c6f93631ed0e20a4d7` |
+| Source manifest SHA256 | `0f20de869297a6f1535b3d44afbaaba05e17691ca5d04b86ab968d43c3fc4ca6` (1899 component records) |
+
+The CI-built arm64 config (`cac9890d…`) differs from the workstation pre-tag build
+(`d2842f27…`), as expected for separate builds; only the CI archive is promoted.
+
+**Independent verification on the deployment host** (2026-11-26, Ubuntu 26.04 amd64,
+checksum-pinned gh 2.103.3, empty GitHub/Docker configuration, no auth variables)
+against a `git archive` of `80c72fa`: every public material and evidence asset
+downloaded anonymously (`notices.tar.gz` hard-linked from preview.6 after an exact
+hash match), `validate_release.py verify` passed on the real local bundles and
+SHA256SUMS matched. The staged `deploy/README.md` is byte-identical to preview.6's
+(SHA256 `9e13ddeb…73ba2b`), so the extracted guide blocks are unchanged.
+
+### T064 run 2 — real-host update, rollback, failure and shutdown — 2026-11-26
+
+- gate_id / requirement_ids: F008-UPDATE, F008-SHUTDOWN (and the return path of the T063
+  root-Compose migration); FR-011–FR-015, FR-019, FR-021; SC-003, SC-005–SC-006.
+- class: Deployment-network/manual. gate_scope: Feature 008 acceptance.
+- result / failure_class: **F008-UPDATE pass / none**; **F008-SHUTDOWN pass / none**
+  on Ubuntu 26.04 amd64. Run 1's defect 1 is fixed (IC-b) and its defect 2 was a runner
+  artifact (IS, 2026-11-25 reproduction and below).
+- release / platform: baseline `v0.1.0-preview.6` index
+  `ghcr.io/hman-pro/openmedia@sha256:1a500b068166d0f0ad80e73bb6b8a559fb75f476e20fba2c7cbd861c2a52700f`;
+  candidate `v0.1.0-preview.7` index
+  `ghcr.io/hman-pro/openmedia@sha256:8c27c75f1808ca97de8aeb0b0ab726d0b008f918ec43b1a1c979247f0b578cc6`
+  (source `80c72fa`); old root-Compose content pinned as `openmedia-recovery:52520a82…`.
+  linux/amd64.
+- environment: the T063 host (Ubuntu 26.04.1 LTS amd64, Docker Engine 29.10.0, Compose
+  v5.8.0, sudo-rs), residential outbound network, no inbound ports.
+
+**Method.** As run 1, with a revised runner: guide blocks 03/08/09/10/11/13/15/16
+sourced verbatim from the staged `80c72fa` checkout; Docker events, running/selected
+identity and console delivery events logged per case; real Telegram requests by the
+operator in a private chat; fake credentials only in separate secret files, the real
+token file never modified. New cases: UP, ST, TO, MRPE. The runner refuses to start
+unless the base runs healthy and selected, and its "same container running" check
+treats "nothing running" as a mismatch. Log retained on the host outside Git:
+`~/openmedia-008-acceptance/logs/t064-20261126T075845Z.log` (07:58:45–08:36:56 UTC).
+
+**Results (UTC).** Outage = old container `kill` event to new `health_status: healthy`.
+
+| Case | Contract transition | Outcome | Evidence |
+|---|---|---|---|
+| N1 failed verification | Update refused before stop | **pass** | Block 09 with the preview.7 digest under preview.6 identity: exit 1; same container running; selection unchanged |
+| N2 non-digest selection | Refused before any Docker call | **pass** | `dc` with a tag reference: exit 2; same container running |
+| N3 unavailable digest | Failed pull leaves old running | **pass** | exit 1; same container running; selection unchanged |
+| UP update-path preflight failure | Preflight failure leaves old running | **pass** | Block 09 with a malformed credential setting: verify passed, preflight `invalid token shape`, exit 2; preview.6 container unchanged; selection unchanged; real setting restored |
+| U1 update 6 → 7 | Verify, pull, preflight, stop old, start, persist | **pass** | Exit 0; kill 08:06:13.230 → healthy 08:06:25.525, outage **12.30 s**; selected = running = preview.7 |
+| SD active-work shutdown | Stop ≤20 s, no children, no repeated uncertain send | **pass** | Stop at app stage `downloading`; kill 08:09:18.254 → exit 0 at 08:09:21.648 (**3.39 s**, wall 3.64 s); console ends `openmedia: stopped (reason=signal)`; host scan for yt-dlp/ffmpeg/ffprobe/deno: none; interrupted file arrived: **none** |
+| ST stale callback | Card from before a restart does not deliver | **pass** | Card with choices left untapped across a stop/start (healthy 08:11:58.462, confirm 0); the tap showed "This choice is stale. Submit the link again for current choices"; files arrived: **none** |
+| RB rollback 7 → 6 | Explicit rollback with current settings/credential | **pass** | Block 11 exit 0; kill 08:12:53.464 → healthy 08:13:06.974, outage **13.51 s**; selected = running = preview.6 |
+| MP missing previous | Fails clearly, nothing running | **pass** | Block 11 to an unpublished digest: `No such image`, pull `not found`, exit 1; nothing running; selection still preview.6. Explicit recovery: exit 0, confirm 0 |
+| IC-a malformed credential | Local preflight prevents start | **pass** | `invalid token shape`, exit 2; nothing running |
+| IC-b Telegram-rejected credential | Failed start stopped; console redacted | **pass** | Preflight passed, Telegram rejected at startup, `start_checked` stopped the unhealthy container, exit 1 after 3 s; nothing running. Console: ``telegram.error.InvalidToken: The token `<redacted>` was rejected by the server.``; fake-token scan **0**, redacted mentions 2 |
+| TO timed-out start | Finite health wait, candidate stopped | **pass** | Container start 08:14:20.743; Telegram dropped both ways for containers (`DOCKER-USER`, 149.154.160.0/20) at 08:14:25.801; `application not healthy after 3m0s`, kill 08:17:20.839, stop 08:17:25.991; `start_checked` exit 1 after 186 s; nothing running; rules removed; recovery exit 0, confirm 0 |
+| IS interrupted start | Interrupted start stopped explicitly | **pass** (second attempt) | Runner attempt inconclusive (healthy 08:17:54.681 before any interrupt; runner stopped it, recovery confirm 0). Operator shell, blocks 03/08, `stop_selected`/`start_checked` with preview.7 and one Ctrl-C: start 08:40:26.199, kill 08:40:26.994, die 08:40:27.136, **exit=130**; no container event until the recovery start 08:40:46.750, healthy 08:40:58.412 |
+| IR migration return | Return to the pinned old local image | **pass** | Blocks 13/16 exit 0; kill 08:18:11.734 → healthy 08:18:28.478 (**16.74 s**) on `openmedia-recovery:52520a82…` |
+| MRPE remigration with persistence error | Old → candidate; failed persistence is reported, bot keeps serving | **pass** | Two `OPENMEDIA_IMAGE` lines in the protected settings; block 15 verified, pulled, preflighted, kill 08:30:39.240 → healthy 08:30:51.466 (**12.23 s**), then `Expected exactly one OPENMEDIA_IMAGE setting; selection not persisted`, exit 1, candidate healthy. Guide recovery (correct settings, `persist_selected`, `confirm_selection`): 0 / 0 |
+
+**Real deliveries after each transition** (console `delivery` events, all `confirmed`):
+
+| Case ID | After | Platform | Bytes | Total / after selection |
+|---|---|---|---|---|
+| T064R2-U1-YT | U1 (preview.7) | YouTube | 14,669,495 | 8.96 s / 4.08 s |
+| T064R2-SD-YT | SD restart (preview.7) | YouTube | 19,644,478 | 11.67 s / 4.91 s |
+| T064R2-RB-YT | RB (preview.6) | YouTube | 9,947,200 | 10.56 s / 4.44 s |
+| T064R2-IR-YT | IR (old image) | YouTube | 2,872,018 | 7.40 s / 3.59 s |
+| T064R2-MR-LI | MRPE recovery (preview.7) | LinkedIn | 4,326,429 | 6.13 s / 3.53 s |
+
+**Scratch and upload cleanup.** Scratch exists only in the container's `/tmp` tmpfs
+(`deploy/compose.yaml`: `read_only: true`, `tmpfs: /tmp … size=536870912`; the only
+host mount is the read-only secret). Docker discards a tmpfs when its container stops,
+and SD's restart destroyed the stopped container (destroy 08:09:22.124). No host path
+can hold scratch or partial uploads; the stopped container's tmpfs was not inspected
+separately.
+
+**One poller.** At most one `openmedia-openmedia-1` container ran at any time in the
+event log; no `409 Conflict` appeared in any console excerpt.
+
+**End state.** preview.7 running and selected (container `392f8b22020d`, healthy since
+08:40:58). The IS recovery's `confirm_selection` output was not captured; the running
+image is preview.7, and no step after the PE recovery's confirm (0) writes the protected
+settings. Migration files and the recovery pin are retained until T065.
