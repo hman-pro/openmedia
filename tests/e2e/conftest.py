@@ -6,7 +6,7 @@ over the Telegram user API, taps card buttons and checks what arrives. It needs:
 * a running bot: `scripts/dev.sh` for the dev bot (default target), or the deployed
   production bot with `OPENMEDIA_E2E_TARGET=prod`;
 * the test account's API id/hash and login session plus the target bot's username, from
-  the environment or the OS keyring (`tests/e2e/credentials.py`; create the session with
+  the environment or the OS keyring (`tests/e2e/keychain.py`; create the session with
   `uv run --group e2e python -m tests.e2e.login`);
 * the private live manifest named by `OPENMEDIA_LIVE_MANIFEST` (same file as the live
   suite), with the e2e case IDs listed in the README.
@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 import pytest_asyncio
 
-from tests.e2e import credentials
+from tests.e2e import keychain
 
 TARGET_ENV_VAR = "OPENMEDIA_E2E_TARGET"
 MANIFEST_ENV_VAR = "OPENMEDIA_LIVE_MANIFEST"
@@ -68,11 +68,11 @@ async def chat() -> AsyncIterator[Any]:
     from tests.e2e.client import BotChat
 
     target = os.environ.get(TARGET_ENV_VAR, "dev")
-    if target not in credentials.BOT_USERNAMES:
-        pytest.fail(f"{TARGET_ENV_VAR} must be one of {sorted(credentials.BOT_USERNAMES)}")
-    values = {name: credentials.lookup(service) for name, service in (
-        ("api_id", credentials.API_ID), ("api_hash", credentials.API_HASH),
-        ("session", credentials.SESSION), ("bot", credentials.BOT_USERNAMES[target]))}
+    if target not in keychain.BOT_USERNAMES:
+        pytest.fail(f"{TARGET_ENV_VAR} must be one of {sorted(keychain.BOT_USERNAMES)}")
+    values = {name: keychain.lookup(service) for name, service in (
+        ("api_id", keychain.API_ID), ("api_hash", keychain.API_HASH),
+        ("session", keychain.SESSION), ("bot", keychain.BOT_USERNAMES[target]))}
     missing = [name for name, value in values.items() if not value]
     if missing:
         pytest.skip(f"e2e credentials not configured: {', '.join(missing)} (tests/e2e/README.md)")
