@@ -144,6 +144,10 @@ titles; inspect captions, filenames, and delivery outcomes.
   cases MUST include normalized titles of 63, 64, and 65 code points and combined emoji,
   plus complete UTF-8 filenames of 239, 240, and 241 bytes before shortening.
   Every resulting complete filename MUST fit within 240 UTF-8 bytes.
+  Filename criteria apply to the name the bot sends. Telegram's hosted Bot API may
+  rewrite it on upload (observed 2026-11-27: stems over 60 characters get `_` for
+  spaces, lose punctuation and the final `…`; emoji become spaces); that rewriting is a
+  Telegram limitation, recorded in 008 validation (T066 S3).
 - **SC-003**: All acceptance deliveries preserve selected media bytes and require
   zero additional user actions compared with the existing workflow.
 - **SC-004**: Overlapping requests, refreshes, and permitted retries produce zero

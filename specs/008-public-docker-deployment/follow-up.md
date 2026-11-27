@@ -47,8 +47,8 @@ step below; this file is only the resume point.
    - Telegram rewrites upload filenames on the hosted Bot API: stems over 60 characters get
      `_` for spaces and lose punctuation; emoji and Arabic punctuation become spaces; a
      trailing `…` is dropped (probed with the test bot). 006 allows a 240-byte stem, so long
-     titles arrive underscored. Decide: cap the stem at 60 code points, or record as a
-     Telegram limitation.
+     titles arrive underscored. Decided 2026-11-27: recorded as a Telegram limitation
+     (006 SC-002 amended); capping the stem at 60 code points stays an option.
 8. The T066 harness (Telethon client for account B) lives in the session scratchpad, which
    a reboot can clear. Decide whether to keep it under `scripts/acceptance/` (no links or
    IDs in it; credentials from the Keychain; Telethon via `uv run --with`, not the lock).
