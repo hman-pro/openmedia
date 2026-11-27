@@ -34,8 +34,26 @@ step below; this file is only the resume point.
    RFC 6381 form `vp09.*`, so an Instagram DASH VP9 download is refused with `source codec
    changed` (T066 S0). Fix test-first in the next release candidate; also check
    `hev1`/`hvc1` and `vp08`. Pre-existing since `f4708eb`; deferred by the operator.
-6. Repeat the Instagram image check once, with plain Instaloader and a single request, a
-   few hours after 2026-11-27 10:10. This rules out our own requests as the cause of the 401.
+6. Done 2026-11-27 13:13: the plain Instaloader request still got 401 three hours later,
+   so the Instagram image is source-blocked (T066 S2).
+7. Product findings from the T066 automated client (pre-existing, next release candidate):
+   - Publish/tap race: a tap that arrives between the card being sent and the request
+     moving to awaiting-selection is answered "stale" (`coordinator.py`: `_publish_preview`
+     then the selection record; `CHECKING` → `STALE`). Seen 3 of 5 times with instant taps.
+   - Duplicate failure sentence: a checking-stage `internal` failure reads "The checking
+     stage failed. The checking stage failed. Retry the link later." (`__main__.py`
+     `notify_failure` prefix plus `bot.py` `failure_message` fallback; same shape for
+     `timeout` and `storage_exhausted`).
+   - Telegram rewrites upload filenames on the hosted Bot API: stems over 60 characters get
+     `_` for spaces and lose punctuation; emoji and Arabic punctuation become spaces; a
+     trailing `…` is dropped (probed with the test bot). 006 allows a 240-byte stem, so long
+     titles arrive underscored. Decide: cap the stem at 60 code points, or record as a
+     Telegram limitation.
+8. The T066 harness (Telethon client for account B) lives in the session scratchpad, which
+   a reboot can clear. Decide whether to keep it under `scripts/acceptance/` (no links or
+   IDs in it; credentials from the Keychain; Telethon via `uv run --with`, not the lock).
+   Keychain items: `openmedia-e2e-tg-api-id`, `-tg-api-hash`, `-tg-session`, `-bot-username`
+   (account `openmedia-e2e`). Revoke the session in Telegram > Devices when done.
 
 ## Release state
 

@@ -91,18 +91,18 @@ outcomes as failure/refusal evidence, never as successful media support.
 | gate_id | requirement_ids / original gate | class | Required execution / earlier evidence index | result |
 |---|---|---|---|---|
 | I001-CONTROLLED | 001 FR/SC controlled acceptance; 008 FR-021 | Controlled | Full media/adapter/delivery/lifecycle regression suite; [001 validation](../001-media-download/validation.md) | pass |
-| I001-SOURCES | 001 FR-002, SC-001; T026/T074 | Deployment-network/manual | Full five-category inspect/download native formats, actual bytes, anonymous access and limitations; earlier 001 validation including 2026-09-21/22 attempts | fail (T066 S0 2026-11-27: Instagram video pre-existing `vp09` codec-family defect; Instagram image anonymous 401, baseline identical, provisional) |
+| I001-SOURCES | 001 FR-002, SC-001; T026/T074 | Deployment-network/manual | Full five-category inspect/download native formats, actual bytes, anonymous access and limitations; earlier 001 validation including 2026-09-21/22 attempts | fail (T066 S0 2026-11-27: live-suite Instagram video hits the pre-existing `vp09` codec-family defect, but the bot's card picks H.264 and delivered the reel 4/4 in S2; Instagram image anonymous 401 persisted 3 h with a plain Instaloader baseline, source-blocked) |
 | I001-RUNTIME | 001 SC-007; T053/T075 | Native container | Constrained container build/start/config plus real dedicated-bot polling, fresh health, active-work shutdown/child cleanup; [001 runtime evidence](../001-media-download/validation.md) | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
-| I001-TELEGRAM | 001 SC-001, SC-005–SC-006; T054/T076 | Deployment-network/manual | Deployment-network five categories and two independent accounts; originating-chat isolation, repeated/forged/stale selections, available audio-only/absent-audio, native received output | pending |
-| I001-TIMING | 001 SC-002–SC-003; T055/T080 | Deployment-network/manual | 20 eligible inspections: >=19 acknowledgments <=2s and previews <=30s; 20 eligible <=20MB deliveries: >=19 <=2min; <=2 global/<=1 Instagram concurrency; document exclusions/replacements | pending |
+| I001-TELEGRAM | 001 SC-001, SC-005–SC-006; T054/T076 | Deployment-network/manual | Deployment-network five categories and two independent accounts; originating-chat isolation, repeated/forged/stale selections, available audio-only/absent-audio, native received output | pass (T066 S1–S4 2026-11-27; B on A's card and forged callback not executable live) |
+| I001-TIMING | 001 SC-002–SC-003; T055/T080 | Deployment-network/manual | 20 eligible inspections: >=19 acknowledgments <=2s and previews <=30s; 20 eligible <=20MB deliveries: >=19 <=2min; <=2 global/<=1 Instagram concurrency; document exclusions/replacements | pass (T066 S2 2026-11-27, automated client) |
 | I002-DIAGNOSTICS | 002 FR/SC; quickstart local/container checks | Deployment-network/manual | Enabled real trace/refusal, console/token privacy; disabled leaves no files; retention/rotation and mounted persistence across restart; [002 quickstart](../002-file-logging/quickstart.md) | pass (T066 S1 2026-11-27) |
-| I003-UX | 003 SC-001–SC-005; manual matrix | Deployment-network/manual | One preview/status surface, first-page choices, audio/combined/image/video behavior, inline video including silent video on actual clients, native delivery/refusal; [003 validation](../003-streamlined-bot-ux/validation.md) | pending |
+| I003-UX | 003 SC-001–SC-005; manual matrix | Deployment-network/manual | One preview/status surface, first-page choices, audio/combined/image/video behavior, inline video including silent video on actual clients, native delivery/refusal; [003 validation](../003-streamlined-bot-ux/validation.md) | pending (T066 S3: attributes verified; inline playback needs a visual check on a client) |
 | I004-SHORT-LINKS | 004 FR-010, SC-001–SC-005 | Deployment-network/manual | Anonymous lnkd.in short/full equivalence, video/image delivery, redirect/refusal diagnostics and console privacy; [004 validation](../004-linkedin-share-links/validation.md) | pass (T066 S1 2026-11-27) |
-| I005-LIVE | 005 SC-001–SC-005; T032/T036 | Deployment-network/manual | Plain/context/offset track identity, whole native audio, selected format/bytes, collection refusal and ordinary YouTube regression; [005 validation](../005-youtube-music-download/validation.md) | pending (T066 S0: plain/context pass; offset, collection, ordinary YouTube in S4) |
-| I005-TELEGRAM | 005 US1–US3; T033/T037 | Deployment-network/manual | One automatic native audio document/no selection, card/progress/completion, whole-track context behavior, collection refusal and ordinary YouTube; actual received-byte comparison where available | pending |
+| I005-LIVE | 005 SC-001–SC-005; T032/T036 | Deployment-network/manual | Plain/context/offset track identity, whole native audio, selected format/bytes, collection refusal and ordinary YouTube regression; [005 validation](../005-youtube-music-download/validation.md) | pass (T066 S0 + S4 2026-11-27) |
+| I005-TELEGRAM | 005 US1–US3; T033/T037 | Deployment-network/manual | One automatic native audio document/no selection, card/progress/completion, whole-track context behavior, collection refusal and ordinary YouTube; actual received-byte comparison where available | pass (T066 S4 2026-11-27, automated client, native bytes equal) |
 | I005-CONTAINER | 005 T034/T038 | Native container | Configured restricted startup/health with runtime credentials; prior missing-daemon result is not source evidence | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
 | I006-CONTAINER | 006 T019 | Native container | Locked distribution/build/import, version/notices, configured startup and live health; [006 validation](../006-media-delivery-titles/validation.md#external-acceptance-and-release-gaps) | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
-| I006-TITLES | 006 FR-001–FR-009, SC-001–SC-005; manual quickstart | Deployment-network/manual | Caption, saved/forwarded filenames, long/Unicode titles, client versions/rendering/playback, native received bytes including YouTube Music; controlled upload labels do not close this gate | pending |
+| I006-TITLES | 006 FR-001–FR-009, SC-001–SC-005; manual quickstart | Deployment-network/manual | Caption, saved/forwarded filenames, long/Unicode titles, client versions/rendering/playback, native received bytes including YouTube Music; controlled upload labels do not close this gate | fail (T066 S3 2026-11-27: Telegram's Bot API rewrites long and emoji filenames; captions pass) |
 
 ## Execution records
 
@@ -2188,3 +2188,132 @@ on the mounted directory passed in T065 (see the T065 record).
 The diagnostics directory holds real links and Telegram identifiers; the operator kept it
 past the runner's retention prompt to read the timings above. It is listed for deletion in
 follow-up.md.
+
+### T066 automated client — account B through the Telegram user API — 2026-11-27
+
+From S2 on, a scripted Telegram client drives the production bot as the second account
+(B) instead of the operator's iPhone: it sends the link, reads the card, taps a button,
+waits for the outcome and downloads the received file (sha256 and byte count). It uses the
+official Telegram user API (Telethon 1.46.0, run in a throwaway `uv` environment, not a
+project dependency) from the Mac on the host's network. The API credentials and the login
+session live in the macOS Keychain; the session is revocable from Telegram's device list.
+Links come from the private manifests and are never printed; server timing comes from the
+container console, which carries no links or identifiers. Taps wait 0.8 s after the card
+appears (human-like) unless a case says otherwise.
+
+Limits of the scripted client: it reads message types and attributes (inline video or
+document, streaming flag, filename, caption) but does not watch a phone screen, so
+playback rendering is attribute-verified, not visually observed; and with one scripted
+account, cross-account checks (B acting on A's card) are not executed.
+
+### T066 S2 — I001-TIMING — 2026-11-27
+
+24 sequential rounds 12:42–13:10 UTC (at most one active request; Instagram rounds at least
+60 s apart), then one Instagram picture round outside the timing set. Mix: YouTube
+(choices: audio only, video without sound), YouTube Music plain/context, LinkedIn video
+(full, short, hyphen code), LinkedIn picture, Instagram reel. No 429, 5xx or connection
+failures, so no exclusions.
+
+| Measure | Result | Required |
+|---|---|---|
+| Acknowledgment ≤ 2 s | 23 of 24 (max 3.38 s, one Instagram round) | ≥ 19 of 20 |
+| Card ≤ 30 s | 22 of 22 cards (max 8.47 s); 2 pictures delivered without a card | ≥ 19 of 20 |
+| Deliveries ≤ 20 MB confirmed ≤ 120 s after selection | 20 of 20 (max 6.75 s) | ≥ 19 of 20 |
+| Console privacy | 0 token-shaped strings, 0 URLs, 0 identifier/link keys | 0 |
+
+Every repeat of a case delivered identical bytes (same sha256): Instagram reel 1,846,690;
+LinkedIn video 4,843,445 through the full address, the short link and the hyphen-code
+address; LinkedIn picture 147,246; YouTube Music 3,344,267 plain and with context; YouTube
+audio only 10,271,496; YouTube video without sound 28,207,144.
+
+Three YouTube rounds (R01, R11, R19) produced no delivery: the harness tapped within
+milliseconds of the card appearing and the bot answered "This choice is stale". Cause
+(code): the card is published before the request moves to awaiting-selection
+(`coordinator.py` `_publish_preview`, then the selection record), and a tap in that gap
+finds the request still `CHECKING` and is answered `STALE`. A `STALE` answer does not end
+the request, so a later tap should succeed; S3's instant-tap round did not hit the race, so
+that recovery was not observed. Real users react far slower than the gap (about one Bot
+API round trip); the harness now waits 0.8 s before a tap. The three rounds count as inspections
+(acknowledgment and card within limits) and not as delivery samples.
+
+Instagram reel: the card offered one automatic choice, "Video (no sound)", and said "Not
+available: Video, Audio only." Inspection shows why: the reel has no audio stream anywhere
+(three DASH VP9 video-only and three progressive video-only formats, no audio format), and
+the delivered file is one H.264 720×720 stream. The automatic choice is the H.264 format,
+not a VP9 one, so users of this reel do not reach the `vp09` defect from S0.
+
+Instagram picture (extra round, 13:10): refused with "That content can't be opened without
+logging in…"; the source answered 4xx. A plain Instaloader 4.15.3 request at 13:13 got the
+same 401 "Please wait a few minutes", three hours after the S0 attempt.
+
+| Gate | Result | Evidence |
+|---|---|---|
+| I001-TIMING | **pass** | Above; sequential rounds (≤ 1 active request, Instagram never overlapping); 0 exclusions; the three stale-tap rounds documented |
+
+### T066 S4 — YouTube Music through Telegram — 2026-11-27
+
+13:13–13:16 UTC, account B. No card buttons in any music case; each showed `Audio only —
+downloading…`, `— sending…`, `— sent.` and delivered one `audio/mp4` document (`.m4a`).
+
+| Case | Outcome | Bytes | sha256 |
+|---|---|---|---|
+| T066-I005-1 plain track | one document, no picker | 3,344,267 | `b4fa6194…c5e6` |
+| T066-I005-2 same track with `list`/`si`/`index`/`t` | one document, no picker | 3,344,267 | `b4fa6194…c5e6` |
+| T066-I005-3 same track with `t=45` | one document, no picker | 3,344,267 | `b4fa6194…c5e6` |
+| T066-I005-4 collection-only (playlist page) | "Only one track is supported. Send a YouTube Music track link." No file | — | — |
+| T066-I005-5 ordinary YouTube video | card with Video, Video (no sound), Audio only | — | — |
+| Native comparison | format 140 fetched by the deployed image's yt-dlp (`docker run --read-only --user 10001:10001`) | 3,344,267 | `b4fa6194…c5e6` |
+
+The received documents are byte-identical to the native format 140, so context and offset
+neither change the track nor cut it. Console: per-request selection to delivery 3.0–3.2 s;
+0 token-shaped strings, 0 URLs, 0 identifier/link keys.
+
+| Gate | Result | Evidence |
+|---|---|---|
+| I005-TELEGRAM | **pass** | One automatic native audio document with no selection; progress and completion on the card; context and offset whole track (identical bytes); collection refusal; ordinary YouTube keeps video choices; received bytes equal the native format |
+| I005-LIVE | **pass** | S0 plain/context identity and native format/bytes, plus S4 offset, collection refusal and ordinary-YouTube regression |
+
+### T066 S3 — Telegram behaviour, UX and titles — 2026-11-27
+
+13:17–13:42 UTC, account B through the automated client (S1 covered account A on the
+iPhone). Every delivery arrived in the chat that sent the link.
+
+| Case | Observation |
+|---|---|
+| T066-S3-1 instant tap (0 s) | Card, tap accepted, audio delivered (race not hit this time) |
+| T066-S3-2 double tap | One delivery (10,271,496 bytes); second tap answered "That request is already processing. Please wait; no duplicate download was started." |
+| T066-S3-3 combined video | First attempt failed at checking with console `external_causes=["connection_failure"]` (excludable, external). Retry: "Video" delivered inline (`sendVideo`, streaming flag set), 32,262,889 bytes, ffprobe H.264 + AAC; bytes re-downloaded from Telegram identical |
+| T066-S3-4 title with `/` | Caption `AC/DC - Thunderstruck (Official Video)`; filename `AC_DC - Thunderstruck (Official Video).m4a` |
+| T066-S3-5 title with emoji | Caption keeps both emoji; filename arrives as `atlantic ocean  View.mp4` (see filename finding) |
+| T066-S3-6 every choice over 50 MB (10-hour video) | "The checking stage failed. None of the available choices fits the current delivery limit, so nothing can be sent. Send another public link." No file |
+| T066-S3-7 forward a delivered file | Filename and sha256 unchanged after forwarding |
+| T066-S3-8 forwarded card | Telegram strips the buttons from the forwarded copy, so it cannot be tapped; the original card still worked afterwards (one delivery) |
+| T066-S3-9 group | Link sent in a new group with the bot, then with an @-mention: no reply and no file (privacy mode: the bot does not receive the message); group deleted |
+| T066-S3-10 tap after 920 s | "Those choices expired. Submit the link again." No file |
+
+From S2 (same client): cards show at most three buttons; LinkedIn video and pictures need
+no tap; pictures arrive as documents (`image/jpeg`); video without sound arrives as an
+inline video (`sendVideo`, not an animation); audio arrives as an `audio/mp4` document; a
+successful request leaves two bot messages (the card, edited in place, and the file); an
+absent audio track is explained on the card ("Not available: Video, Audio only."). Captions
+equal the 006 caption rule (64 code points with `…` for long titles; Persian, `/` and emoji
+kept literally).
+
+Filename finding (Telegram-side): the hosted Bot API rewrites upload filenames. A probe
+with the test bot (not production) sent fixed names and read the stored name back from the
+API: stems up to 60 characters arrive unchanged (ASCII `-`, `,`, `(`, `_` kept); longer
+stems get `_` for spaces, lose punctuation and are cut near 60 characters; emoji and
+Arabic punctuation become spaces; a trailing `…` is dropped. The bot sends names that meet
+006 FR-005 (stem up to 64 code points with `…`), so long titles arrive as
+`Big_Buck_Bunny_60fps_4K_Official_Blender_Foundation_Short_Film.m4a` and emoji titles lose
+the emoji.
+
+Message wording finding: a checking-stage `internal` failure reads "The checking stage
+failed. The checking stage failed. Retry the link later." (prefix in `notify_failure` plus
+the `failure_message` fallback); pre-existing.
+
+| Gate | Result | Evidence |
+|---|---|---|
+| I001-TELEGRAM | **pass** | Two accounts (A on iPhone in S1, B in S2–S4); five categories delivered except Instagram picture (source-blocked, I001-SOURCES); originating-chat delivery; double tap → one delivery; stale tap refused; audio-only delivered; absent audio explained; received bytes equal native output (S4) and stable across repeats (S2). Limits: B acting on A's card has no client path (forwarding strips the buttons), and a forged callback stays controlled-only |
+| I003-UX | **pending visual check** | Message shape, button count, tap counts and send methods verified from message attributes; inline playback of video and silent video still needs one look on an actual client |
+| I006-TITLES | **fail (Telegram-side filename rewriting)** | Captions pass FR-004; forwarded filename unchanged; `/` → `_` passes. Received filenames for stems over 60 characters or with emoji do not keep the 006 form (`…` dropped, spaces → `_`, emoji → spaces). Missing-title fallback not reached live (controlled tests only) |
