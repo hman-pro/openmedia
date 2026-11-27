@@ -692,6 +692,8 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 sudo chmod 0600 "$replacement"
 sudoedit "$replacement"
+sudo test -s "$replacement" || {
+  printf '%s\n' 'Replacement is empty; the running service was not touched.' >&2; exit 1; }
 sudo chown root:10001 "$replacement"
 sudo chmod 0640 "$replacement"
 stop_selected "$ACTIVE_IMAGE"
@@ -706,8 +708,10 @@ printf '%s\n' 'Replacement polling health passed; verify real use and complete r
 
 The rename is atomic on the same filesystem. An existing file bind mount can retain the
 old inode; `restart` alone is insufficient. Local validation proves readability and shape,
-not remote authentication. Confirm fresh healthy polling and a real private-chat request
-with the replacement credential before accepting rotation. Do not record its value/hash.
+not remote authentication. An empty replacement (for example an editor quit without
+saving, or a paste that did not land) ends the block before anything is stopped: the
+service keeps running on the current credential. Paste only the token itself. Confirm
+fresh healthy polling and a real private-chat request with the replacement credential before accepting rotation. Do not record its value/hash.
 If local validation fails, the old service stays stopped. If authentication, health or
 startup fails, `start_checked` stops the attempt. After terminal loss, run
 `stop_selected "$ACTIVE_IMAGE"` and confirm absence before retrying. Prepare a corrected

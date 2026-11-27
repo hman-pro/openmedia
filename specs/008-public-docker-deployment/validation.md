@@ -1962,8 +1962,8 @@ retained until T065.
 - class: Deployment-network/manual. gate_scope: Feature 008 acceptance.
 - result / failure_class: **F008-OPERATIONS pass / none** on Ubuntu 26.04 amd64. Every
   OP case passed; the runner faults below are acceptance-harness defects, not
-  deployment regressions. One guide finding (empty rotation input) is open as a
-  follow-up.
+  deployment regressions. One guide finding (empty rotation input) was fixed after
+  the run.
 - release / platform: `v0.1.0-preview.7` index
   `ghcr.io/hman-pro/openmedia@sha256:8c27c75f1808ca97de8aeb0b0ab726d0b008f918ec43b1a1c979247f0b578cc6`
   (source `80c72fa`), selected and running throughout. Guide blocks were extracted from
@@ -2025,11 +2025,14 @@ a namespace's init from inside it, so the command did nothing. `4ef5dcc` kills e
 other process instead (`os.kill(-1, SIGKILL)`). The published preview.7 `deploy/README.md`
 still carries the old command; T067 reconciles it.
 
-**Guide finding (open follow-up).** Block 21 moves the edited replacement over the live
+**Guide finding (fixed after T065).** Block 21 moved the edited replacement over the live
 token file before local validation. An unchanged or empty edit (sudoedit exits 0)
-therefore stops a healthy bot and empties the token file, and validation then refuses
-to start. The failure is safe and reported (exit 2, stopped, no temporary files), but a
-non-empty check before `stop_selected` would leave the healthy bot running.
+therefore stopped a healthy bot and emptied the token file, and validation then refused
+to start. The failure is safe and reported (exit 2, stopped, no temporary files), and a
+healthy bot should not be stopped by it. The block now ends before `stop_selected` when
+the replacement is empty (`sudo test -s`), pinned by
+`tests/contract/test_deploy_guide_rotation.py`, which runs the block against stub host
+commands.
 
 **Runner faults and their outages.** All were acceptance-harness defects, fixed and
 followed by valid reruns:

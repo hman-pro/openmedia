@@ -18,15 +18,15 @@ step below; this file is only the resume point.
 ## Next steps
 
 1. Run T066 (inherited media matrix), then T067 (claims reconciliation).
-2. T067 must note that the published preview.7 `deploy/README.md` carries the old
-   OP-EXIT command (kills PID 1, a no-op under `init: true`); `4ef5dcc` fixed it.
-3. Guide follow-up: block 21 (token rotation) should refuse an empty or unchanged
-   replacement before `stop_selected`; today an empty edit stops a healthy bot.
-4. Host cleanup now that T065 is done: the recovery pin `openmedia-recovery:52520a82…`,
+2. T067 must note that the published preview.7 `deploy/README.md` predates two guide
+   fixes: the OP-EXIT command (`4ef5dcc`; the old one kills PID 1, a no-op under
+   `init: true`) and the rotation empty-replacement guard (block 21 now ends before
+   `stop_selected` when the edited file is empty; `tests/contract/test_deploy_guide_rotation.py`).
+3. Host cleanup now that T065 is done: the recovery pin `openmedia-recovery:52520a82…`,
    `openmedia:local`, `~/openmedia/.env`, and the closed LUKS2 vault
    `/var/lib/openmedia-backup/vault.luks` (holds a copy of the current token;
    passphrase in the Mac Keychain as `openmedia-backup-luks`).
-5. Release follow-up: add a bounded retry to `download_url`
+4. Release follow-up: add a bounded retry to `download_url`
    (`scripts/release/collect_sources.py`) in the next release candidate.
 
 ## Release state
