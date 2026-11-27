@@ -1,4 +1,4 @@
-# Resume feature 008 — updated 2026-11-26
+# Resume feature 008 — updated 2026-11-27
 
 Do not cancel running workflows. Check their actual status before acting on one.
 Never move or delete tags, overwrite a published image version, replace immutable
@@ -7,23 +7,26 @@ step below; this file is only the resume point.
 
 ## Where things stand
 
-- **T059–T064 done.** T063 (2026-11-23) installed preview.5 on the operator's Ubuntu
+- **T059–T065 done.** T063 (2026-11-23) installed preview.5 on the operator's Ubuntu
   26.04 amd64 host and migrated the old root-Compose bot. T064 run 2 (2026-11-26)
   passed every update, rollback, failure, shutdown and migration case between
-  preview.6 and preview.7, including the run 1 token-leak fix (IC-b). T062 closes with
-  that pair.
+  preview.6 and preview.7. T065 (2026-11-26/27) passed every maintenance case on the
+  production host by operator choice.
 - **Production:** preview.7 running and selected on the host.
-- **T065–T067 open.** T065 needs a decision on the isolated acceptance host.
+- **T066–T067 open.**
 
 ## Next steps
 
-1. Decide T065's host: its disruptive cases (reboot, token rotation, backup/restore,
-   project-only removal) are specified for an isolated acceptance host, not the
-   production bot.
-2. Run T065, then T066 (inherited media matrix), then T067 (claims reconciliation).
-3. After T065: retire the old root-Compose project's credential copy, the migration
-   files and the recovery pin once their return path is no longer needed.
-4. Release follow-up: add a bounded retry to `download_url`
+1. Run T066 (inherited media matrix), then T067 (claims reconciliation).
+2. T067 must note that the published preview.7 `deploy/README.md` carries the old
+   OP-EXIT command (kills PID 1, a no-op under `init: true`); `4ef5dcc` fixed it.
+3. Guide follow-up: block 21 (token rotation) should refuse an empty or unchanged
+   replacement before `stop_selected`; today an empty edit stops a healthy bot.
+4. Host cleanup now that T065 is done: the recovery pin `openmedia-recovery:52520a82…`,
+   `openmedia:local`, `~/openmedia/.env`, and the closed LUKS2 vault
+   `/var/lib/openmedia-backup/vault.luks` (holds a copy of the current token;
+   passphrase in the Mac Keychain as `openmedia-backup-luks`).
+5. Release follow-up: add a bounded retry to `download_url`
    (`scripts/release/collect_sources.py`) in the next release candidate.
 
 ## Release state
@@ -36,7 +39,7 @@ step below; this file is only the resume point.
 | preview.4 | `b4d087d` | Rejected before publication: unreviewed SRT revision; tags kept |
 | preview.5 | `c84a168` | **Accepted**, run 44149181265; index `sha256:2262f99c…6b81` |
 | preview.6 | `d938409` | **Accepted**, run 45238239957; index `sha256:1a500b06…700f` |
-| preview.7 | `80c72fa` | **Accepted**, run 45687934499; index `sha256:8c27c75f…8cc6`; T064 run 2 passed; in production |
+| preview.7 | `80c72fa` | **Accepted**, run 45687934499; index `sha256:8c27c75f…8cc6`; T064 run 2 and T065 passed; in production |
 
 Release lessons that cost a version before:
 
@@ -60,9 +63,9 @@ Release lessons that cost a version before:
   operator; never ask for a password.
 - Deployment: root-owned `/opt/openmedia` (`compose.yaml`, `deploy.env` 0600 holding the
   selected digest, `secrets/` with the token file). preview.7 running and selected
-  as of 2026-11-26.
-- Keep until T065 ends: `/opt/openmedia/migration` (old compose/env) and the pinned
-  old image `openmedia-recovery:52520a82…`.
+  as of 2026-11-27 (restored from backup in T065).
+- `/opt/openmedia/migration` was deleted after T065's restore. The pinned old image
+  `openmedia-recovery:52520a82…` is still present (cleanup item above).
 - Acceptance staging: `~/openmedia-008-acceptance` (runner, guide blocks, release
   assets, logs). Run 1's runner is kept as `t064.run1.sh`.
 - Guide functions: never call `start_checked` (or other guide functions) inside
@@ -73,7 +76,11 @@ Release lessons that cost a version before:
   IDs stay in private notes outside Git, never in validation or release notes.
 - After any interrupt test, run `docker ps` before leaving: on 2026-11-25 an
   interrupted start without a recovery start left the bot down for 13.5 h unnoticed.
+- The server's default editor is vim (`EDITOR`/`VISUAL`/`SUDO_EDITOR` in `~/.bashrc`).
+  A runner that tees its output must run the editor on `/dev/tty`: an editor screen
+  echoes pasted secrets into the log (T065 session R, token revoked).
+- Read runner logs through a token-redacting filter, and scan them before printing.
 
 ## Suggested first prompt
 
-"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md` with T065."
+"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md` with T066."

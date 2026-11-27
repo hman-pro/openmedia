@@ -73,7 +73,7 @@ their pending rows are not a claim that the completed US1 checks were unexecuted
 | F008-INSTALL | FR-005–FR-010, FR-018–FR-019; SC-003–SC-004 | Deployment-network/manual | Clean supported host guide walkthrough, secret ownership as UID 10001, local preflight vs remote token validity, exact digest polling/fresh health and representative native media delivery | pass (operator host Ubuntu 26.04 amd64, 2026-11-23); other host combinations pending in the supported-host matrix |
 | F008-UPDATE | FR-011–FR-015, FR-019; SC-003, SC-005–SC-006 | Deployment-network/manual | Failed pull/preflight leaves old poller uninterrupted; successful update; timeout/failure/interruption stops candidate; finite 180s health wait; protected selection persistence; explicit current-settings rollback incl unavailable/incompatible failure; migration/recovery of local image ID; one poller | pass (operator host Ubuntu 26.04 amd64, preview.6 ↔ preview.7, T064 run 2 2026-11-26); other host combinations pending |
 | F008-SHUTDOWN | FR-014, FR-019, FR-021; SC-006 | Deployment-network/manual | Real active-work shutdown <=20s, child termination/reaping and scratch/upload cleanup, no duplicate uncertain/canceled sends; fresh request after recovery | pass (operator host Ubuntu 26.04 amd64, preview.6 ↔ preview.7, T064 run 2 2026-11-26); other host combinations pending |
-| F008-OPERATIONS | FR-015–FR-017, FR-019; SC-003, SC-007 | Deployment-network/manual | Token rotation/recreated file mount, console privacy/status/resources, optional 002 diagnostics, unexpected process exit, reboot and intentional stop, upstream outage/recovery with no health restart loop/additional poller, backup/restore/removal | pending |
+| F008-OPERATIONS | FR-015–FR-017, FR-019; SC-003, SC-007 | Deployment-network/manual | Token rotation/recreated file mount, console privacy/status/resources, optional 002 diagnostics, unexpected process exit, reboot and intentional stop, upstream outage/recovery with no health restart loop/additional poller, backup/restore/removal | pass (operator host Ubuntu 26.04 amd64, preview.7, T065 2026-11-26/27); other host combinations pending |
 | F008-ASSESSMENT | FR-019–FR-021; SC-008 | Deployment-network/manual | Execute/assess full inherited matrix, classify every failure from evidence, reconcile actual release/README/deployment capability claims; distinguish feature completion from stable readiness | pending |
 
 F008-INSTALL/UPDATE/SHUTDOWN/OPERATIONS records identify the actual tested Ubuntu
@@ -765,8 +765,8 @@ stable-readiness obligations remain required. No new support or stable-release c
 These are required future execution cases, **not executed acceptance results**. Follow
 the [maintenance runbook](../../deploy/README.md#maintenance) and
 [quickstart walkthrough](quickstart.md#7-maintenance-walkthrough-t065).
-Every row starts `pending`: no accepted public digest/isolated real-host maintenance run
-has been recorded. Release/platform and environment are `not yet selected/recorded`;
+Every row started `pending`; T065 results are in the
+[T065 record](#t065-maintenance-acceptance--2026-11-2627). Release/platform and environment are `not yet selected/recorded`;
 failure_class is `none` until an observed outcome is assessed. Each execution must append
 the full record format above: exact version/source/index/container/image identities,
 OS/architecture, Engine/Compose, UTC and observed timing, nonsecret network context,
@@ -775,18 +775,18 @@ separately; no result here expands the supported-host evidence matrix.
 
 | Case | Gate / requirements | Required observation | Result |
 |---|---|---|---|
-| OP-INSPECT | F008-OPERATIONS; FR-016–FR-017, FR-019; SC-003 | Selected health/restart/time fields, bounded console logs and one-shot resource stats; no token/link/Telegram ID disclosure, no poller from inspection, memory includes tmpfs | pending |
-| OP-DIAGNOSTICS-OFF | F008-OPERATIONS; FR-017, FR-021; SC-003 | Default-off mode creates no diagnostic files, including local validation | pending |
-| OP-DIAGNOSTICS-ON | F008-OPERATIONS; FR-017, FR-021; SC-003 | Explicit protected writable mount, UID 10001 access, directory 0700/files 0600, private real trace/refusal, no console disclosure, 14 UTC-day files/50MB retention, persistence across recreation; healthcheck writes no logs | pending |
-| OP-ROTATE | F008-OPERATIONS; FR-008–FR-010, FR-015, FR-017; SC-003–SC-004 | Protected replacement, confirmed stop, atomic rename, local validation, forced mount recreation, real replacement authentication/health and one poller; transient/editor copies cleaned under host policy | pending |
-| OP-ROTATE-FAIL | F008-OPERATIONS; FR-009, FR-015, FR-017; SC-003–SC-004 | Local invalid input and remotely rejected credential leave attempts stopped; corrected current input recovers; no revoked-token restoration or restart-only mount renewal | pending |
-| OP-EXIT | F008-OPERATIONS; FR-016, FR-019; SC-007 | In-container unexpected exit after restart-monitoring threshold, automatic same-container recovery/increased restart count without up/start, health <=180s and delivery; no second poller | pending |
-| OP-REBOOT | F008-OPERATIONS; FR-016, FR-019; SC-007 | Running selected digest automatically recovers after isolated-host reboot, healthy <=180s after Engine availability, real delivery and one poller; record boot IDs/timing | pending |
-| OP-STOP | F008-OPERATIONS; FR-016, FR-019; SC-007 | Intentional stop persists across reboot; retained stopped container/no polling observed >=180s after Engine availability, followed by explicit healthy restart | pending |
-| OP-OUTAGE | F008-OPERATIONS; FR-016, FR-019; SC-007 | Isolated network loss exceeds freshness/retry windows; unhealthy with unchanged container/StartedAt/restart count, reconnect recovers healthy polling <=180s and delivery; no restart agent/additional poller | pending |
-| OP-BACKUP | F008-OPERATIONS; FR-017, FR-019; SC-003 | Operator verifies encrypted storage/access controls; consistent config/current credential/verified selection record, protected recoverability, no media/request/diagnostic backup | pending |
-| OP-REMOVE | F008-OPERATIONS; FR-017, FR-019; SC-003 | Only fixed project removed; explicit retained config/secret/diagnostic/migration/record/backup/image inventory and retention decisions; unrelated services unchanged | pending |
-| OP-RESTORE | F008-OPERATIONS; FR-015, FR-017, FR-019; SC-003 | Other pollers stopped; reviewed config, current credential and ownership/modes, verified digest and isolated preflight, real health/delivery; no request resumption | pending |
+| OP-INSPECT | F008-OPERATIONS; FR-016–FR-017, FR-019; SC-003 | Selected health/restart/time fields, bounded console logs and one-shot resource stats; no token/link/Telegram ID disclosure, no poller from inspection, memory includes tmpfs | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-DIAGNOSTICS-OFF | F008-OPERATIONS; FR-017, FR-021; SC-003 | Default-off mode creates no diagnostic files, including local validation | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-DIAGNOSTICS-ON | F008-OPERATIONS; FR-017, FR-021; SC-003 | Explicit protected writable mount, UID 10001 access, directory 0700/files 0600, private real trace/refusal, no console disclosure, 14 UTC-day files/50MB retention, persistence across recreation; healthcheck writes no logs | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-ROTATE | F008-OPERATIONS; FR-008–FR-010, FR-015, FR-017; SC-003–SC-004 | Protected replacement, confirmed stop, atomic rename, local validation, forced mount recreation, real replacement authentication/health and one poller; transient/editor copies cleaned under host policy | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-ROTATE-FAIL | F008-OPERATIONS; FR-009, FR-015, FR-017; SC-003–SC-004 | Local invalid input and remotely rejected credential leave attempts stopped; corrected current input recovers; no revoked-token restoration or restart-only mount renewal | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-EXIT | F008-OPERATIONS; FR-016, FR-019; SC-007 | In-container unexpected exit after restart-monitoring threshold, automatic same-container recovery/increased restart count without up/start, health <=180s and delivery; no second poller | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-REBOOT | F008-OPERATIONS; FR-016, FR-019; SC-007 | Running selected digest automatically recovers after isolated-host reboot, healthy <=180s after Engine availability, real delivery and one poller; record boot IDs/timing | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-STOP | F008-OPERATIONS; FR-016, FR-019; SC-007 | Intentional stop persists across reboot; retained stopped container/no polling observed >=180s after Engine availability, followed by explicit healthy restart | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-OUTAGE | F008-OPERATIONS; FR-016, FR-019; SC-007 | Isolated network loss exceeds freshness/retry windows; unhealthy with unchanged container/StartedAt/restart count, reconnect recovers healthy polling <=180s and delivery; no restart agent/additional poller | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-BACKUP | F008-OPERATIONS; FR-017, FR-019; SC-003 | Operator verifies encrypted storage/access controls; consistent config/current credential/verified selection record, protected recoverability, no media/request/diagnostic backup | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-REMOVE | F008-OPERATIONS; FR-017, FR-019; SC-003 | Only fixed project removed; explicit retained config/secret/diagnostic/migration/record/backup/image inventory and retention decisions; unrelated services unchanged | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
+| OP-RESTORE | F008-OPERATIONS; FR-015, FR-017, FR-019; SC-003 | Other pollers stopped; reviewed config, current credential and ownership/modes, verified digest and isolated preflight, real health/delivery; no request resumption | pass (Ubuntu 26.04 amd64, T065 2026-11-26/27) |
 
 All OP cases have gate_scope **Feature 008 acceptance**, class
 **Deployment-network/manual**, and belong to T065. F008-SHUTDOWN/T064 remains a separate
@@ -1954,3 +1954,122 @@ event log; no `409 Conflict` appeared in any console excerpt.
 08:40:58); a separate `confirm_selection` with the preview.7 digest after the IS
 recovery returned 0 (selected = running). Migration files and the recovery pin are
 retained until T065.
+
+### T065 maintenance acceptance — 2026-11-26/27
+
+- gate_id / requirement_ids: F008-OPERATIONS (cases OP-INSPECT … OP-RESTORE);
+  FR-008–FR-010, FR-015–FR-017, FR-019, FR-021; SC-003–SC-004, SC-007.
+- class: Deployment-network/manual. gate_scope: Feature 008 acceptance.
+- result / failure_class: **F008-OPERATIONS pass / none** on Ubuntu 26.04 amd64. Every
+  OP case passed; the runner faults below are acceptance-harness defects, not
+  deployment regressions. One guide finding (empty rotation input) is open as a
+  follow-up.
+- release / platform: `v0.1.0-preview.7` index
+  `ghcr.io/hman-pro/openmedia@sha256:8c27c75f1808ca97de8aeb0b0ab726d0b008f918ec43b1a1c979247f0b578cc6`
+  (source `80c72fa`), selected and running throughout. Guide blocks were extracted from
+  `4ef5dcc`, whose `deploy/README.md` differs from `80c72fa` only in the OP-EXIT
+  command (block 25). linux/amd64.
+- environment: the T063/T064 host (Ubuntu 26.04.1 LTS amd64, Docker Engine 29.10.0,
+  Compose v5.8.0, sudo-rs), residential outbound network, no inbound ports.
+
+**Host choice.** T065 ran on the production host by operator choice (plan.md, "Phase 7
+maintenance acceptance host adjustment"): the bot's outages are tolerable, and each
+case keeps its isolation as plan.md describes (OP-OUTAGE disconnects only the bot
+container from its Compose network; OP-REMOVE inventories unrelated services before
+and after).
+
+**Method.** A runner (`~/openmedia-008-acceptance/t065.sh`, outside Git) sourced guide
+blocks 03/08 and each case's block verbatim, logged Docker events, running/selected
+identity and console delivery events, and scanned every captured output for
+token-shaped strings, URLs and identifier keys. Sessions: A (2026-11-26
+10:02:36–10:14:31), A2 (10:25:39 and 10:36:03), R (13:54:53 and 13:59:32), B1/B2/B3
+(14:13:45–14:19:10), C (2026-11-27 07:45:50–07:49:02 UTC). Real Telegram requests were
+sent by the operator in a private chat; token replacements came from BotFather
+`/revoke`. Logs retained on the host outside Git (`logs/t065-*.log`).
+
+| Case | Outcome | Evidence |
+|---|---|---|
+| OP-INSPECT | **pass** | Blocks 17/18: privacy scan of all inspection output token-shaped 0, URLs 0, identifier keys 0; same single container afterwards, 0 containers created; `mem_limit` 2,147,483,648 with the 512 MiB `/tmp` tmpfs counted inside it |
+| OP-DIAGNOSTICS-OFF | **pass** | Setting `0`; local validation `diagnostic_log=off`, exit 0; host diagnostics directory absent; 0 entries under in-container `/var/log/openmedia`; only mount is the read-only secret |
+| OP-DIAGNOSTICS-ON | **pass** (limits below) | Block 19 exit 0; validation `diagnostic_log=on (/var/log/openmedia)`; directory `10001:10001 700`, today's file `10001:10001 600`; real delivery traced, 1 refusal entry, 0 token-shaped strings in the file; console scan 0/0/0 while on; 70 s idle (two healthcheck intervals) left the file at 12,212 bytes; file kept across recreation (12,870 bytes); after disable the only mount is the secret. Retention with 16 seeded day files: today plus the 12 newest seeds kept (2026-11-14…11-25), the 4 seeds 13–16 days old removed (2026-11-10…11-13) |
+| OP-EXIT | **pass** | Block 25 (`os.kill(-1, SIGKILL)` inside the container, about 100 s after start): die 10:10:44.477 → start 10:10:44.684, same container, restarts 0 → 1, healthy after 13 s with no `up`/`start`; 1 project container |
+| OP-OUTAGE | **pass** (A2) | Block 28 disconnected only the bot container at 10:25:40; `health_status: unhealthy` 10:28:16.753; runner reconnected at 10:28:36 (176 s); healthy again 42 s later; same container, StartedAt and restart count unchanged |
+| OP-ROTATE | **pass** (R, second run) | Block 21 with a new BotFather token via `sudoedit`: exit 0; kill 14:00:13.746 → healthy 14:00:32.831 (**19.1 s**); new container, local validation `token=<redacted>`; 0 temporary token files left; secret `root:10001 640`; log and console token scans 0; no editor swap or temporary copies under `~`, `/tmp`, `/var/tmp`; `~/.viminfo` and shell history token scans 0 |
+| OP-ROTATE-FAIL | **pass** | Malformed input: `invalid token shape`, exit 2, service stopped (kill 10:14:26.322). Telegram-rejected input from the stopped state: preflight passed, startup rejected, exit 1, stopped; fake-token console scan 0, 2 `<redacted>` mentions. Empty input (A2 operator error): `TELEGRAM_BOT_TOKEN_FILE: empty content`, exit 2, stopped, 0 temporary files. Corrected current input from the stopped state (block 21 without its initial confirmation): health passed twice (10:21:06 and 12:25:19) and real deliveries followed each |
+| OP-REBOOT | **pass** | Boot ID changed; Engine active 14:14:08; same container `5ae554f8…` started 14:14:07.790, first passing probe ended 14:14:25.356 (**17 s** after Engine availability); restarts 0, no `up`/`start`; 1 running project container |
+| OP-STOP | **pass** | Block 27 stopped the bot (14:15:27) with the container retained, then rebooted; boot ID changed; Engine active 14:15:49; no running project container at any 5 s poll through 188 s after Engine availability; retained container still `Exited (0)`; deliberate `start_checked` + `confirm_selection` exit 0, healthy within 13 s |
+| OP-BACKUP | **pass** | Mount `/mnt/openmedia-encrypted-backup` on `/dev/mapper/openmedia-backup`: LUKS2, `aes-xts-plain64`, 512-bit key, file-backed loop device, mount root `root:root 700`; block 22 exit 0; backup directory `700 root:root` holding `compose.yaml`, `deploy.env`, `telegram_bot_token` and the runner's version/digest/revision record, each `600 root:root` (operator listing); no media, diagnostics or request files. The vault was closed afterwards |
+| OP-REMOVE | **pass** | Block 24 exit 0: removed the project container and `openmedia_default` network only; running-service and non-project container inventories identical before and after; retained inventory `compose.yaml`, `deploy.env`, `migration/`, `secrets/` and all images (preview.5/.6/.7, recovery pin, local builds) |
+| OP-RESTORE | **pass** | `/opt/openmedia` moved aside to start from an empty destination; 0 project containers; operator confirmed no other poller; block 23 exit 0 from the backup, block 04 pull and preflight exit 0, block 05 exit 0, `confirm=0`; modes: directory `root:0 750`, `compose.yaml` 640, `deploy.env` 600, `secrets/` 700, token `root:10001 640`; kill 07:46:25.836 → healthy 07:47:06.531 (40.7 s). A card left untapped before removal showed "stale" after restore: no request resumed |
+
+**Real deliveries after each transition** (console `delivery` events, all `confirmed`):
+
+| Case ID | After | Platform | Bytes | Total / after selection |
+|---|---|---|---|---|
+| T065-DIAG-YT | Diagnostics on | YouTube | 22,847,091 | 11.50 s / 6.31 s |
+| T065-EXIT-YT | OP-EXIT recovery | YouTube | 4,191,972 | 6.13 s / 3.53 s |
+| T065-OUT-YT | OP-OUTAGE recovery (A2) | YouTube | 3,423,844 | 8.42 s / 3.67 s |
+| T065-RFIX-LI | Corrected input, 12:25 | LinkedIn | 18,914,866 | 15.10 s / 11.88 s |
+| T065-ROT1-YT | First R rotation (token later revoked) | YouTube | 1,770,015 | 7.77 s / 3.72 s |
+| T065-ROT2-YT | OP-ROTATE (R, second run) | YouTube | 3,905,936 | 7.41 s / 3.77 s |
+| T065-RB-YT | OP-REBOOT | YouTube | 27,118,621 | 14.65 s / 5.93 s |
+| T065-STOP-YT | OP-STOP restart | YouTube | 11,417,888 | 8.36 s / 3.88 s |
+| T065-REST-YT | OP-RESTORE | YouTube | 36,845,469 | 22.83 s / 13.31 s |
+
+**One poller.** At most one `openmedia-openmedia-1` container ran at any time in the
+event logs; the operator stopped `scripts/dev.sh` before OP-RESTORE.
+
+**Guide fix found by T065.** The original OP-EXIT command killed PID 1 from inside the
+container. With `init: true`, PID 1 is the init, and the kernel ignores SIGKILL sent to
+a namespace's init from inside it, so the command did nothing. `4ef5dcc` kills every
+other process instead (`os.kill(-1, SIGKILL)`). The published preview.7 `deploy/README.md`
+still carries the old command; T067 reconciles it.
+
+**Guide finding (open follow-up).** Block 21 moves the edited replacement over the live
+token file before local validation. An unchanged or empty edit (sudoedit exits 0)
+therefore stops a healthy bot and empties the token file, and validation then refuses
+to start. The failure is safe and reported (exit 2, stopped, no temporary files), but a
+non-empty check before `stop_selected` would leave the healthy bot running.
+
+**Runner faults and their outages.** All were acceptance-harness defects, fixed and
+followed by valid reruns:
+
+1. Session A: nano could not start under the host's unknown `xterm-ghostty` terminal type,
+   so the real OP-ROTATE `sudoedit` exited 1 before any stop. The runner continued into
+   the scripted OP-ROTATE-FAIL cases, which replaced the real token file. The bot was
+   down 10:14:26–10:21:06 until the operator installed a newly revoked token. Fixed:
+   terminal-type fallback, halt after a failed rotation.
+2. Session A OP-OUTAGE was invalid: its Enter was consumed 21 s after the disconnect,
+   before health went unhealthy. Fixed: the runner presses Enter 15 s after unhealthy;
+   rerun in A2.
+3. Session A diagnostics and session C backup checks globbed inside 0700 directories
+   without privilege, so byte totals, line counts and backup modes went unrecorded. The
+   retention outcome is from the privileged file inventory; the backup modes are from
+   the operator's privileged listing. Fixed for diagnostics (privileged `find`).
+4. A2 OP-ROTATE: the whole BotFather message was pasted into nano and the edit left
+   unsaved, giving the empty-input refusal above. The bot was down 10:35:42–12:25:19
+   until the corrected input was installed. The editor became vim (`SUDO_EDITOR`).
+5. Session R, first run: the runner tee'd the terminal into its log, so the vim screen
+   carried the pasted token into the log. The token reached the log file, the operator's
+   terminal and the coding assistant's session transcript (sent to its model API). It was redacted from the
+   log and revoked by the second R rotation at 14:00:13. Fixed: the editor runs on
+   `/dev/tty`, outside the logged stream; the second run's log scan is 0.
+6. Session B2 passed `@epoch` to `docker events --since`, which Docker rejects, so the
+   17 s reboot timing was read from the container's health probe log. Fixed.
+
+**Limitations.**
+- Retention was exercised for the 14-day rule only. The 50 MB byte limit was not
+  exercised on the host (seeded files were empty); controlled 002 tests cover it.
+  Retention runs when a new day's file is opened, so a process running across midnight
+  applies it at that point.
+- One host combination (Ubuntu 26.04 amd64). Other combinations stay pending.
+- The backup is a file-backed LUKS2 container on the same disk. It proves the guide
+  procedure, not off-host recoverability.
+
+**End state.** preview.7 running and selected (container `562e6b22fccd`, healthy since
+07:47:06 on 2026-11-27, restarts 0). The old root-Compose `migration/` directory,
+including its revoked credential, was deleted with the moved-aside pre-removal copy
+after the successful restore. The diagnostics directory was removed before session C.
+Still on the host: the recovery pin `openmedia-recovery:52520a82…`,
+`openmedia:local`, `~/openmedia/.env`, and the closed encrypted vault holding a copy of
+the current token.
