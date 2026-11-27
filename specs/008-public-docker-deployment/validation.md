@@ -95,9 +95,9 @@ outcomes as failure/refusal evidence, never as successful media support.
 | I001-RUNTIME | 001 SC-007; T053/T075 | Native container | Constrained container build/start/config plus real dedicated-bot polling, fresh health, active-work shutdown/child cleanup; [001 runtime evidence](../001-media-download/validation.md) | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
 | I001-TELEGRAM | 001 SC-001, SC-005–SC-006; T054/T076 | Deployment-network/manual | Deployment-network five categories and two independent accounts; originating-chat isolation, repeated/forged/stale selections, available audio-only/absent-audio, native received output | pending |
 | I001-TIMING | 001 SC-002–SC-003; T055/T080 | Deployment-network/manual | 20 eligible inspections: >=19 acknowledgments <=2s and previews <=30s; 20 eligible <=20MB deliveries: >=19 <=2min; <=2 global/<=1 Instagram concurrency; document exclusions/replacements | pending |
-| I002-DIAGNOSTICS | 002 FR/SC; quickstart local/container checks | Deployment-network/manual | Enabled real trace/refusal, console/token privacy; disabled leaves no files; retention/rotation and mounted persistence across restart; [002 quickstart](../002-file-logging/quickstart.md) | pending |
+| I002-DIAGNOSTICS | 002 FR/SC; quickstart local/container checks | Deployment-network/manual | Enabled real trace/refusal, console/token privacy; disabled leaves no files; retention/rotation and mounted persistence across restart; [002 quickstart](../002-file-logging/quickstart.md) | pass (T066 S1 2026-11-27) |
 | I003-UX | 003 SC-001–SC-005; manual matrix | Deployment-network/manual | One preview/status surface, first-page choices, audio/combined/image/video behavior, inline video including silent video on actual clients, native delivery/refusal; [003 validation](../003-streamlined-bot-ux/validation.md) | pending |
-| I004-SHORT-LINKS | 004 FR-010, SC-001–SC-005 | Deployment-network/manual | Anonymous lnkd.in short/full equivalence, video/image delivery, redirect/refusal diagnostics and console privacy; [004 validation](../004-linkedin-share-links/validation.md) | pending |
+| I004-SHORT-LINKS | 004 FR-010, SC-001–SC-005 | Deployment-network/manual | Anonymous lnkd.in short/full equivalence, video/image delivery, redirect/refusal diagnostics and console privacy; [004 validation](../004-linkedin-share-links/validation.md) | pass (T066 S1 2026-11-27) |
 | I005-LIVE | 005 SC-001–SC-005; T032/T036 | Deployment-network/manual | Plain/context/offset track identity, whole native audio, selected format/bytes, collection refusal and ordinary YouTube regression; [005 validation](../005-youtube-music-download/validation.md) | pending (T066 S0: plain/context pass; offset, collection, ordinary YouTube in S4) |
 | I005-TELEGRAM | 005 US1–US3; T033/T037 | Deployment-network/manual | One automatic native audio document/no selection, card/progress/completion, whole-track context behavior, collection refusal and ordinary YouTube; actual received-byte comparison where available | pending |
 | I005-CONTAINER | 005 T034/T038 | Native container | Configured restricted startup/health with runtime credentials; prior missing-daemon result is not source evidence | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
@@ -2140,3 +2140,51 @@ Decision (operator, 2026-11-27): defer the fix to the next release candidate; S1
 on preview.7, and the S2/S3 Instagram deliveries decide whether users reach the defect.
 `test_sources.py` should report each case separately instead of stopping at the first
 failure.
+
+### T066 S1 — diagnostics and LinkedIn short links — 2026-11-27
+
+Runner `t066.sh S1` (sha256 `d20a3a06…b8bd`) on the production host, preview.7 digest
+`8c27c75f…8cc6`, iPhone account A, 11:59–12:11 UTC. The runner log was scanned before
+reading (0 token-shaped strings, 0 URLs, 0 bot usernames). Diagnostics were enabled with
+guide block 19 (scripted edits, configuration check, stop/start, selection confirmed);
+directory `10001:10001 0700`, file `0600`. Per-request timings come from the diagnostics
+file through a reader that prints only platform, times and outcome.
+
+| # | Case | Inspection | Card | Delivered | Bytes | Outcome |
+|---|---|---|---|---|---|---|
+| 1 | T066-I002-1 ordinary YouTube | 4.22 s | 4.60 s | 17.14 s | 47,817,430 | confirmed |
+| 2 | T066-I002-2 unavailable YouTube | 1.08 s | — | — | — | failed `unavailable`, ERROR `failed_stage=checking` |
+| 3 | T066-I004-1 first original lnkd.in | 3.15 s | 3.46 s | 9.78 s | 9,303,269 | confirmed |
+| 4 | T066-I004-2 second original lnkd.in | 3.24 s | 3.50 s | 6.98 s | 8,829,701 | confirmed |
+| 5 | T066-I004-3 video, full address | 2.58 s | 2.90 s | 6.22 s | 6,379,045 | confirmed |
+| 6 | T066-I004-4 same video, short link | 2.52 s | 2.68 s | 5.25 s | 6,379,045 | confirmed |
+| 7 | T066-I004-5 picture, full address | 3.07 s | — | 5.25 s | 64,434 | confirmed (no card) |
+| 8 | T066-I004-6 same picture, app short link | 3.60 s | — | 6.58 s | 64,434 | confirmed (no card) |
+| — | T066-I002-3 non-link text | — | — | — | — | refused `no_link` |
+| — | T066-I004-7 two links in one message | — | — | — | — | refused `too_many_links` |
+
+Times are seconds from request creation. Delivery times for cards include the operator's
+selection, so card equivalence uses the card time.
+
+Diagnostics file after the sends (counts only): 206 entries; 8 received, 8 terminal, 7
+deliveries, 2 refusals; 1 ERROR, with `failed_stage`; 0 token-shaped strings; 0 `rcm=`
+and 0 `utm_`; 6 `resolved_url` entries, none with a query string. Console since
+enablement: 0 token-shaped strings, 0 URLs, 0 identifier or link keys. `failed_stage`
+values are the 003 user-facing stage names (`checking`, `downloading`, `sending`); the
+`inspection` value in the 002 contract example predates that rename.
+
+Restart on the mounted volume (stop/start): the file kept every entry and gained
+`startup`, `shutdown(signal)`, `startup` in that order. Disabled (block 19 reverted,
+recreated): startup reports `diagnostic_log=off`, the only mount is the token file, an
+ordinary YouTube delivery (21,089,494 bytes, confirmed) left the diagnostics inventory
+unchanged, and `/var/log/openmedia` in the container is empty. Retention by age and size
+on the mounted directory passed in T065 (see the T065 record).
+
+| Gate | Result | Evidence |
+|---|---|---|
+| I002-DIAGNOSTICS | **pass** | Real success trace (#1) and failure trace (#2, ERROR with `failed_stage`); refusal reasons logged; 0 tokens in file and console; console carries no links or identifiers; persistence across restart; disabled writes nothing; retention from T065 |
+| I004-SHORT-LINKS | **pass** | Both original 004 short links delivered (SC-003); short/full video: card 2.68 s vs 2.90 s, identical bytes; short/full picture: delivered 6.58 s vs 5.25 s (+1.33 s, limit 3 s), identical bytes (SC-001, SC-002); no tracking parameters or query strings in resolved addresses; refusal reasons in the log alone (SC-005); console privacy |
+
+The diagnostics directory holds real links and Telegram identifiers; the operator kept it
+past the runner's retention prompt to read the timings above. It is listed for deletion in
+follow-up.md.

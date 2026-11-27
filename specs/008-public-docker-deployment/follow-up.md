@@ -25,7 +25,9 @@ step below; this file is only the resume point.
 3. Host cleanup now that T065 is done: the recovery pin `openmedia-recovery:52520a82…`,
    `openmedia:local`, `~/openmedia/.env`, and the closed LUKS2 vault
    `/var/lib/openmedia-backup/vault.luks` (holds a copy of the current token;
-   passphrase in the Mac Keychain as `openmedia-backup-luks`).
+   passphrase in the Mac Keychain as `openmedia-backup-luks`). Also the T066 S1
+   diagnostics directory `/opt/openmedia/diagnostics` (real links and Telegram IDs), unless
+   already deleted after the S1 timing read.
 4. Release follow-up: add a bounded retry to `download_url`
    (`scripts/release/collect_sources.py`) in the next release candidate.
 5. Release follow-up: `codec_family()` (`src/openmedia/sources/__init__.py`) misses the
