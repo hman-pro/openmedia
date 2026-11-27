@@ -13,16 +13,18 @@ step below; this file is only the resume point.
   preview.6 and preview.7. T065 (2026-11-26/27) passed every maintenance case on the
   production host by operator choice.
 - **Production:** preview.7 running and selected on the host.
-- **T066 done (2026-11-27)**, cross-referenced in 001–006 `validation.md`. **T068 done**
-  (opt-in e2e suite). **T067 open.**
+- **T066–T068 done (2026-11-27).** Feature 008 is complete as a preview. T067 reconciled
+  `README.md`, `deploy/README.md`, the preview.7 release notes (update paragraph) and the
+  validation register. Stable promotion still needs I001-SOURCES and hosts beyond Ubuntu
+  26.04 amd64.
 
 ## Next steps
 
-1. Run T067 (claims reconciliation).
-2. T067 must note that the published preview.7 `deploy/README.md` predates two guide
-   fixes: the OP-EXIT command (`4ef5dcc`; the old one kills PID 1, a no-op under
-   `init: true`) and the rotation empty-replacement guard (block 21 now ends before
-   `stop_selected` when the edited file is empty; `tests/contract/test_deploy_guide_rotation.py`).
+1. Next release candidate (preview.8): items 4, 5 and 7 below, test-first, then the release
+   lessons under "Release state". Run `tests/e2e` against the dev bot before tagging and
+   against production after the update; the instant-tap test flips to a pass once the
+   race is fixed.
+2. Merge PR #1 (`008-public-docker-deployment` → `main`, open, 41 commits ahead as of 2026-11-27) when ready.
 3. Host cleanup now that T065 is done: the recovery pin `openmedia-recovery:52520a82…`,
    `openmedia:local`, `~/openmedia/.env`, and the closed LUKS2 vault
    `/var/lib/openmedia-backup/vault.luks` (holds a copy of the current token;
@@ -114,4 +116,4 @@ Release lessons that cost a version before:
 
 ## Suggested first prompt
 
-"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md` with T067."
+"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md` for preview.8 (follow-up items 4, 5 and 7)."

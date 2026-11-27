@@ -2359,8 +2359,13 @@ Reconciled documents:
   recorded as passed on Ubuntu 26.04 amd64 with other hosts pending; operators are told
   to follow the repository guide, because the preview.7 source release predates the
   OP-EXIT command fix (`4ef5dcc`) and the empty-input rotation guard.
-- Immutable tags, images and source releases were not changed. The preview.7 release keeps
-  its pre-release flag.
+- preview.7 release notes (edited 2026-11-27, after `c945e72` was pushed): the original
+  paragraph is kept and an "Update 2026-11-27" paragraph appended. It records server
+  acceptance on Ubuntu 26.04 amd64, names the open stable gates (I001-SOURCES; Ubuntu 24.04
+  and arm64 hosts) and points operators to the guide at `c945e72` instead of the copy in
+  the release's sources. Tag, pre-release flag and all 9 assets checked unchanged before
+  and after the edit.
+- Immutable tags, images and source releases were not changed.
 
 Feature 008 is complete as a preview. Stable promotion still needs I001-SOURCES to pass
 (the `vp09.*` codec fix in the next release candidate and Instagram single-image access)
