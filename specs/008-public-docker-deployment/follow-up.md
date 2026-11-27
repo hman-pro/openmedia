@@ -28,6 +28,12 @@ step below; this file is only the resume point.
    passphrase in the Mac Keychain as `openmedia-backup-luks`).
 4. Release follow-up: add a bounded retry to `download_url`
    (`scripts/release/collect_sources.py`) in the next release candidate.
+5. Release follow-up: `codec_family()` (`src/openmedia/sources/__init__.py`) misses the
+   RFC 6381 form `vp09.*`, so an Instagram DASH VP9 download is refused with `source codec
+   changed` (T066 S0). Fix test-first in the next release candidate; also check
+   `hev1`/`hvc1` and `vp08`. Pre-existing since `f4708eb`; deferred by the operator.
+6. Repeat the Instagram image check once, with plain Instaloader and a single request, a
+   few hours after 2026-11-27 10:10. This rules out our own requests as the cause of the 401.
 
 ## Release state
 

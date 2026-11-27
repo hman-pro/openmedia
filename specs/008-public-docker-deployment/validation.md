@@ -91,17 +91,17 @@ outcomes as failure/refusal evidence, never as successful media support.
 | gate_id | requirement_ids / original gate | class | Required execution / earlier evidence index | result |
 |---|---|---|---|---|
 | I001-CONTROLLED | 001 FR/SC controlled acceptance; 008 FR-021 | Controlled | Full media/adapter/delivery/lifecycle regression suite; [001 validation](../001-media-download/validation.md) | pass |
-| I001-SOURCES | 001 FR-002, SC-001; T026/T074 | Deployment-network/manual | Full five-category inspect/download native formats, actual bytes, anonymous access and limitations; earlier 001 validation including 2026-09-21/22 attempts | pending |
-| I001-RUNTIME | 001 SC-007; T053/T075 | Native container | Constrained container build/start/config plus real dedicated-bot polling, fresh health, active-work shutdown/child cleanup; [001 runtime evidence](../001-media-download/validation.md) | pending |
+| I001-SOURCES | 001 FR-002, SC-001; T026/T074 | Deployment-network/manual | Full five-category inspect/download native formats, actual bytes, anonymous access and limitations; earlier 001 validation including 2026-09-21/22 attempts | fail (T066 S0 2026-11-27: Instagram video pre-existing `vp09` codec-family defect; Instagram image anonymous 401, baseline identical, provisional) |
+| I001-RUNTIME | 001 SC-007; T053/T075 | Native container | Constrained container build/start/config plus real dedicated-bot polling, fresh health, active-work shutdown/child cleanup; [001 runtime evidence](../001-media-download/validation.md) | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
 | I001-TELEGRAM | 001 SC-001, SC-005–SC-006; T054/T076 | Deployment-network/manual | Deployment-network five categories and two independent accounts; originating-chat isolation, repeated/forged/stale selections, available audio-only/absent-audio, native received output | pending |
 | I001-TIMING | 001 SC-002–SC-003; T055/T080 | Deployment-network/manual | 20 eligible inspections: >=19 acknowledgments <=2s and previews <=30s; 20 eligible <=20MB deliveries: >=19 <=2min; <=2 global/<=1 Instagram concurrency; document exclusions/replacements | pending |
 | I002-DIAGNOSTICS | 002 FR/SC; quickstart local/container checks | Deployment-network/manual | Enabled real trace/refusal, console/token privacy; disabled leaves no files; retention/rotation and mounted persistence across restart; [002 quickstart](../002-file-logging/quickstart.md) | pending |
 | I003-UX | 003 SC-001–SC-005; manual matrix | Deployment-network/manual | One preview/status surface, first-page choices, audio/combined/image/video behavior, inline video including silent video on actual clients, native delivery/refusal; [003 validation](../003-streamlined-bot-ux/validation.md) | pending |
 | I004-SHORT-LINKS | 004 FR-010, SC-001–SC-005 | Deployment-network/manual | Anonymous lnkd.in short/full equivalence, video/image delivery, redirect/refusal diagnostics and console privacy; [004 validation](../004-linkedin-share-links/validation.md) | pending |
-| I005-LIVE | 005 SC-001–SC-005; T032/T036 | Deployment-network/manual | Plain/context/offset track identity, whole native audio, selected format/bytes, collection refusal and ordinary YouTube regression; [005 validation](../005-youtube-music-download/validation.md) | pending |
+| I005-LIVE | 005 SC-001–SC-005; T032/T036 | Deployment-network/manual | Plain/context/offset track identity, whole native audio, selected format/bytes, collection refusal and ordinary YouTube regression; [005 validation](../005-youtube-music-download/validation.md) | pending (T066 S0: plain/context pass; offset, collection, ordinary YouTube in S4) |
 | I005-TELEGRAM | 005 US1–US3; T033/T037 | Deployment-network/manual | One automatic native audio document/no selection, card/progress/completion, whole-track context behavior, collection refusal and ordinary YouTube; actual received-byte comparison where available | pending |
-| I005-CONTAINER | 005 T034/T038 | Native container | Configured restricted startup/health with runtime credentials; prior missing-daemon result is not source evidence | pending |
-| I006-CONTAINER | 006 T019 | Native container | Locked distribution/build/import, version/notices, configured startup and live health; [006 validation](../006-media-delivery-titles/validation.md#external-acceptance-and-release-gaps) | pending |
+| I005-CONTAINER | 005 T034/T038 | Native container | Configured restricted startup/health with runtime credentials; prior missing-daemon result is not source evidence | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
+| I006-CONTAINER | 006 T019 | Native container | Locked distribution/build/import, version/notices, configured startup and live health; [006 validation](../006-media-delivery-titles/validation.md#external-acceptance-and-release-gaps) | pass (preview.7 on Ubuntu 26.04 amd64, T066 S0 2026-11-27) |
 | I006-TITLES | 006 FR-001–FR-009, SC-001–SC-005; manual quickstart | Deployment-network/manual | Caption, saved/forwarded filenames, long/Unicode titles, client versions/rendering/playback, native received bytes including YouTube Music; controlled upload labels do not close this gate | pending |
 
 ## Execution records
@@ -1991,7 +1991,7 @@ sent by the operator in a private chat; token replacements came from BotFather
 |---|---|---|
 | OP-INSPECT | **pass** | Blocks 17/18: privacy scan of all inspection output token-shaped 0, URLs 0, identifier keys 0; same single container afterwards, 0 containers created; `mem_limit` 2,147,483,648 with the 512 MiB `/tmp` tmpfs counted inside it |
 | OP-DIAGNOSTICS-OFF | **pass** | Setting `0`; local validation `diagnostic_log=off`, exit 0; host diagnostics directory absent; 0 entries under in-container `/var/log/openmedia`; only mount is the read-only secret |
-| OP-DIAGNOSTICS-ON | **pass** (limits below) | Block 19 exit 0; validation `diagnostic_log=on (/var/log/openmedia)`; directory `10001:10001 700`, today's file `10001:10001 600`; real delivery traced, 1 refusal entry, 0 token-shaped strings in the file; console scan 0/0/0 while on; 70 s idle (two healthcheck intervals) left the file at 12,212 bytes; file kept across recreation (12,870 bytes); after disable the only mount is the secret. Retention with 16 seeded day files: today plus the 12 newest seeds kept (2026-11-14…11-25), the 4 seeds 13–16 days old removed (2026-11-10…11-13) |
+| OP-DIAGNOSTICS-ON | **pass** (limits below) | Block 19 exit 0; validation `diagnostic_log=on (/var/log/openmedia)`; directory `10001:10001 700`, today's file `10001:10001 600`; real delivery traced, 1 refusal entry, 0 token-shaped strings in the file; console scan 0/0/0 while on; 70 s idle (two healthcheck intervals) left the file at 12,212 bytes; file kept across recreation (12,870 bytes); after disable the only mount is the secret. Retention with 16 seeded day files of 4,000,000 bytes each: today plus the 12 newest seeds kept (2026-11-14…11-25); seeds 14–16 days old removed by age (11-10…11-12) and the 13-day seed (11-13) by size, since 13 × 4,000,000 bytes exceeds 50,000,000 |
 | OP-EXIT | **pass** | Block 25 (`os.kill(-1, SIGKILL)` inside the container, about 100 s after start): die 10:10:44.477 → start 10:10:44.684, same container, restarts 0 → 1, healthy after 13 s with no `up`/`start`; 1 project container |
 | OP-OUTAGE | **pass** (A2) | Block 28 disconnected only the bot container at 10:25:40; `health_status: unhealthy` 10:28:16.753; runner reconnected at 10:28:36 (176 s); healthy again 42 s later; same container, StartedAt and restart count unchanged |
 | OP-ROTATE | **pass** (R, second run) | Block 21 with a new BotFather token via `sudoedit`: exit 0; kill 14:00:13.746 → healthy 14:00:32.831 (**19.1 s**); new container, local validation `token=<redacted>`; 0 temporary token files left; secret `root:10001 640`; log and console token scans 0; no editor swap or temporary copies under `~`, `/tmp`, `/var/tmp`; `~/.viminfo` and shell history token scans 0 |
@@ -2061,9 +2061,10 @@ followed by valid reruns:
    17 s reboot timing was read from the container's health probe log. Fixed.
 
 **Limitations.**
-- Retention was exercised for the 14-day rule only. The 50 MB byte limit was not
-  exercised on the host (seeded files were empty); controlled 002 tests cover it.
-  Retention runs when a new day's file is opened, so a process running across midnight
+- Both retention rules fired: age (14+ days) and size (the 13-day seed could only go by
+  the 50,000,000-byte limit). The runner's byte totals failed (unprivileged), so the held
+  total (12 × 4,000,000 bytes plus today's file) is inferred from the seed size and the
+  surviving file list, not measured. Retention runs when a new day's file is opened, so a process running across midnight
   applies it at that point.
 - One host combination (Ubuntu 26.04 amd64). Other combinations stay pending.
 - The backup is a file-backed LUKS2 container on the same disk. It proves the guide
@@ -2076,3 +2077,66 @@ after the successful restore. The diagnostics directory was removed before sessi
 Still on the host: the recovery pin `openmedia-recovery:52520a82…`,
 `openmedia:local`, `~/openmedia/.env`, and the closed encrypted vault holding a copy of
 the current token.
+
+### T066 S0 — container gates and live source suite — 2026-11-27
+
+- gate_id / requirement_ids: I001-RUNTIME, I005-CONTAINER, I006-CONTAINER, I001-SOURCES,
+  I005-LIVE (inherited stable-readiness obligations).
+- class: Native container (running deployment) and Deployment-network/manual.
+  gate_scope: Inherited stable-readiness obligation.
+- release / platform: `v0.1.0-preview.7` index
+  `ghcr.io/hman-pro/openmedia@sha256:8c27c75f1808ca97de8aeb0b0ab726d0b008f918ec43b1a1c979247f0b578cc6`
+  (labels `org.opencontainers.image.version=v0.1.0-preview.7`, revision `80c72fa`),
+  linux/amd64. The live suite ran from a checkout of `a9a0f9d`, whose `src/`,
+  `pyproject.toml` and `uv.lock` are identical to `80c72fa`.
+- environment: production host (Ubuntu 26.04.1 amd64, Engine 29.10.0, Compose v5.8.0)
+  for the container checks. The live suite ran on the operator's Mac on the same LAN,
+  with the same public egress address as the host (compared by hash). The host has no
+  `uv`. Instaloader 4.15.3.
+
+**Container checks (running container `562e6b22fccd`, healthy since 07:47:06, restarts 0).**
+User 10001:10001; read-only root (`touch /probe` refused); `init: true`; capabilities
+effective and bounding sets 0, `cap_drop: ALL`, `no-new-privileges`, not privileged; no
+published ports; 2 CPUs (`NanoCpus` 2,000,000,000), memory 2 GiB, `/tmp` tmpfs 512 MiB
+`noexec,nosuid`; json-file logs 3 × 10 MB; restart `unless-stopped`; only mount the
+read-only token file. In the image: package `openmedia 0.1.0`; `import regex,
+openmedia.media_titles` succeeds (regex 2026.8.31); `/app/LICENSE`,
+`/app/THIRD_PARTY_NOTICES.md` (3 regex mentions) and the regex `LICENSE.txt` present.
+Healthcheck `python -m openmedia --healthcheck` every 30 s; last probe exit 0.
+Observations: memory+swap limit 4 GiB (2 GiB swap allowed beyond the memory limit); no
+PID limit (not required).
+
+| Gate | Result | Evidence |
+|---|---|---|
+| I001-RUNTIME | **pass** | The constraints above on the selected digest; real polling with fresh health (healthcheck enforces heartbeat/poll freshness); active-work shutdown on this same digest from T064 run 2 SD (stop at `downloading`, exit in 3.39 s, no yt-dlp/ffmpeg/ffprobe/deno processes, no interrupted file) |
+| I005-CONTAINER | **pass** | Configured restricted startup with the runtime file credential and live health on the selected digest (above; T065 restore start 07:46:55 → healthy 07:47:06) |
+| I006-CONTAINER | **pass** | Locked image from the release pipeline (T062); version label/package, regex import and licence/notices in the image; configured startup and live health |
+
+**Live source suite.** `tests/live/test_sources.py` with the private nine-case manifest
+(outside Git). The test stops at its first failing case, and it reached Instagram image
+first, so each case was rerun with the same calls in a per-case script (scratch, outside
+Git), one case per call with Instagram spacing of 60 s.
+
+| Case ID | Outcome | Evidence |
+|---|---|---|
+| T066-SRC-YT-VIDEO | **pass** | Identity matches; 137 options, 79 selectable; smallest native choice format `139-drc` m4a, 3,871,021 bytes |
+| T066-SRC-YTM-PLAIN | **pass** | Kind audio, canonical `music.youtube.com` watch address, automatic single choice format `140` m4a, 3,344,267 bytes |
+| T066-SRC-YTM-CONTEXT | **pass** | Same track identity, same automatic `140`, 3,344,267 bytes |
+| T066-SRC-LI-VIDEO | **pass** | Identity matches; format `1` mp4, 4,843,445 bytes |
+| T066-SRC-LI-SHORT | **pass** | lnkd.in app link resolves to the same post; same format and bytes |
+| T066-SRC-LI-HYPHEN | **pass** | Hyphen-code address; same post, format and bytes |
+| T066-SRC-LI-IMAGE | **pass** | Identity matches; native jpg, 147,246 bytes |
+| T066-SRC-IG-VIDEO | **fail — pre-existing product defect** | Inspection passed (six video options: three DASH VP9, three without codec). The download of the DASH option `vcodec=vp09.00.40.08…` produced a VP9 1080×1080 file (ffprobe `vp9`), then failed `format_unavailable` with `source codec changed`. Cause: `codec_family()` (`src/openmedia/sources/__init__.py`) maps `vp9*` but not the RFC 6381 form `vp09.*`, so a correct file is refused. Present since `f4708eb` (feature 003); not a deployment regression. YouTube labels VP9 as `vp9` (28 selectable VP9 options classified correctly, card offered H.264), so only `vp09.*` sources are affected. Whether the Instagram card offers the VP9 option, and so whether users reach the defect, is checked by the S2/S3 Instagram deliveries |
+| T066-SRC-IG-IMAGE | **fail — source-blocked (provisional)** | Inspection failed `unavailable`: Instagram GraphQL `401 … "Please wait a few minutes before you try again."` at 09:59 and again at 10:09 UTC after a cool-down. Independent baseline: unwrapped Instaloader 4.15.3 `Post.from_shortcode` from the same egress at about 10:25 returned the same 401. Provisional because the suite's own requests may have triggered the throttle; repeat the baseline later before final classification |
+
+Gate results from S0: **I001-SOURCES fail** (Instagram video: pre-existing product
+defect; Instagram image: anonymous access refused by the source, provisional). **I005-LIVE
+partial**: plain and context music identity, whole native audio and format/bytes pass;
+offset, collection refusal and the ordinary-YouTube regression run in S4.
+
+Follow-ups: fix `codec_family()` for `vp09.*` (and check `hev1`/`hvc1`, `vp08`) with a
+failing test first. The fix needs a new preview release to reach the deployment.
+Decision (operator, 2026-11-27): defer the fix to the next release candidate; S1–S4 run
+on preview.7, and the S2/S3 Instagram deliveries decide whether users reach the defect.
+`test_sources.py` should report each case separately instead of stopping at the first
+failure.
