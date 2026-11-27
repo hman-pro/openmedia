@@ -3,7 +3,7 @@
 Three guarantees are established here, because every later phase depends on them:
 
 1. **Controlled tests cannot reach the network.** An autouse fixture blocks outbound
-   TCP and name resolution for every test that is not marked ``live``. A test that
+   TCP and name resolution for every test that is not marked ``live`` or ``e2e``. A test that
    silently talks to Telegram, YouTube, Instagram, or LinkedIn is not a controlled test;
    it is a flaky one whose failures track someone else's outage.
 2. **Telegram is exercised through a fake transport**, not a mock of our own code. The
@@ -51,13 +51,13 @@ def _blocked(detail: str) -> BlockedNetworkAccess:
 
 @pytest.fixture(autouse=True)
 def block_network(request: pytest.FixtureRequest) -> Iterator[None]:
-    """Refuse outbound connections and DNS for every test not marked ``live``.
+    """Refuse outbound connections and DNS for every test not marked ``live`` or ``e2e``.
 
     Connect-time and resolution-time interception is deliberate: constructing a socket is
     harmless and some libraries do it at import, so blocking the constructor would break
     tests for no safety gain. Nothing leaves the machine without one of these calls.
     """
-    if request.node.get_closest_marker("live") is not None:
+    if request.node.get_closest_marker("live") is not None or request.node.get_closest_marker("e2e") is not None:
         yield
         return
 

@@ -24,6 +24,12 @@ dev = [
     "pytest>=8,<10",
     "pytest-asyncio>=1,<2",
 ]
+# Opt-in end-to-end suite (tests/e2e): drives a running bot from a dedicated Telegram
+# test account over the user API. Never installed in the runtime image; see 008
+# research.md "End-to-end acceptance client".
+e2e = [
+    "telethon==1.46.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
@@ -38,10 +44,11 @@ testpaths = ["tests"]
 
 # `--strict-markers` turns a mistyped marker into an error instead of a silently
 # unfiltered test run, which is what keeps the `live` gate below trustworthy.
-addopts = "--strict-markers --strict-config -m 'not live'"
+addopts = "--strict-markers --strict-config -m 'not live and not e2e'"
 
 markers = [
     "live: opt-in check that reaches a real upstream source. Excluded by default; run deliberately with `uv run pytest -m live`.",
+    "e2e: opt-in end-to-end check that drives a running bot from a Telegram test account. Excluded by default; run with `uv run --group e2e pytest -m e2e` (tests/e2e/README.md).",
 ]
 
 # The bot is async end to end, so every async test is an asyncio test; "auto" avoids

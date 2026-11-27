@@ -642,3 +642,35 @@ Add this exact binary/source version to `release/source-policy.json`, retaining 
 earlier reviewed version, under the same rules as the SRT update above: no wildcards,
 no bypass of authenticated source collection, and a complete gated workflow on a new
 immutable tag pair.
+
+## End-to-end acceptance client — 2026-11-27 (T068)
+
+**Decision**: Keep the T066 automated client as an opt-in pytest suite (`tests/e2e`,
+marker `e2e`) that drives a running bot from a dedicated Telegram test account through the
+Telegram user API, using Telethon 1.46.0 in a separate locked dependency group `e2e`.
+
+**Rationale**: The controlled suite replaces Telegram with a fake transport and the live
+suite reaches sources only; neither observes what a user receives. T066 showed the gap is
+real: the Bot API rewrites upload filenames, and a tap can race the card's publication —
+both visible only from a real client. The Bot API cannot play the user (bots do not receive
+other bots' messages), so a user-API client is required. Telethon is the maintained
+asyncio MTProto library with callback-button and file-attribute access.
+
+**Alternatives considered**: Pyrogram (archived upstream, no maintained release); TDLib
+bindings (native library build, far larger than needed); a `uv run --with` script outside
+the lock (no hash pinning, report-only, no assertions); manual phone runs (not repeatable).
+
+**Dependency record (constitution IV)**: purpose — test-only Telegram user client for the
+opt-in e2e suite; never imported by `src/`, never installed in the runtime image (the image
+installs `uv sync --no-dev`, and `uv export --no-dev` contains none of the group). Version
+constraint — `telethon==1.46.0`, hash-pinned in `uv.lock` with its transitive packages
+`pyaes` 1.6.1, `pyasn1` 0.6.5 and `rsa` 4.9.1. Licences — Telethon MIT, pyaes MIT, pyasn1
+BSD-2-Clause, rsa Apache-2.0; all permissive and compatible with this MIT project. The
+release source collector works from the image inventory, so the group adds no release
+materials beyond the lock file itself.
+
+**Credential handling**: the test account's API id/hash and login session and the target
+bot username come from the environment or the OS keyring (account `openmedia-e2e`); the
+session is created by `python -m tests.e2e.login`, never printed or written to a file, and
+revocable from Telegram's device list. Links come from the private manifest; results carry
+no links or Telegram identifiers.

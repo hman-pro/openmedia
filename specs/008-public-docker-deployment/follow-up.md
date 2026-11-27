@@ -49,11 +49,15 @@ step below; this file is only the resume point.
      trailing `…` is dropped (probed with the test bot). 006 allows a 240-byte stem, so long
      titles arrive underscored. Decided 2026-11-27: recorded as a Telegram limitation
      (006 SC-002 amended); capping the stem at 60 code points stays an option.
-8. The T066 harness (Telethon client for account B) lives in the session scratchpad, which
-   a reboot can clear. Decide whether to keep it under `scripts/acceptance/` (no links or
-   IDs in it; credentials from the Keychain; Telethon via `uv run --with`, not the lock).
-   Keychain items: `openmedia-e2e-tg-api-id`, `-tg-api-hash`, `-tg-session`, `-bot-username`
-   (account `openmedia-e2e`). Revoke the session in Telegram > Devices when done.
+8. T068: the T066 client is now the opt-in suite `tests/e2e/` (README there), driven by a
+   dedicated test account against the dev bot by default. First run 2026-11-27 against the
+   dev bot: 18 passed, 2 expected failures (publish/tap race reproduced; Instagram picture
+   source-blocked), expiry case opt-in. Keychain account `openmedia-e2e`: `-tg-api-id`,
+   `-tg-api-hash`, `-tg-session` (test account), `-dev-bot-username`, `-bot-username`
+   (production). The second personal account used in T066 S2–S4 was logged out. The private
+   manifest is `~/.config/openmedia/live-sources.json` (e2e-only cases under `e2e_cases`).
+   Start `scripts/dev.sh` before the suite: its exact `uv sync` removes the e2e group,
+   and `uv run --group e2e` adds it back.
 
 ## Release state
 
