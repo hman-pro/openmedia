@@ -52,6 +52,18 @@ step below; this file is only the resume point.
      trailing `…` is dropped (probed with the test bot). 006 allows a 240-byte stem, so long
      titles arrive underscored. Decided 2026-11-27: recorded as a Telegram limitation
      (006 SC-002 amended); capping the stem at 60 code points stays an option.
+   - Stale accepted release notes: `scripts/release/publish.py` (`accepted-notes.txt`)
+     hard-codes "Deployment acceptance and inherited source/live readiness gates remain
+     open"; since 008 deployment acceptance passed, preview.8 would publish a wrong
+     sentence. Make the text name only the gates still open.
+   - CI time: the `sources` job (`.github/workflows/ci.yml`) takes about 20 minutes on every
+     push, docs-only ones included. Run it only when release inputs change (`Dockerfile`,
+     `uv.lock`, `pyproject.toml`, `release/`, `scripts/release/`, the workflows) and always
+     on `workflow_call` and tags. Do it per job, not with a workflow-level `paths:` filter,
+     which would also skip `controlled` and `native`. Use a `git diff` step, not a new
+     third-party action, and check that `publish.py`'s `ci.yml` assertions still pass.
+     Accepted gap: a new Debian security revision with no repository change shows up only
+     at the pre-tag no-cache inventory (release lessons below).
 8. T068: the T066 client is now the opt-in suite `tests/e2e/` (README there), driven by a
    dedicated test account against the dev bot by default. First run 2026-11-27 against the
    dev bot: 18 passed, 2 expected failures (publish/tap race reproduced; Instagram picture
