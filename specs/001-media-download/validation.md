@@ -691,3 +691,21 @@ progressive format `1` downloaded unchanged, 3,599,614 bytes, and passed the MP4
 ffprobe stream checks. **Instagram video now has passing live evidence through the product's
 transport.** Finding 9 stands: formats `1`–`3` share one label. Still open: a `GraphImage`
 single-image example (T097 f), then the five-category suite for T026/T074.
+
+## Deployment acceptance through feature 008 T066 — 2026-11-27
+
+Feature 008 re-ran this feature's external gates against the released preview.7 container
+on the operator's Ubuntu 26.04 amd64 host and recorded the evidence in [008 validation](../008-public-docker-deployment/validation.md)
+(sections "T066 S0" to "T066 S4" and the inherited-gate register). Case IDs are
+sanitized there; links and Telegram IDs stay in private notes. This note does not change
+this feature's task boxes.
+
+| Gate (008 register) | Tasks here | Result |
+|---|---|---|
+| I001-RUNTIME | T053/T075 | **pass**: constrained container, real polling with fresh health, active-work shutdown with no child processes left (S0; T064 run 2) |
+| I001-TELEGRAM | T054/T076 | **pass with limits**: two accounts, all categories except the Instagram picture, originating-chat delivery, double and stale taps, received bytes equal native output (S1–S4). One account acting on another's card has no client path (forwarding strips the buttons); a forged callback stays controlled-only |
+| I001-TIMING | T055/T080 | **pass** (S2): 24 inspections (acknowledgment ≤ 2 s 23 of 24, card ≤ 30 s 22 of 22) and 20 deliveries ≤ 20 MB (20 of 20 within 120 s) from the deployment network through an automated Telegram client; no exclusions |
+| I001-SOURCES | T026/T074 | **fail, stays open**: the live suite's Instagram video hits the pre-existing `vp09` codec-family defect (the bot's card picks H.264 and delivered the reel 4 of 4 times); the Instagram picture is refused anonymously (401, unchanged after 3 h with a plain Instaloader baseline), so it is source-blocked |
+
+The 2026-09-21 container hold no longer applies: this evidence was taken from the released
+container, not a local run.

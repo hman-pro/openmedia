@@ -128,3 +128,20 @@ Both lie in 001's yt-dlp adapter; 003 exposed them.
 - ~~**Rejected links leave no diagnostic event**~~ Resolved by 004: refused messages write a `refused` entry; see [004 validation](../004-linkedin-share-links/validation.md)., which slowed diagnosis of the LinkedIn case.
 - **Local runs on macOS** need `OPENMEDIA_WORK_DIR=/private/tmp/openmedia`: `/tmp` is a
   symlink and the workspace sweep refuses a symlinked root. The container is unaffected.
+
+## Deployment acceptance through feature 008 T066 — 2026-11-27
+
+Feature 008 re-ran this feature's external gates against the released preview.7 container
+on the operator's Ubuntu 26.04 amd64 host and recorded the evidence in [008 validation](../008-public-docker-deployment/validation.md)
+(sections "T066 S0" to "T066 S4" and the inherited-gate register). Case IDs are
+sanitized there; links and Telegram IDs stay in private notes. This note does not change
+this feature's task boxes.
+
+| Gate (008 register) | Result |
+|---|---|
+| I003-UX | **pass** (S3): one card edited in place plus the file, at most three buttons, no tap for single-choice LinkedIn media, pictures as documents, combined and silent video inline (silent video not as an animation), absent audio explained on the card; the operator played the combined and silent videos on an iPhone |
+
+Findings for a later release (pre-existing, 008 follow-up item 7): a tap that arrives
+before the card is recorded is answered "stale"; a checking-stage `internal` failure
+repeats its first sentence. The merged-video audio tie-break and Opus-on-iOS limitations
+above were not re-tested.

@@ -335,3 +335,17 @@ and the pre-existing tracked Python cache modification remain outside the featur
   ordinary YouTube, card progress and byte comparison where available). T034/T038
   remain open for container build/startup/health verification. User playback confirmation
   is accepted as partial manual evidence, without marking unperformed checks complete.
+
+## Deployment acceptance through feature 008 T066 — 2026-11-27
+
+Feature 008 re-ran this feature's external gates against the released preview.7 container
+on the operator's Ubuntu 26.04 amd64 host and recorded the evidence in [008 validation](../008-public-docker-deployment/validation.md)
+(sections "T066 S0" to "T066 S4" and the inherited-gate register). Case IDs are
+sanitized there; links and Telegram IDs stay in private notes. This note does not change
+this feature's task boxes.
+
+| Gate (008 register) | Tasks here | Result |
+|---|---|---|
+| I005-LIVE | T032/T036 | **pass** (S0 + S4): plain, context and offset links resolve to the same track and native format; collection refusal; ordinary YouTube unchanged |
+| I005-TELEGRAM | T033/T037 | **pass** (S4): one automatic `.m4a` document with no picker; card progress and completion; plain, context and offset links delivered byte-identical files equal to native format 140 fetched by the deployed image |
+| I005-CONTAINER | T034/T038 | **pass** (S0): configured restricted startup with runtime file credentials and live health |

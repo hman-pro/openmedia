@@ -2317,3 +2317,20 @@ the `failure_message` fallback); pre-existing.
 | I001-TELEGRAM | **pass** | Two accounts (A on iPhone in S1, B in S2–S4); five categories delivered except Instagram picture (source-blocked, I001-SOURCES); originating-chat delivery; double tap → one delivery; stale tap refused; audio-only delivered; absent audio explained; received bytes equal native output (S4) and stable across repeats (S2). Limits: B acting on A's card has no client path (forwarding strips the buttons), and a forged callback stays controlled-only |
 | I003-UX | **pass** | Message shape, button count, tap counts and send methods verified from message attributes; the operator played the combined and silent videos on the iPhone (account B): both inline, the silent one not looping |
 | I006-TITLES | **pass with a Telegram limitation** | Captions pass FR-004; the bot sends FR-005 filenames; forwarded filename unchanged; `/` → `_` passes. The hosted Bot API rewrites stems over 60 characters (`…` dropped, spaces → `_`) and replaces emoji with spaces; recorded as a Telegram limitation by operator decision (2026-11-27), with 006 SC-002 amended to measure the filename the bot sends. Missing-title fallback not reached live (controlled tests only) |
+
+### T066 completion — 2026-11-27
+
+Every required matrix case has an executed outcome or an evidenced source-blocked outcome
+(S0–S4), real delivery passes in all five categories except the source-blocked Instagram
+picture, and no deployment regression or unclassified failure remains. Open or limited
+inherited gates, each classified: **I001-SOURCES fail** (pre-existing `vp09` codec-family
+defect in the live suite, not reached through the bot's card; Instagram picture
+source-blocked), **I001-TELEGRAM** limits (no client path for acting on another account's
+card; forged callbacks controlled-only), **I006-TITLES** Telegram filename limitation.
+Pre-existing product findings (publish/tap race, repeated failure sentence) are queued for
+the next release candidate (follow-up item 7).
+
+Cross-references were added to the earlier records: 001, 002, 003, 004, 005 and 006
+`validation.md`, each under "Deployment acceptance through feature 008 T066 — 2026-11-27".
+The earlier features' task boxes are unchanged. T066 is marked complete; T067 reconciles
+public claims next.

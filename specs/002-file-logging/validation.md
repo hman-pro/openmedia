@@ -34,3 +34,15 @@ Run on 2026-09-21 on macOS (Darwin 25.6.0), Python 3.13, Docker 29.8.0, branch
   `request_id`; the full suite is 357 passed.
 - The unwritable-directory tests rely on POSIX permissions and would not fail as intended if
   the suite ran as root.
+
+## Deployment acceptance through feature 008 T066 — 2026-11-27
+
+Feature 008 re-ran this feature's external gates against the released preview.7 container
+on the operator's Ubuntu 26.04 amd64 host and recorded the evidence in [008 validation](../008-public-docker-deployment/validation.md)
+(sections "T066 S0" to "T066 S4" and the inherited-gate register). Case IDs are
+sanitized there; links and Telegram IDs stay in private notes. This note does not change
+this feature's task boxes.
+
+| Gate (008 register) | Result |
+|---|---|
+| I002-DIAGNOSTICS | **pass** (S1): real success and failure traces in the deployed container, refusal reasons logged, no token in the file or console, no links or identifiers on the console, persistence across restart, nothing written when disabled; retention from 008 T065 |

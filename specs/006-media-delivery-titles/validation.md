@@ -495,3 +495,16 @@ unverified until actually executed. Do not treat local builds or synthetic confi
 as container readiness. Final controlled suite: 944 passed, 3 deselected, 32 PTB
 retry_after deprecation warnings; package build and notices verified. The known
 uv 0.13.1/backend range warning is non-fatal and recorded above.
+
+## Deployment acceptance through feature 008 T066 — 2026-11-27
+
+Feature 008 re-ran this feature's external gates against the released preview.7 container
+on the operator's Ubuntu 26.04 amd64 host and recorded the evidence in [008 validation](../008-public-docker-deployment/validation.md)
+(sections "T066 S0" to "T066 S4" and the inherited-gate register). Case IDs are
+sanitized there; links and Telegram IDs stay in private notes. This note does not change
+this feature's task boxes.
+
+| Gate (008 register) | Tasks here | Result |
+|---|---|---|
+| I006-CONTAINER | T019 | **pass** (S0): locked image from the release pipeline, version label, licence notices, configured startup and live health |
+| I006-TITLES | quickstart manual check | **pass with a Telegram limitation** (S3): captions follow FR-004 (long, Persian, `/` and emoji titles); the bot sends FR-005 filenames and forwarding keeps them. The hosted Bot API rewrites stems over 60 characters and replaces emoji with spaces; recorded as a Telegram limitation by operator decision, with SC-002 amended in [spec.md](spec.md). The missing-title fallback was not reached live |

@@ -13,11 +13,12 @@ step below; this file is only the resume point.
   preview.6 and preview.7. T065 (2026-11-26/27) passed every maintenance case on the
   production host by operator choice.
 - **Production:** preview.7 running and selected on the host.
-- **T066–T067 open.**
+- **T066 done (2026-11-27)**, cross-referenced in 001–006 `validation.md`. **T068 done**
+  (opt-in e2e suite). **T067 open.**
 
 ## Next steps
 
-1. Run T066 (inherited media matrix), then T067 (claims reconciliation).
+1. Run T067 (claims reconciliation).
 2. T067 must note that the published preview.7 `deploy/README.md` predates two guide
    fixes: the OP-EXIT command (`4ef5dcc`; the old one kills PID 1, a no-op under
    `init: true`) and the rotation empty-replacement guard (block 21 now ends before
@@ -113,4 +114,4 @@ Release lessons that cost a version before:
 
 ## Suggested first prompt
 
-"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md` with T066."
+"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md` with T067."

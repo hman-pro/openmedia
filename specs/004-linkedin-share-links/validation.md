@@ -138,3 +138,15 @@ five FR-002 YouTube/LinkedIn/Instagram cases. Its two 004 cases are covered by t
   `/tmp` is a symlink, but startup then refuses it (`workspace root cannot be a symlink`).
   Already recorded in 003 validation (use `OPENMEDIA_WORK_DIR=/private/tmp/…` locally);
   not fixed in 004.
+
+## Deployment acceptance through feature 008 T066 — 2026-11-27
+
+Feature 008 re-ran this feature's external gates against the released preview.7 container
+on the operator's Ubuntu 26.04 amd64 host and recorded the evidence in [008 validation](../008-public-docker-deployment/validation.md)
+(sections "T066 S0" to "T066 S4" and the inherited-gate register). Case IDs are
+sanitized there; links and Telegram IDs stay in private notes. This note does not change
+this feature's task boxes.
+
+| Gate (008 register) | Result |
+|---|---|
+| I004-SHORT-LINKS | **pass** (S1): both original `lnkd.in` links delivered; short and full addresses gave identical bytes for a video and a picture, the short picture 1.33 s slower (limit 3 s); no tracking parameters in resolved addresses; refusal reasons only in the diagnostic file; console privacy held |
