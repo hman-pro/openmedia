@@ -74,7 +74,7 @@ their pending rows are not a claim that the completed US1 checks were unexecuted
 | F008-UPDATE | FR-011–FR-015, FR-019; SC-003, SC-005–SC-006 | Deployment-network/manual | Failed pull/preflight leaves old poller uninterrupted; successful update; timeout/failure/interruption stops candidate; finite 180s health wait; protected selection persistence; explicit current-settings rollback incl unavailable/incompatible failure; migration/recovery of local image ID; one poller | pass (operator host Ubuntu 26.04 amd64, preview.6 ↔ preview.7, T064 run 2 2026-11-26); other host combinations pending |
 | F008-SHUTDOWN | FR-014, FR-019, FR-021; SC-006 | Deployment-network/manual | Real active-work shutdown <=20s, child termination/reaping and scratch/upload cleanup, no duplicate uncertain/canceled sends; fresh request after recovery | pass (operator host Ubuntu 26.04 amd64, preview.6 ↔ preview.7, T064 run 2 2026-11-26); other host combinations pending |
 | F008-OPERATIONS | FR-015–FR-017, FR-019; SC-003, SC-007 | Deployment-network/manual | Token rotation/recreated file mount, console privacy/status/resources, optional 002 diagnostics, unexpected process exit, reboot and intentional stop, upstream outage/recovery with no health restart loop/additional poller, backup/restore/removal | pass (operator host Ubuntu 26.04 amd64, preview.7, T065 2026-11-26/27); other host combinations pending |
-| F008-ASSESSMENT | FR-019–FR-021; SC-008 | Deployment-network/manual | Execute/assess full inherited matrix, classify every failure from evidence, reconcile actual release/README/deployment capability claims; distinguish feature completion from stable readiness | pending |
+| F008-ASSESSMENT | FR-019–FR-021; SC-008 | Deployment-network/manual | Execute/assess full inherited matrix, classify every failure from evidence, reconcile actual release/README/deployment capability claims; distinguish feature completion from stable readiness | pass (T066 assessment 2026-11-27; T067 reconciliation 2026-11-27) |
 
 F008-INSTALL/UPDATE/SHUTDOWN/OPERATIONS records identify the actual tested Ubuntu
 24.04 or 26.04 LTS and amd64 or arm64 combination. Untested combinations stay pending
@@ -2334,3 +2334,34 @@ Cross-references were added to the earlier records: 001, 002, 003, 004, 005 and 
 `validation.md`, each under "Deployment acceptance through feature 008 T066 — 2026-11-27".
 The earlier features' task boxes are unchanged. T066 is marked complete; T067 reconciles
 public claims next.
+
+### T067 claims reconciliation — 2026-11-27
+
+Public claims checked against the register and T059–T066 outcomes, reported by evidence kind:
+
+| Kind | Requirements | Outcome | Evidence |
+|---|---|---|---|
+| Controlled | FR-003, FR-008–FR-010, FR-014, FR-017–FR-021; SC-004, SC-006, SC-008 | pass | F008-SETUP, F008-CONFIG, F008-REGRESSION, F008-COMPOSE, F008-RELEASE-POLICY |
+| Native container | FR-007, FR-018; SC-004 | pass on amd64 and arm64 | F008-NATIVE-AMD64, F008-NATIVE-ARM64 (T059) |
+| Public distribution | FR-001–FR-004, FR-020; SC-001–SC-002 | pass (preview.5, .6, .7 accepted; preview.1–.4 kept as incomplete or rejected) | F008-SOURCES, F008-PUBLIC (T061–T062) |
+| Deployment host | FR-005–FR-017, FR-019; SC-003, SC-005–SC-007 | pass on Ubuntu 26.04 amd64; 24.04 and arm64 hosts have no host acceptance | F008-INSTALL, F008-UPDATE, F008-SHUTDOWN, F008-OPERATIONS (T063–T065) |
+| Live and Telegram | FR-019–FR-021; SC-008 | assessment complete; inherited I001-SOURCES fails (classified), other inherited gates pass, two with recorded limits | F008-ASSESSMENT, T066 S0–S4 and completion |
+
+Reconciled documents:
+
+- `README.md`: the source table reports the T066 outcomes; the Instagram single-image
+  capability is withheld (source-blocked anonymously); Project status separates
+  controlled, native/public, deployment and live results, names preview.7, keeps the
+  project a **preview** and lists the open stable-release gates (I001-SOURCES; hosts
+  other than Ubuntu 26.04 amd64) and the known limitations (Telegram filename rewriting,
+  publish/tap race).
+- `deploy/README.md`: preview.7 and its accepted index digest replace preview.5; T063 is
+  recorded as passed on Ubuntu 26.04 amd64 with other hosts pending; operators are told
+  to follow the repository guide, because the preview.7 source release predates the
+  OP-EXIT command fix (`4ef5dcc`) and the empty-input rotation guard.
+- Immutable tags, images and source releases were not changed. The preview.7 release keeps
+  its pre-release flag.
+
+Feature 008 is complete as a preview. Stable promotion still needs I001-SOURCES to pass
+(the `vp09.*` codec fix in the next release candidate and Instagram single-image access)
+and host acceptance beyond Ubuntu 26.04 amd64.

@@ -73,10 +73,10 @@ download-and-send stage has 10 minutes to finish.
 
 | Source | Accepted links | Media | Live verification |
 |---|---|---|---|
-| YouTube | `youtube.com/watch?v=…`, `youtu.be/…`, `youtube.com/shorts/…` | Single video | Feasibility pass; full live suite pending |
-| YouTube Music | `music.youtube.com/watch?v=…` with optional listening/sharing context | One complete native audio track, sent automatically as a document | User confirmed tested-track phone playback; full live/manual matrix pending |
-| LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Video and image pass live through Telegram, including `lnkd.in` short links; full live suite pending |
-| Instagram | `instagram.com/p/…`, `instagram.com/reel/…` | Video or single image | Video passes live through the product transport; single image pending |
+| YouTube | `youtube.com/watch?v=…`, `youtu.be/…`, `youtube.com/shorts/…` | Single video | Passes live and through Telegram on the deployed bot |
+| YouTube Music | `music.youtube.com/watch?v=…` with optional listening/sharing context | One complete native audio track, sent automatically as a document | Passes live and through Telegram on the deployed bot; context and offset links deliver the same bytes |
+| LinkedIn | `linkedin.com/posts/…`, `linkedin.com/feed/update/urn:li:…`, app share links `lnkd.in/p/…` | Video or single image | Passes live and through Telegram on the deployed bot, including `lnkd.in` short links |
+| Instagram | `instagram.com/p/…`, `instagram.com/reel/…` | Video; single image not claimed | Video delivered through Telegram on the deployed bot. Single image: Instagram refused anonymous access from the deployment network, so this capability is not claimed |
 
 YouTube Music prefers native AAC in M4A/MP4 for phone playback, with no picker. If none
 is eligible, it falls back to the best eligible native audio format. Album
@@ -91,39 +91,44 @@ See [feature 005 validation](specs/005-youtube-music-download/validation.md) for
 or login-gated content, and any source not listed above. The bot explains each rejection, for
 example *"Only one finished media item is supported. Send a single-item link."*
 
-The "Live verification" column reflects historical results in
-[001 validation](specs/001-media-download/validation.md),
-[004 validation](specs/004-linkedin-share-links/validation.md) and
-[005 validation](specs/005-youtube-music-download/validation.md#user-acceptance-update--2026-10-08).
-These results do not establish current deployment-network availability. Sources change
-without notice; feature 008 must repeat the matrix on its selected release/network.
+The "Live verification" column reflects the feature 008 matrix run on 2026-11-27 against
+v0.1.0-preview.7 from its deployment network
+([008 validation](specs/008-public-docker-deployment/validation.md), "T066"). Sources change
+without notice, so these results do not promise current availability. One known defect
+remains in the live source suite: an Instagram download whose format reports the `vp09.*`
+codec form is refused (the bot's card picks H.264 instead, so delivery was not affected in
+the matrix); a fix is planned for the next preview.
 
 ## Project status
 
-OpenMedia is **pre-release**. Media behavior has controlled test coverage with the
-network disabled. [v0.1.0-preview.5](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.5)
-passed the complete public Docker pipeline: native amd64/arm64 checks, matching sources,
-anonymous retrieval and real signed-evidence verification. Server deployment acceptance
-remains open. See the [008 validation register](specs/008-public-docker-deployment/validation.md).
-The remaining external gates include:
+OpenMedia is a **preview**. Results by kind of evidence:
 
-- [ ] Full live source suite, run through the product's own transport
-- [ ] Clean-server polling/health and real delivery on the selected verified digest
-- [ ] Real-host update, rollback, shutdown, rotation, reboot and maintenance acceptance
-- [ ] Deployment-network source checks and two-account Telegram acceptance
-- [ ] Acceptance timing runs, 20 inspections plus 20 deliveries
-- [ ] Remaining YouTube Music context/collection checks and real-client title/filename checks
+- **Controlled:** the full suite runs with the network disabled and a fake Telegram
+  transport.
+- **Native and public:** [v0.1.0-preview.7](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.7)
+  passed the complete public Docker pipeline: native amd64/arm64 builds and checks,
+  matching sources, anonymous retrieval and real signed-evidence verification.
+- **Deployment (Ubuntu 26.04 LTS, amd64):** clean-server installation, update, rollback,
+  shutdown, credential rotation, reboot and maintenance passed on the operator's server
+  (feature 008 T063–T065). Ubuntu 24.04 and arm64 hosts are supported targets without
+  recorded host acceptance.
+- **Live through Telegram (2026-11-27):** two accounts, all sources above, 20 + 20 timing
+  runs, YouTube Music context and collection checks, and real-client captions all passed
+  (T066).
 
-No controlled test closes these gates. Historical phone playback confirmation is partial
-music evidence; [006 validation](specs/006-media-delivery-titles/validation.md#external-acceptance-and-release-gaps)
-still leaves real-client titles, saved/forwarded filenames and received bytes unverified.
-Ubuntu 24.04/26.04 LTS on amd64/arm64 are deployment targets; none of the four host
-combinations has clean-server acceptance recorded yet. Treat use as a preview.
+Still open before a stable release:
 
-Feature 008 can complete as a preview only after its own acceptance checks and
-representative real delivery pass and the inherited matrix is executed/assessed.
-Evidenced pre-existing source limitations may remain inherited stable-readiness blockers;
-missing evidence, deployment regressions and unclassified failures still block completion.
+- [ ] Full live source suite: the Instagram `vp09.*` codec defect, and Instagram single
+      images refused to anonymous visitors
+- [ ] Host acceptance on Ubuntu 24.04 and on arm64
+
+Known limitations: Telegram's hosted Bot API rewrites long and emoji filenames on upload
+(captions keep the full title; see [006 spec](specs/006-media-delivery-titles/spec.md)
+SC-002), and a card tapped within a fraction of a second of appearing can be answered "stale"
+(a fix is planned for the next preview).
+
+See the [008 validation register](specs/008-public-docker-deployment/validation.md) for
+every gate and its evidence.
 
 ## Quick start
 
@@ -201,10 +206,9 @@ adds a second service, which this project deliberately does not run.
 For a server using a **published image**, follow the
 [single-server guide](deploy/README.md#install-on-a-single-server). It selects a verified
 immutable digest, supplies a read-only file secret and covers manual updates, rollback
-and [maintenance](deploy/README.md#maintenance). Public distribution checks passed for
-[v0.1.0-preview.5](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.5);
-complete [account-free verification](deploy/README.md#account-free-verification) before deploying.
-Real-server acceptance remains open.
+and [maintenance](deploy/README.md#maintenance). [v0.1.0-preview.7](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.7)
+passed public distribution checks and server acceptance on Ubuntu 26.04 amd64; complete
+[account-free verification](deploy/README.md#account-free-verification) before deploying.
 See [release/source distribution](deploy/README.md#maintainer-release-procedure) and
 [third-party notices](THIRD_PARTY_NOTICES.md) for matching materials and obligations.
 
@@ -229,8 +233,7 @@ Drop `--check-config` to start the bot. The image:
 
 If diagnostics are needed, explicitly provision the protected writable mount and retention
 described in the [maintenance guide](deploy/README.md#inspect-health-logs-and-resources).
-Deployment, live-source, real-Telegram, and timing checks remain separate release gates (see
-[Project status](#project-status)).
+Open stable-release gates are listed under [Project status](#project-status).
 
 > **Redistributing the image?** It contains a GPL-2.0-or-later FFmpeg build and other
 > copyleft components. [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) lists your

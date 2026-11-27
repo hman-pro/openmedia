@@ -1,9 +1,12 @@
 # Public release distribution
 
-[v0.1.0-preview.5](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.5)
+[v0.1.0-preview.7](https://github.com/hman-pro/openmedia/releases/tag/v0.1.0-preview.7)
 passed the full public distribution pipeline, including anonymous image/source retrieval
-and real signed index/manifest verification. Server and inherited live acceptance remain
-open in [feature 008 validation](../specs/008-public-docker-deployment/validation.md).
+and real signed index/manifest verification, and server acceptance on Ubuntu 26.04 amd64
+(installation, update, rollback, maintenance and real delivery). Open stable-release gates
+are listed in [feature 008 validation](../specs/008-public-docker-deployment/validation.md).
+Follow this guide from the repository, not the copy in the preview.7 source release: it
+adds two later fixes (the OP-EXIT command and the empty-input rotation guard).
 The existing root Compose file remains the local-build entry point.
 
 ## Install on a single server
@@ -11,7 +14,8 @@ The existing root Compose file remains the local-build entry point.
 Use Bash on **Ubuntu 24.04 or 26.04 LTS, amd64 or arm64**, with standard rootful
 Docker Engine. Rootless Docker and user-namespace remapping require a separate design.
 These are supported targets; actual host acceptance for each combination is tracked in
-[validation](../specs/008-public-docker-deployment/validation.md), with T063 still pending.
+[validation](../specs/008-public-docker-deployment/validation.md): Ubuntu 26.04 amd64 passed
+(T063–T065); Ubuntu 24.04 and arm64 have no recorded host acceptance.
 Use one operator/change session. The bot needs outbound HTTPS to Telegram and the media
 sources, DNS, and HTTPS to GHCR/GitHub for release acquisition; it opens no inbound ports.
 Do not add a second process manager or another polling service.
@@ -85,8 +89,8 @@ and [up](https://docs.docker.com/reference/cli/docker/compose/up/) references de
 
 From a separately reviewed checkout, verify the selected release with the
 [account-free verification procedure](#account-free-verification) before selecting its
-literal index digest. Preview.5's accepted public index is
-`sha256:2262f99c6580a2b2c4d60911febb5bb4180b4330329ae39878f5115e7d4b6b81`;
+literal index digest. Preview.7's accepted public index is
+`sha256:8c27c75f1808ca97de8aeb0b0ab726d0b008f918ec43b1a1c979247f0b578cc6`;
 verify it before use. Install the reviewed files, then replace the image placeholder
 in `deploy.env` with that exact verified digest:
 
@@ -239,7 +243,8 @@ poll history; `--healthcheck` never creates a second poller (0 healthy, 1 unheal
 2 invalid settings). Health degradation alone triggers no restart agent. Successful
 preflight is not real-token acceptance. Record actual OS/architecture, Engine/Compose,
 verified source/index identity, health outcome and representative real Telegram delivery
-for **T063** before claiming installation acceptance. Other host combinations remain pending.
+for **T063** before claiming installation acceptance. T063 passed on Ubuntu 26.04 amd64;
+other host combinations remain pending.
 
 ## Update, rollback, and migration
 
