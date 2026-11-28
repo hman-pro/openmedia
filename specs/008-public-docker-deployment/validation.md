@@ -2370,3 +2370,53 @@ Reconciled documents:
 Feature 008 is complete as a preview. Stable promotion still needs I001-SOURCES to pass
 (the `vp09.*` codec fix in the next release candidate and Instagram single-image access)
 and host acceptance beyond Ubuntu 26.04 amd64.
+
+### Preview.8 pre-tag checks — 2026-11-28
+
+- gate_id / requirement_ids: F008-RELEASE-POLICY, F008-SOURCES (pre-tag, controlled);
+  I001-SOURCES, I001-TELEGRAM (dev bot, not the deployed bot); FR-002, FR-004; SC-002.
+- class: Controlled plus dev-bot/live. gate_scope: Feature 008 follow-up items 4, 5 and 7.
+  result / failure_class: **pre-tag checks pass / none**. This is not a release run;
+  preview.8 publication gates remain pending.
+- release / platform: candidate source = branch `008-preview-8` at `661d065` (code
+  `7bb97de`, CI filter `a0d2adb`); native linux/arm64 image built locally without cache
+  (`docker build --no-cache --pull`), image `sha256:a83b1ada…`, inventoried config
+  `sha256:8d1c7edd1e511fef009e931c61443c5c7149d1451da5671074167766e9dfe647`.
+- environment: maintainer workstation, macOS arm64, Docker 29.9.3; dev bot from
+  `scripts/dev.sh`; e2e test account and private manifest as in T068.
+
+**Fixes under test.** `codec_family()` maps `vp09.*`, `vp08.*` and `hev1`/`hvc1`/`h265`
+to their families; `download_url` retries transient failures 3 times; a stage-only failure
+names its stage once (003 stage text amended); release notes name only the open gates
+(`publish.OPEN_GATES`); a tap during card publication waits up to 5 s for the record (003
+callbacks amended); CI runs `sources` only when release inputs change
+(`scripts/release/ci_changes.py`).
+
+**Checks.**
+- Controlled suite **1214 passed, 24 live/e2e deselected**, also from a clean index export;
+  `uv build`, `publish.audit_pins()` and `git diff --check 80c72fa..HEAD` passed; no
+  `*-v0.1.0-preview.8` tags exist locally or on the remote.
+- No-cache inventory resolves **317 of 317** components with no unreviewed embedded
+  source edge, so no Debian revision appeared since preview.7 and the policy is unchanged.
+- Branch CI run 46170590790 (new branch, `changes` decided *run*): controlled, both native
+  jobs and `sources` (21 min) passed, proving amd64 and arm64 resolution. Run 46170938574
+  (docs-only push, base `a0d2adb`): `changes` decided *skip*, `sources` **skipped**, all
+  other jobs passed.
+- e2e against the dev bot: **19 passed, 1 xfailed** (Instagram picture, source-blocked),
+  then the opt-in expiry case **passed** (15 min). `test_instant_tap_is_accepted` passed
+  with three instant taps: the publish/tap race no longer answers "stale". Bot log: no
+  traceback and no token-like string; 19 deliveries confirmed, 2 expected refusals
+  (`too_large`, `unavailable`).
+- Live source matrix, run per case with the repo test's checks (the repo test stops at its
+  first case, `instagram-image`): **8 of 9 pass**. `instagram-video` selected and downloaded
+  the `vp09.00.40.08…` DASH stream that T066 S0 refused as `source codec changed`.
+  `instagram-image` still gets Instagram's anonymous 401 ("Please wait a few minutes").
+- Shutdown: one TERM to the bot process gave `stopped (reason=signal)`. A first stop that
+  signalled both `uv run` and its child printed `coroutine 'Updater.stop' was never
+  awaited`; that was the double signal (as in T064 run 1 IS), not a product defect.
+
+**Limitations / next action.** Only arm64 was inventoried locally; amd64 resolution is
+proved by the branch CI `sources` job above. I001-SOURCES stays **fail** until Instagram
+single-image access works anonymously. The repo live matrix still aborts at its first
+failing case. Next: merge to `main`, tag the preview.8 pair, release, update production,
+then rerun `tests/e2e` against production.

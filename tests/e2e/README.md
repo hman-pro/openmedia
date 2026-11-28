@@ -73,8 +73,8 @@ from it.
 
 ## Known outcomes
 
-- `test_instant_tap_is_accepted` is an expected failure while the publish/tap race exists
-  (008 follow-up item 7); it passes once fixed.
+- `test_instant_tap_is_accepted` fails on any "stale" answer: the publish/tap race (008
+  follow-up item 7) is fixed in preview.8, where a tap waits up to 5 s for its card record.
 - `test_instagram_picture_is_delivered_or_refused_as_login_only` is an expected failure while
   Instagram refuses anonymous picture access from the test network.
 - Telegram's Bot API rewrites long and emoji filenames on upload (006 SC-002 note), so the
