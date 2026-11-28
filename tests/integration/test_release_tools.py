@@ -363,3 +363,52 @@ def test_release_notes_name_only_the_gates_still_open():
         assert 'deployment acceptance remain open' not in notes.lower()
         assert 'deployment acceptance and' not in notes.lower()
     assert 'sources-v0.1.0-preview.8' in publish.accepted_notes('v0.1.0-preview.8')
+
+
+ZERO = '0' * 40
+# The runtime image that runs CI's controlled suite has no git; the changes job uses real git.
+NEEDS_GIT = pytest.mark.skipif(__import__('shutil').which('git') is None, reason='git is not installed')
+
+
+@pytest.mark.parametrize(('context', 'changed', 'expected'), [
+    # A release always collects: release.yml downloads matching-sources from this run.
+    ({'event': 'push', 'ref': 'refs/tags/v0.1.0-preview.8', 'version': 'v0.1.0-preview.8', 'base': ''}, [], True),
+    ({'event': 'push', 'ref': 'refs/tags/v0.1.0-preview.8', 'version': '', 'base': 'a'*40}, ['README.md'], True),
+    ({'event': 'push', 'ref': 'refs/heads/main', 'version': 'v0.1.0-preview.8', 'base': 'a'*40}, ['README.md'], True),
+    ({'event': 'workflow_dispatch', 'ref': 'refs/heads/main', 'version': '', 'base': ''}, [], True),
+    # A new branch has no previous commit to compare with.
+    ({'event': 'push', 'ref': 'refs/heads/topic', 'version': '', 'base': ZERO}, [], True),
+    ({'event': 'push', 'ref': 'refs/heads/topic', 'version': '', 'base': ''}, [], True),
+    # Ordinary pushes and pull requests collect only when a release input changed.
+    ({'event': 'push', 'ref': 'refs/heads/topic', 'version': '', 'base': 'a'*40}, ['README.md', 'specs/x.md', 'src/openmedia/bot.py'], False),
+    ({'event': 'pull_request', 'ref': 'refs/pull/1/merge', 'version': '', 'base': 'a'*40}, ['tests/unit/test_x.py'], False),
+    *[({'event': 'push', 'ref': 'refs/heads/topic', 'version': '', 'base': 'a'*40}, [path], True) for path in (
+        'Dockerfile', 'uv.lock', 'pyproject.toml', 'release/source-policy.json', 'release/Collector.Dockerfile',
+        'scripts/release/collect_sources.py', '.github/workflows/ci.yml', '.github/workflows/release.yml')],
+    # Prefixes are directories, not name stems.
+    ({'event': 'push', 'ref': 'refs/heads/topic', 'version': '', 'base': 'a'*40}, ['releases.md', 'scripts/release_notes.md', 'docs/Dockerfile.md'], False),
+])
+def test_sources_job_runs_only_when_release_inputs_can_change(context, changed, expected):
+    import ci_changes
+    assert ci_changes.needs_sources(changed=changed, **context) is expected
+
+
+@NEEDS_GIT
+def test_sources_decision_reads_the_real_git_diff(tmp_path):
+    import subprocess
+    import ci_changes
+    def git(*args): return subprocess.run(['git', '-C', str(tmp_path), *args], check=True, capture_output=True, text=True).stdout.strip()
+    git('init', '-q'); git('config', 'user.email', 'ci@example.invalid'); git('config', 'user.name', 'ci')
+    (tmp_path / 'README.md').write_text('a'); git('add', '.'); git('commit', '-qm', 'one'); base = git('rev-parse', 'HEAD')
+    (tmp_path / 'README.md').write_text('b'); (tmp_path / 'uv.lock').write_text('x'); git('add', '.'); git('commit', '-qm', 'two')
+    assert ci_changes.changed_paths(base, git('rev-parse', 'HEAD'), cwd=tmp_path) == ['README.md', 'uv.lock']
+
+
+@NEEDS_GIT
+def test_sources_decision_runs_when_the_base_commit_is_gone(tmp_path):
+    # After a force-push the previous commit may no longer exist; collecting is the safe answer.
+    import subprocess
+    import ci_changes
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    assert ci_changes.changed_paths('b'*40, 'c'*40, cwd=tmp_path) is None
+    assert ci_changes.needs_sources(event='push', ref='refs/heads/topic', version='', base='b'*40, changed=None) is True

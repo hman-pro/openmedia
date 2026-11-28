@@ -98,8 +98,25 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+  changes:
+    # Source closure takes ~20 minutes; run it only when a release input changed, and always
+    # for a release (inputs.version), a tag, a manual dispatch or a new branch.
+    runs-on: ubuntu-24.04
+    outputs:
+      sources: ${{ steps.decide.outputs.sources }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: decide
+        name: Decide whether release inputs changed
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 scripts/release/ci_changes.py
   sources:
-    needs: [controlled, native]
+    needs: [controlled, native, changes]
+    if: needs.changes.outputs.sources == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
