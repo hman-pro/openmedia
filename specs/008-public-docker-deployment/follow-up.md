@@ -1,4 +1,4 @@
-# Resume feature 008 — updated 2026-11-27
+# Resume feature 008 — updated 2026-11-28
 
 Do not cancel running workflows. Check their actual status before acting on one.
 Never move or delete tags, overwrite a published image version, replace immutable
@@ -20,28 +20,31 @@ step below; this file is only the resume point.
 
 ## Next steps
 
-1. Next release candidate (preview.8): items 4, 5 and 7 below, test-first, then the release
-   lessons under "Release state". Run `tests/e2e` against the dev bot before tagging and
-   against production after the update; the instant-tap test flips to a pass once the
-   race is fixed.
-2. Done 2026-11-27: PR #1 merged to `main` by fast-forward. preview.8 work is on branch
-   `008-preview-8` (2026-11-28: items 4, 5, 7a, 7b, 7d fixed test-first, uncommitted; 7e CI
-   filter next).
+1. Next release candidate (preview.8), branch `008-preview-8`: items 4, 5 and 7 are fixed
+   test-first (2026-11-28, `7bb97de` code, `a0d2adb` CI filter); 7c stays a recorded
+   Telegram limitation. Remaining before tagging: the release lessons under "Release
+   state" (no-cache inventory against `release/source-policy.json`, branch CI green) and
+   `tests/e2e` against the dev bot (`scripts/dev.sh` from this branch); the instant-tap
+   test now fails, not xfails, on a stale answer. Then merge to `main`, tag, and run
+   `tests/e2e` against production after the update.
+2. Done 2026-11-27: PR #1 merged to `main` by fast-forward.
 3. Host cleanup now that T065 is done: the recovery pin `openmedia-recovery:52520a82…`,
    `openmedia:local`, `~/openmedia/.env`, and the closed LUKS2 vault
    `/var/lib/openmedia-backup/vault.luks` (holds a copy of the current token;
    passphrase in the Mac Keychain as `openmedia-backup-luks`). Also the T066 S1
    diagnostics directory `/opt/openmedia/diagnostics` (real links and Telegram IDs), unless
    already deleted after the S1 timing read.
-4. Release follow-up: add a bounded retry to `download_url`
-   (`scripts/release/collect_sources.py`) in the next release candidate.
-5. Release follow-up: `codec_family()` (`src/openmedia/sources/__init__.py`) misses the
-   RFC 6381 form `vp09.*`, so an Instagram DASH VP9 download is refused with `source codec
-   changed` (T066 S0). Fix test-first in the next release candidate; also check
-   `hev1`/`hvc1` and `vp08`. Pre-existing since `f4708eb`; deferred by the operator.
+4. Done 2026-11-28: `download_url` retries 3 times (5 s, 15 s) on transient errors only;
+   HTTP 4xx, an insecure redirect and a checksum mismatch still fail at once.
+5. Done 2026-11-28: `codec_family()` maps `vp09.*`→vp9, `vp08.*`→vp8 and
+   `hev1`/`hvc1`/`h265`→hevc (T066 S0 Instagram DASH VP9 refusal). Recheck I001-SOURCES
+   with the live suite after preview.8 is deployed.
 6. Done 2026-11-27 13:13: the plain Instaloader request still got 401 three hours later,
    so the Instagram image is source-blocked (T066 S2).
-7. Product findings from the T066 automated client (pre-existing, next release candidate):
+7. Product findings from the T066 automated client. Done 2026-11-28 except the Telegram
+   limitation (7c): the race waits up to 5 s for the card record (003 callbacks contract),
+   the stage is named once (003 stage text), the notes use `publish.OPEN_GATES`, and CI
+   decides the sources job in `scripts/release/ci_changes.py` (`changes` job):
    - Publish/tap race: a tap that arrives between the card being sent and the request
      moving to awaiting-selection is answered "stale" (`coordinator.py`: `_publish_preview`
      then the selection record; `CHECKING` → `STALE`). Seen 3 of 5 times with instant taps.
@@ -130,4 +133,4 @@ Release lessons that cost a version before:
 
 ## Suggested first prompt
 
-"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md` for preview.8 (follow-up items 4, 5 and 7)."
+"Continue feature 008 from `specs/008-public-docker-deployment/follow-up.md`: release preview.8 from branch `008-preview-8` (next step 1)."
