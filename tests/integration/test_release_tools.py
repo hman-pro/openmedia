@@ -251,6 +251,64 @@ def test_pinned_download_stops_after_expected_size_plus_one(tmp_path, monkeypatc
     assert response.bytes_read == 8
 
 
+class _Response(io.BytesIO):
+    """A urlopen response whose body can drop the connection after some bytes."""
+    def __init__(self, body, *, url='https://example.org/source', drop_after=None):
+        super().__init__(body); self.url = url; self.drop_after = drop_after
+    def read(self, size=-1):
+        if self.drop_after is not None and self.tell() >= self.drop_after:
+            from http.client import RemoteDisconnected
+            raise RemoteDisconnected('Remote end closed connection without response')
+        if self.drop_after is not None: size = min(size, self.drop_after - self.tell())
+        return super().read(size)
+
+
+def _scripted_urlopen(monkeypatch, outcomes):
+    calls = []
+    def urlopen(*args, **kwargs):
+        calls.append(args[0]); outcome = outcomes.pop(0)
+        if isinstance(outcome, BaseException): raise outcome
+        return outcome
+    monkeypatch.setattr(collector, 'urlopen', urlopen)
+    monkeypatch.setattr(collector.time, 'sleep', lambda seconds: None)
+    return calls
+
+
+def test_source_download_retries_a_dropped_connection_from_an_empty_file(tmp_path, monkeypatch):
+    from http.client import RemoteDisconnected
+    body = b'source!'
+    calls = _scripted_urlopen(monkeypatch, [
+        RemoteDisconnected('Remote end closed connection without response'),
+        _Response(body, drop_after=3),
+        _Response(body),
+    ])
+    material = {'url': 'https://example.org/source', 'sha256': hashlib.sha256(body).hexdigest(), 'size': len(body)}
+    target = collector.acquire(material, tmp_path / 'target')
+    assert target.read_bytes() == body
+    assert len(calls) == 3
+
+
+def test_source_download_gives_up_after_three_transient_failures(tmp_path, monkeypatch):
+    from urllib.error import URLError
+    calls = _scripted_urlopen(monkeypatch, [URLError('reset'), TimeoutError('slow'), URLError('reset')])
+    material = {'url': 'https://example.org/source', 'sha256': 'a'*64, 'size': 7}
+    with pytest.raises(URLError): collector.acquire(material, tmp_path / 'target')
+    assert len(calls) == 3
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize('failure', ['not-found', 'insecure-redirect'])
+def test_source_download_does_not_retry_a_definite_refusal(tmp_path, monkeypatch, failure):
+    from urllib.error import HTTPError
+    outcome = (HTTPError('https://example.org/source', 404, 'Not Found', {}, None) if failure == 'not-found'
+        else _Response(b'source!', url='http://example.org/source'))
+    calls = _scripted_urlopen(monkeypatch, [outcome, _Response(b'source!')])
+    material = {'url': 'https://example.org/source', 'sha256': 'a'*64, 'size': 7}
+    with pytest.raises((HTTPError, release.ReleaseError)): collector.acquire(material, tmp_path / 'target')
+    assert len(calls) == 1
+    assert not list(tmp_path.iterdir())
+
+
 def test_unknown_executable_outside_usrlocal_is_visible_to_inventory(tmp_path, monkeypatch):
     # Run the actual probe against injected file/metadata boundaries without Docker.
     # The fixture filesystem path uses /opt, outside all original scanner roots.
@@ -293,3 +351,15 @@ def test_authenticated_debian_receipt_must_match_dsc_and_all_references(tmp_path
     if fault == 'success': collector.validate_debian_receipt({'files':files}, tmp_path, identity)
     else:
         with pytest.raises(release.ReleaseError): collector.validate_debian_receipt({'files':files}, tmp_path, identity)
+
+
+def test_release_notes_name_only_the_gates_still_open():
+    import publish
+    # Feature 008 deployment acceptance passed (T064/T065 on Ubuntu 26.04 amd64), so neither the
+    # draft nor the accepted notes may still call it open; both name the gates that are.
+    for notes in (publish.draft_notes(), publish.accepted_notes('v0.1.0-preview.8')):
+        assert 'I001-SOURCES' in notes
+        assert 'Ubuntu 26.04 amd64' in notes
+        assert 'deployment acceptance remain open' not in notes.lower()
+        assert 'deployment acceptance and' not in notes.lower()
+    assert 'sources-v0.1.0-preview.8' in publish.accepted_notes('v0.1.0-preview.8')

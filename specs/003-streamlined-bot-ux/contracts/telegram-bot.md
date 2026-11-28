@@ -50,6 +50,10 @@ text is exactly the label. No numbers, no pagination row.
   payload of 001 is removed and treated as malformed.
 - All 001 checks still apply: exact syntax, 64-byte limit, user, chat, preview message ID,
   expiry, state, prompt answer to every callback.
+- The card reaches Telegram before the request is recorded as awaiting selection. A tap in
+  that gap waits up to 5 seconds (fixed in code) for the record, before the per-user lock, and
+  then runs the checks above; only a request still unrecorded after the wait is stale
+  (preview.8, T066 finding).
 - On acceptance: remove the keyboard, answer the callback with the label, and set the status
   to `<Label> — downloading…`.
 
@@ -62,6 +66,12 @@ text is exactly the label. No numbers, no pagination row.
 | completed | `<Label> — sent.` |
 | failed | `<Label> — <stage> failed. <next step from 001 table>` |
 | upload unconfirmed | `<Label> — could not confirm sending. Check this chat before sending the link again.` |
+
+A timeout reads `<stage> timed out.` and exhausted temporary space reads `<stage> ran out of
+temporary space.` in place of `<stage> failed.`. Categories without their own guidance (internal,
+timeout, temporary space) then give only `Retry the link later.`, so the stage is named once; a
+checking-stage failure with no card reads `The checking stage <outcome>. <next step>` the same way
+(preview.8, T066 finding).
 
 On a video card the status is the last line of the caption, below the title and duration.
 

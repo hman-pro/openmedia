@@ -575,16 +575,24 @@ def _same_option(original: FormatOption, refreshed: FormatOption) -> bool:
 
 
 def codec_family(value: str) -> str:
-    """Map a yt-dlp or ffprobe codec string to its family name (h264, av1, aac, vp9, opus)."""
+    """Map a yt-dlp or ffprobe codec string to its family name (h264, hevc, av1, aac, vp8, vp9, opus).
+
+    yt-dlp may report the RFC 6381 sample-entry form (``vp09.00.40.08``, ``hvc1.1.6.L93``)
+    while ffprobe reports its decoder name (``vp9``, ``hevc``); both must map to one family.
+    """
     lowered = value.lower()
     if lowered.startswith(("avc1", "h264")):
         return "h264"
+    if lowered.startswith(("hev1", "hvc1", "h265", "hevc")):
+        return "hevc"
     if lowered.startswith(("av01", "av1")):
         return "av1"
     if lowered.startswith(("mp4a", "aac")):
         return "aac"
-    if lowered.startswith("vp9"):
+    if lowered.startswith(("vp09", "vp9")):
         return "vp9"
+    if lowered.startswith(("vp08", "vp8")):
+        return "vp8"
     if lowered.startswith("opus"):
         return "opus"
     return lowered

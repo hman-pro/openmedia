@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from tests.e2e import E2E
 
 pytestmark = E2E
@@ -37,16 +35,14 @@ async def test_forwarded_card_has_no_buttons_and_the_original_still_works(chat, 
 
 
 async def test_instant_tap_is_accepted(chat, case):
-    """Known defect (T066): a tap before the card is recorded is answered "stale".
+    """A tap before the card is recorded waits for the record (T066 finding, fixed in preview.8).
 
-    The card is published before the request moves to awaiting-selection, so a tap in that
-    gap finds the request still checking. Three instant taps; any stale answer marks the
-    known defect as expected-fail, and the test passes once the race is fixed.
+    The card reaches Telegram before the request moves to awaiting-selection; a tap in that
+    gap must wait for the record rather than be answered "stale". Three instant taps.
     """
     for _ in range(3):
         result = await chat.exchange(case("youtube-video"), prefer=("Audio only",), tap_delay=0, download=False)
-        if STALE in result.tap_answers:
-            pytest.xfail("publish/tap race: an instant tap was answered stale (follow-up 7)")
+        assert STALE not in result.tap_answers, "publish/tap race: an instant tap was answered stale"
         assert result.files, result.final_status
 
 

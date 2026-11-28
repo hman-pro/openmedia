@@ -1059,3 +1059,40 @@ async def test_delivery_title_policy_does_not_replace_the_preview_card_title_pol
     assert len(harness.cards) == 1
     assert harness.downloads == []
     assert card_text(request.metadata, harness.cards[0]).splitlines()[0] == expected_preview
+
+
+# Categories with no guidance of their own say only how the stage ended, then the retry step;
+# the stage sentence appears once, never repeated by the runtime prefix (T066 finding).
+STAGE_ONLY_FAILURES = [
+    (RuntimeError("boom"), "failed"),
+    (SourceAdapterError(ErrorCategory.TIMEOUT, stage="checking"), "timed out"),
+    (SourceAdapterError(ErrorCategory.STORAGE_EXHAUSTED, stage="checking"), "ran out of temporary space"),
+]
+
+
+@pytest.mark.parametrize(("error", "outcome"), STAGE_ONLY_FAILURES)
+async def test_checking_failure_names_the_stage_once(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any, error: BaseException, outcome: str
+) -> None:
+    flow = FailingInspectFlow(tmp_path, fake_bot, fake_transport, youtube_with_thumbnail(tmp_path),
+        chat_id=307, inspect_error=error)
+
+    with pytest.raises(type(error)):
+        await flow.workflow.submit(user_id=37, chat_id=307,
+            text=flow.result.metadata.canonical_url, chat_type="private")
+
+    assert flow.status_edits() == [(RUNTIME_CHECKING_ID, f"The checking stage {outcome}. Retry the link later.")]
+
+
+@pytest.mark.parametrize(("error", "outcome"), STAGE_ONLY_FAILURES)
+async def test_downloading_failure_names_the_stage_once(
+    tmp_path: Path, fake_bot: Any, fake_transport: Any, error: BaseException, outcome: str
+) -> None:
+    if isinstance(error, SourceAdapterError):
+        error = SourceAdapterError(error.category, stage="downloading")
+    flow = RuntimeFlow(tmp_path, fake_bot, fake_transport, youtube_with_thumbnail(tmp_path),
+        chat_id=308, download_error=error)
+
+    await tap_video(flow, user_id=38)
+
+    assert flow.status_edits()[-1] == (RUNTIME_PHOTO_CARD_ID, f"Video — downloading {outcome}. Retry the link later.")

@@ -24,7 +24,9 @@ step below; this file is only the resume point.
    lessons under "Release state". Run `tests/e2e` against the dev bot before tagging and
    against production after the update; the instant-tap test flips to a pass once the
    race is fixed.
-2. Merge PR #1 (`008-public-docker-deployment` → `main`, open, 41 commits ahead as of 2026-11-27) when ready.
+2. Done 2026-11-27: PR #1 merged to `main` by fast-forward. preview.8 work is on branch
+   `008-preview-8` (2026-11-28: items 4, 5, 7a, 7b, 7d fixed test-first, uncommitted; 7e CI
+   filter next).
 3. Host cleanup now that T065 is done: the recovery pin `openmedia-recovery:52520a82…`,
    `openmedia:local`, `~/openmedia/.env`, and the closed LUKS2 vault
    `/var/lib/openmedia-backup/vault.luks` (holds a copy of the current token;

@@ -153,13 +153,28 @@ def get_release(tag):
     return matches[0] if matches else None
 
 
+# The one place that says which readiness gates are still open; update it when a gate closes.
+OPEN_GATES = ('Feature 008 deployment acceptance passed on Ubuntu 26.04 amd64; other hosts and the '
+    'inherited source gate I001-SOURCES remain open')
+
+
+def draft_notes():
+    return ('Preview; public distribution is INCOMPLETE until this workflow succeeds.\n\n' + OPEN_GATES
+        + '. Matching sources are retained even if later checks fail. Publication never deploys to a server.\n')
+
+
+def accepted_notes(version):
+    return ('Public distribution checks passed for this preview. ' + OPEN_GATES + '; see the signed '
+        'manifest and feature validation record. Matching source materials are retained in sources-' + version + '.\n')
+
+
 def create_draft(tag, revision, directory, title):
     existing = get_release(tag)
     if existing:
         require(existing['draft'] is True and not existing.get('assets'), 'Existing image release cannot be replaced')
         return existing
     notes = Path(directory) / 'release-notes.txt'
-    notes.write_text('Preview; public distribution is INCOMPLETE until this workflow succeeds.\n\nInherited source/live gates and deployment acceptance remain open. Matching sources are retained even if later checks fail. Publication never deploys to a server.\n')
+    notes.write_text(draft_notes())
     run(['gh', 'release', 'create', tag, '--repo', REPOSITORY, '--verify-tag', '--target', revision, '--draft', '--prerelease', '--title', title, '--notes-file', str(notes)])
     return get_release(tag)
 
@@ -318,7 +333,7 @@ def finalize(directory):
             expected = {'sha256': digest(directory / name), 'size': (directory / name).stat().st_size}
             download_public(SOURCE + '/releases/download/' + version + '/' + name, target / name, expected)
         verify(target, IMAGE + '@' + manifest['index_digest'], version, revision, default_policy())
-    notes = directory / 'accepted-notes.txt'; notes.write_text('Public distribution checks passed for this preview. Deployment acceptance and inherited source/live readiness gates remain open; see the signed manifest and feature validation record. Matching source materials are retained in sources-' + version + '.\n')
+    notes = directory / 'accepted-notes.txt'; notes.write_text(accepted_notes(version))
     run(['gh', 'release', 'edit', version, '--repo', REPOSITORY, '--title', version + ' preview', '--notes-file', str(notes)])
 
 

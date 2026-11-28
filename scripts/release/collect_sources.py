@@ -18,7 +18,9 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import tomllib
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from validate_release import (ReleaseError, require, read_json, write_json, digest, safe_path,
@@ -138,15 +140,31 @@ def resolve_component(component, policy, lock):
     return result
 
 
+DOWNLOAD_RETRY_DELAYS = (5, 15)  # seconds before attempts 2 and 3
+
+
+def _transient(error):
+    # A dropped or slow connection may succeed next time; an HTTP 4xx answer will not.
+    if isinstance(error, HTTPError): return error.code >= 500
+    return isinstance(error, OSError)
+
+
 def download_url(url, target, expected_size):
     require(url.startswith('https://'), 'Source acquisition requires HTTPS')
-    with urlopen(url, timeout=120) as response, target.open('wb') as out:
-        require(response.url.startswith('https://'), 'Insecure source redirect')
-        remaining = expected_size + 1
-        while remaining:
-            block = response.read(min(1024 * 1024, remaining))
-            if not block: break
-            out.write(block); remaining -= len(block)
+    for delay in (*DOWNLOAD_RETRY_DELAYS, None):
+        try:
+            # 'wb' truncates, so a retry never appends to a partial earlier body.
+            with urlopen(url, timeout=120) as response, target.open('wb') as out:
+                require(response.url.startswith('https://'), 'Insecure source redirect')
+                remaining = expected_size + 1
+                while remaining:
+                    block = response.read(min(1024 * 1024, remaining))
+                    if not block: break
+                    out.write(block); remaining -= len(block)
+            return
+        except Exception as error:
+            if delay is None or not _transient(error): raise
+            time.sleep(delay)
 
 
 def acquire(material, target, download=download_url):

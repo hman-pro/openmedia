@@ -405,3 +405,51 @@ async def test_publish_and_claim_requires_exactly_one_option(count: int) -> None
         )
 
     assert snapshot(registry, item) == before
+
+
+async def _tap(registry: RequestRegistry, item, preview_message_id: int = 50):
+    return await registry.claim_selection(
+        item.request_id, user_id=1, chat_id=1, preview_message_id=preview_message_id, option_id=0, now=11)
+
+
+async def test_tap_during_card_publication_waits_and_is_accepted() -> None:
+    # The card with its buttons reaches Telegram before publish_preview records it; a tap in
+    # that gap must wait for the record instead of being answered stale (T066 finding).
+    import asyncio
+
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    tap = asyncio.create_task(_tap(registry, item))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert not tap.done()
+    await preview(registry, item)
+    selection = await asyncio.wait_for(tap, 1)
+    assert selection.outcome is SelectionOutcome.ACCEPTED
+    assert item.state is RequestState.DOWNLOADING
+
+
+async def test_tap_during_publication_ends_when_the_request_fails() -> None:
+    import asyncio
+
+    registry = RequestRegistry()
+    item = request(registry, 1)
+    await registry.admit(item)
+    tap = asyncio.create_task(_tap(registry, item))
+    await asyncio.sleep(0)
+    await registry.finalize(item.request_id, state=RequestState.FAILED)
+    selection = await asyncio.wait_for(tap, 1)
+    assert selection.outcome is not SelectionOutcome.ACCEPTED
+
+
+async def test_tap_during_publication_is_stale_when_publication_never_comes() -> None:
+    import asyncio
+
+    registry = RequestRegistry()
+    registry.publication_wait_seconds = 0.05
+    item = request(registry, 1)
+    await registry.admit(item)
+    selection = await asyncio.wait_for(_tap(registry, item), 1)
+    assert selection.outcome is SelectionOutcome.STALE
+    assert item.state is RequestState.CHECKING

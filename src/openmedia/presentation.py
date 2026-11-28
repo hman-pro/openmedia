@@ -86,6 +86,7 @@ def status_text(
     automatic: bool = False,
     media_kind: MediaKind | str | None = None,
     next_step: str | None = None,
+    outcome: str = "failed",
     unknown: bool = False,
 ) -> str:
     """One status line: ``<Label> — downloading…``, ``— sending…``, ``— sent.``, or a failure."""
@@ -93,7 +94,7 @@ def status_text(
         return f"{label} — {_UNCONFIRMED}"
     if next_step:
         # A next step only exists for a failure, whose stage may be `downloading` or `sending`.
-        return f"{label} — {stage} failed. {next_step}"
+        return f"{label} — {stage} {outcome}. {next_step}"
     if stage == "downloading":
         return f"{label} — only version available, downloading…" if automatic and media_kind != MediaKind.AUDIO else f"{label} — downloading…"
     if stage == "sending":

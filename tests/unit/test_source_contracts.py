@@ -78,3 +78,28 @@ def test_music_error_envelope_reconstruction(category: str, stage: str) -> None:
     assert ErrorCategory.UNSUPPORTED_COLLECTION.value == "unsupported_collection"
     assert ErrorCategory.NO_FORMATS.value == "no_formats"
     assert ErrorCategory.FORMAT_UNAVAILABLE.value == "format_unavailable"
+
+
+@pytest.mark.parametrize(
+    ("source_name", "probed_name", "family"),
+    [
+        # yt-dlp reports RFC 6381 sample-entry names; ffprobe reports its decoder names.
+        # Both sides of the "source codec changed" check must land on one family name.
+        ("vp09.00.40.08", "vp9", "vp9"),
+        ("vp9", "vp9", "vp9"),
+        ("vp08.00.41.08", "vp8", "vp8"),
+        ("vp8", "vp8", "vp8"),
+        ("hev1.1.6.L93.B0", "hevc", "hevc"),
+        ("hvc1.1.6.L93.B0", "hevc", "hevc"),
+        ("h265", "hevc", "hevc"),
+        ("avc1.64001F", "h264", "h264"),
+        ("av01.0.08M.08", "av1", "av1"),
+        ("mp4a.40.2", "aac", "aac"),
+        ("opus", "opus", "opus"),
+    ],
+)
+def test_codec_family_matches_source_and_probe_names(source_name: str, probed_name: str, family: str) -> None:
+    from openmedia.sources import codec_family
+
+    assert codec_family(source_name) == family
+    assert codec_family(probed_name) == family

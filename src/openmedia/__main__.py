@@ -21,7 +21,8 @@ from dataclasses import fields
 from telegram.ext import Application, ApplicationBuilder, ExtBot
 from telegram.request import HTTPXRequest
 
-from openmedia.bot import build_card, publish_profile, register_handlers, send_card, update_status
+from openmedia.bot import (build_card, publish_profile, register_handlers, send_card,
+    stage_outcome, update_status)
 from openmedia.choices import ChoiceKind, ChoiceSet, kind_of
 from openmedia.config import ConfigError, Settings
 from openmedia.coordinator import MediaWorkflow, ParentRateController, RequestRegistry
@@ -501,11 +502,12 @@ class RuntimeCallbacks:
         label = self._selected_label(request)
         if label is None:
             # Nothing chosen yet (a checking-stage failure): the plain 001 failure text.
-            outcome = "could not be confirmed" if result.status == "unknown" else "failed"
+            outcome = ("could not be confirmed" if result.status == "unknown"
+                else stage_outcome(str(result.error_category)))
             text = f"The {result.failed_stage} stage {outcome}. {result.next_step}"
         else:
             text = status_text(label, str(result.failed_stage), next_step=result.next_step,
-                unknown=result.status == "unknown")
+                outcome=stage_outcome(str(result.error_category)), unknown=result.status == "unknown")
         await update_status(self.application.bot, request, text)
 
     async def maintain(self, registry: RequestRegistry) -> None:

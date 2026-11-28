@@ -26,6 +26,11 @@ from openmedia.models import (
 from openmedia.sources import RESOLUTION_FAILURES, DownloadResult, InspectResult
 
 
+# A tap can arrive while its card is still being recorded; it waits this long, then is stale.
+# Fixed in code like the other deadlines.
+PUBLICATION_WAIT_SECONDS = 5
+
+
 class AdmissionOutcome(StrEnum):
     ADMITTED = "admitted"
     REPLACED = "replaced"
@@ -117,6 +122,7 @@ class RequestRegistry:
         self.terminal_ttl = terminal_ttl
         self.terminal_limit = terminal_limit
         self.monotonic = monotonic
+        self.publication_wait_seconds = PUBLICATION_WAIT_SECONDS
 
         self.requests_by_id: dict[str, DownloadRequest] = {}
         self.active_request_by_user: dict[int, str] = {}
@@ -126,6 +132,8 @@ class RequestRegistry:
         self._work_reservations: set[str] = set()
         self._instagram_reservations: set[str] = set()
         self._pending_reservations: set[str] = set()
+        # Set when a request leaves CHECKING; a tap that beats publication waits on it.
+        self._left_checking: dict[str, asyncio.Event] = {}
         self._closed = False
         self.source_busy: Callable[[str], bool] = lambda platform: False
 
@@ -228,6 +236,7 @@ class RequestRegistry:
             request.state = RequestState.AWAITING_SELECTION
             self._work_reservations.discard(request_id)
             self._instagram_reservations.discard(request_id)
+            self._signal_left_checking_locked(request_id)
             return True
 
     async def publish_and_claim(
@@ -273,7 +282,27 @@ class RequestRegistry:
             request.processing_deadline = current + self.processing_seconds
             request.state = RequestState.DOWNLOADING
             self._pending_reservations.discard(request_id)
+            self._signal_left_checking_locked(request_id)
             return SelectionResult(SelectionOutcome.ACCEPTED, request, option)
+
+    async def _await_publication(self, request_id: str) -> None:
+        """Let a tap that beat its own card's publication wait, bounded, for the record.
+
+        The card and its buttons reach Telegram before ``publish_preview`` records the request
+        as awaiting selection. Request IDs are fresh, so a tap on a request still CHECKING can
+        only come from that card. Waiting happens before the user lock is taken, so a new link
+        from the same user is never held up; the normal checks then run on the settled state.
+        """
+        async with self._registry_lock:
+            request = self.requests_by_id.get(request_id)
+            if request is None or request.state is not RequestState.CHECKING:
+                return
+            event = self._left_checking.setdefault(request_id, asyncio.Event())
+        try:
+            async with asyncio.timeout(self.publication_wait_seconds):
+                await event.wait()
+        except TimeoutError:
+            pass
 
     async def claim_selection(
         self,
@@ -285,6 +314,7 @@ class RequestRegistry:
         option_id: int,
         now: float | None = None,
     ) -> SelectionResult:
+        await self._await_publication(request_id)
         async with self._user_guard(user_id):
             async with self._registry_lock:
                 request = self.requests_by_id.get(request_id)
@@ -496,6 +526,11 @@ class RequestRegistry:
     def _is_instagram(request: DownloadRequest) -> bool:
         return request.platform.lower() == "instagram"
 
+    def _signal_left_checking_locked(self, request_id: str) -> None:
+        event = self._left_checking.pop(request_id, None)
+        if event is not None:
+            event.set()
+
     def _terminalize_locked(
         self, request: DownloadRequest, state: RequestState, terminal_at: float
     ) -> None:
@@ -506,6 +541,7 @@ class RequestRegistry:
         self._work_reservations.discard(request_id)
         self._instagram_reservations.discard(request_id)
         self._pending_reservations.discard(request_id)
+        self._signal_left_checking_locked(request_id)
         self.requests_by_id.pop(request_id, None)
         if self.active_request_by_user.get(user_id) == request_id:
             self.active_request_by_user.pop(user_id, None)
@@ -810,7 +846,7 @@ class MediaWorkflow:
         return delivered
 
     async def _fail(self, request: DownloadRequest, exc: BaseException, stage: str) -> DeliveryResult:
-        from openmedia.bot import failure_message
+        from openmedia.bot import failure_next_step
         from openmedia.sources import ErrorCategory
         from openmedia.workers import WorkerTimeout
         category = getattr(exc, "category", "internal")
@@ -825,7 +861,7 @@ class MediaWorkflow:
         unknown = stage == "sending" and isinstance(exc, (TimeoutError, asyncio.CancelledError))
         result = DeliveryResult(status="unknown" if unknown else "failed", error_category=category,
             failed_stage=stage, next_step=("Check this chat before submitting the link again." if unknown
-                else failure_message(category, stage=stage)))
+                else failure_next_step(category, stage=stage)))
         self._record_failure(request, exc, stage, result)
         await self.registry.finalize(request.request_id, state=RequestState.FAILED, delivery_result=result)
         if not isinstance(exc, asyncio.CancelledError):

@@ -72,8 +72,35 @@ REFUSAL_MAX_LINK_CHARACTERS = 2_048
 _CALLBACK = re.compile(r"^s:([0-9a-f]{32}):(0|[1-9][0-9]{0,9})$")
 
 
+RETRY_STEP = "Retry the link later."
+_STAGE_OUTCOMES = {
+    ErrorCategory.TIMEOUT: "timed out",
+    ErrorCategory.STORAGE_EXHAUSTED: "ran out of temporary space",
+}
+
+
+def stage_outcome(category: ErrorCategory | str) -> str:
+    """How a stage ended, for a status line that names the stage itself (``failed`` by default)."""
+    try:
+        return _STAGE_OUTCOMES.get(ErrorCategory(category), "failed")
+    except ValueError:
+        return "failed"
+
+
 def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
+    """A complete reply: the category's own guidance, or the stage sentence plus the retry step."""
     error = ErrorCategory(category)
+    return _guidance(error, stage) or f"The {stage} stage {stage_outcome(error)}. {RETRY_STEP}"
+
+
+def failure_next_step(category: ErrorCategory | str, *, stage: str) -> str:
+    """The next step for a status surface that already states how the stage ended."""
+    error = ErrorCategory(category)
+    return _guidance(error, stage) or RETRY_STEP
+
+
+def _guidance(error: ErrorCategory, stage: str) -> str | None:
+    """Category-specific guidance; None for categories that only say which stage ended how."""
     if error is ErrorCategory.UNSUPPORTED_URL:
         return "Send one supported public media link."
     if error is ErrorCategory.MUSIC_COLLECTION:
@@ -108,10 +135,6 @@ def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
         )
     if error is ErrorCategory.RATE_LIMITED:
         return "The source is busy. Retry the public link later."
-    if error is ErrorCategory.TIMEOUT:
-        return f"The {stage} stage timed out. Retry the link later."
-    if error is ErrorCategory.STORAGE_EXHAUSTED:
-        return f"The {stage} stage ran out of temporary space. Retry the link later."
     if error is ErrorCategory.UNSAFE_DESTINATION:
         return "That source destination cannot be accessed safely. Send another public link."
     if error is ErrorCategory.INVALID_SOURCE_RESPONSE:
@@ -120,7 +143,7 @@ def failure_message(category: ErrorCategory | str, *, stage: str) -> str:
         return "That LinkedIn link could not be opened. Send the post's full linkedin.com address."
     if error is ErrorCategory.SHORT_LINK_NOT_POST:
         return "That LinkedIn link does not lead to a supported post. Send a public LinkedIn post link."
-    return f"The {stage} stage failed. Retry the link later."
+    return None
 
 
 class InputError(ValueError):
